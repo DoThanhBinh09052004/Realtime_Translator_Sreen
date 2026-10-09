@@ -25,3 +25,8 @@ __pycache__/
 .idea/
 *.swp
 *.swo
+
+# Build & PyInstaller
+build/
+dist/
+*.spec

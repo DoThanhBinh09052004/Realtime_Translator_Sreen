@@ -3,12 +3,15 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
 
 
 class Overlay(QLabel):
-    """Overlay hiển thị subtitle – KHÔNG kéo thả"""
+    """
+    Overlay hiển thị phụ đề nổi trên màn hình.
+    Có hiệu ứng mờ dần (fade), tự căn giữa màn hình và cho phép click chuột xuyên thấu vào game.
+    """
 
     def __init__(self):
         super().__init__()
 
-        # ===== 1. Window config =====
+        # ===== 1. Cấu hình Window Flag =====
         self.setWindowFlags(
             Qt.Window |
             Qt.FramelessWindowHint |
@@ -17,8 +20,9 @@ class Overlay(QLabel):
         )
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Xuyên thấu chuột, không chặn click game
 
-        # ===== 2. UI =====
+        # ===== 2. Styling =====
         self.setStyleSheet("""
             QLabel {
                 color: black;
@@ -43,8 +47,9 @@ class Overlay(QLabel):
         self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
         self.fade_anim.setDuration(300)
         self.fade_anim.setEasingCurve(QEasingCurve.InOutQuad)
+        self.fade_anim.finished.connect(self._on_fade_finished)
 
-        # ===== 5. Init =====
+        # ===== 5. Khởi tạo vị trí =====
         self.setText("Subtitle Ready")
         self.adjustSize()
         self.move_to_bottom_center()
@@ -56,7 +61,12 @@ class Overlay(QLabel):
         y = screen.height() - self.height() - 80
         self.move(x, y)
 
-    # ===== Update text =====
+    def get_geometry_rect(self):
+        if not self.isVisible():
+            return None
+        return (self.x(), self.y(), self.width(), self.height())
+
+    # ===== Cập nhật hiển thị =====
     def update_text(self, text: str):
         if not text or not text.strip():
             self.fade_out()
@@ -75,6 +85,7 @@ class Overlay(QLabel):
         self._show_with_timer()
 
     def refresh(self):
+        """Giữ cho overlay sáng và reset timer tự ẩn"""
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
         self.hide_timer.start()
@@ -83,7 +94,7 @@ class Overlay(QLabel):
         self.hide_timer.stop()
         self.fade_out()
 
-    # ===== Fade =====
+    # ===== Fade Animations =====
     def _show_with_timer(self):
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
@@ -100,16 +111,12 @@ class Overlay(QLabel):
         self.fade_anim.stop()
         self.fade_anim.setStartValue(self.windowOpacity())
         self.fade_anim.setEndValue(0.0)
-        self.fade_anim.finished.connect(self._on_fade_out_finished)
         self.fade_anim.start()
 
-    def _on_fade_out_finished(self):
-        if self.windowOpacity() == 0:
+    def _on_fade_finished(self):
+        if self.windowOpacity() <= 0.01:
             self.hide()
-            try:
-                self.fade_anim.finished.disconnect(self._on_fade_out_finished)
-            except TypeError:
-                pass
+
 
     def show(self):
         super().show()

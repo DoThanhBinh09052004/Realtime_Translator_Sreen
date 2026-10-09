@@ -1,25 +1,15 @@
-# controller.py sửa: 
-# - Source combo: Chỉ "English" và "Japanese" (default "English")
-# - Target combo: Chỉ "Vietnamese" (cố định, nhưng vẫn giữ combo cho nhất quán, hoặc có thể làm label nếu muốn đơn giản hơn)
-# - Xóa "Auto" và "Vietnamese" khỏi source options
-
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QSpinBox, QComboBox, QFrame
 )
 from PyQt5.QtCore import Qt
 
-LANGUAGES_SOURCE = ["English", "Japanese"]  # Chỉ source: Eng và Jap
-LANGUAGES_TARGET = ["Vietnamese"]  # Chỉ target: Viet
+from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, load_config, save_config
 
-LANGUAGE_MAP = {
-    "English": "English",
-    "Japanese": "Japanese",
-    "Vietnamese": "Vietnamese"
-}
 
 
 class Section(QFrame):
+    """Container nhóm các thiết lập trong giao diện"""
     def __init__(self, title: str):
         super().__init__()
 
@@ -52,13 +42,14 @@ class Section(QFrame):
 
 
 class ControllerWindow(QWidget):
-    def __init__(self, timer, state, on_select_region, on_quit):
+    """Cửa sổ bảng điều khiển chính của ứng dụng"""
+    def __init__(self, worker, state, on_select_region, on_quit):
         super().__init__()
 
-        self.timer = timer
+        self.worker = worker
         self.state = state
 
-        # ===== WINDOW =====
+        # ===== Cấu hình Window =====
         self.setWindowTitle("Game Translator")
         self.setFixedSize(520, 600)
 
@@ -151,24 +142,23 @@ class ControllerWindow(QWidget):
 
         lang.layout.addWidget(QLabel("Source"))
         src = QComboBox()
-        src.addItems(LANGUAGES_SOURCE)
-        src.setCurrentText("English")
+        src.addItems(list(SUPPORTED_LANGUAGES.keys()))
+        src.setCurrentText(self.state.source if self.state.source in SUPPORTED_LANGUAGES else "English")
         src.currentTextChanged.connect(
-            lambda t: self.state.update(source=LANGUAGE_MAP[t])
+            lambda t: self.state.update(source=t)
         )
         lang.layout.addWidget(src)
 
         lang.layout.addWidget(QLabel("Target"))
         tgt = QComboBox()
-        tgt.addItems(LANGUAGES_TARGET)
-        tgt.setCurrentText("Vietnamese")
+        tgt.addItems(SUPPORTED_TARGETS)
+        tgt.setCurrentText(self.state.target if self.state.target in SUPPORTED_TARGETS else "Vietnamese")
         tgt.currentTextChanged.connect(
-            lambda t: self.state.update(target=LANGUAGE_MAP[t])
+            lambda t: self.state.update(target=t)
         )
         lang.layout.addWidget(tgt)
 
         root.addWidget(lang)
-        
 
         # ===== OCR SETTINGS =====
         ocr = Section("OCR Settings")
@@ -181,9 +171,13 @@ class ControllerWindow(QWidget):
 
         ocr.layout.addWidget(QLabel("Interval (ms)"))
         interval = QSpinBox()
-        interval.setRange(150, 2000)
-        interval.setValue(timer.interval())
-        interval.valueChanged.connect(timer.setInterval)
+        interval.setRange(100, 2000)
+        saved_interval = load_config().get("interval_ms", worker.interval())
+        worker.setInterval(saved_interval)
+        interval.setValue(saved_interval)
+        interval.valueChanged.connect(
+            lambda v: (worker.setInterval(v), save_config("interval_ms", v))
+        )
         ocr.layout.addWidget(interval)
 
         root.addWidget(ocr)
@@ -198,11 +192,11 @@ class ControllerWindow(QWidget):
         root.addWidget(quit_btn)
 
     def start_ocr(self):
-        self.timer.start()
-        self.status.setText("Running")
+        self.worker.start_worker()
+        self.status.setText("Running (Background Worker)")
         self.status.setStyleSheet("color: #a6e3a1; font-size: 12.5px;")
 
     def stop_ocr(self):
-        self.timer.stop()
+        self.worker.stop_worker()
         self.status.setText("Stopped")
         self.status.setStyleSheet("color: #f38ba8; font-size: 12.5px;")
