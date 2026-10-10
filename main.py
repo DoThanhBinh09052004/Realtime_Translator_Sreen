@@ -1,77 +1,16 @@
 import sys
-import json
-import numpy as np
-import mss
-import gc  
-import cv2 
-
-
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QPalette, QColor
 
-from select_region import RegionSelector
-from ocr_engine import ocr_image
-from translator import translate
-from overlay import Overlay
-from controller import ControllerWindow
+from core.config import State, load_region, save_region
+from core.worker import TranslationWorker
+from ui.overlay import Overlay
+from ui.controller import ControllerWindow
+from ui.selector import RegionSelector
 
 
-# ===== STATE =====
-class State:
-    def __init__(self):
-        self.source = "English"  # Default Eng
-        self.target = "Vietnamese"  # Luôn Viet
-
-    def update(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-
-# ===== MASK OVERLAY KHỎI OCR =====
-def mask_overlay(img, overlay, region):
-    if not overlay.isVisible():
-        return img
-
-    geo = overlay.geometry()
-    ox, oy = geo.x(), geo.y()
-    ow, oh = geo.width(), geo.height()
-
-    rx, ry = region["left"], region["top"]
-
-    x1 = max(0, ox - rx)
-    y1 = max(0, oy - ry)
-    x2 = min(img.shape[1], x1 + ow)
-    y2 = min(img.shape[0], y1 + oh)
-
-    if x1 < x2 and y1 < y2:
-        img[y1:y2, x1:x2] = 0
-
-    return img
-
-
-# ===== LOAD REGION =====
-def load_region():
-    try:
-        with open("config.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("region")
-    except Exception:
-        pass
-
-    return {
-        "top": 0,
-        "left": 0,
-        "width": 800,
-        "height": 600
-    }
-
-
-# ===== MAIN =====
-def main():
-    app = QApplication(sys.argv)
-
-    # ===== DARK THEME =====
+def setup_dark_theme(app: QApplication):
+    """Thiết lập giao diện Dark Theme phong cách Catppuccin"""
     app.setStyle("Fusion")
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(30, 30, 46))
@@ -84,101 +23,86 @@ def main():
     palette.setColor(QPalette.HighlightedText, QColor(205, 214, 244))
     app.setPalette(palette)
 
-    # ===== STATE & REGION =====
+
+def main():
+    app = QApplication(sys.argv)
+    setup_dark_theme(app)
+
+    # ===== 1. Cấu hình & Trạng thái =====
     state = State()
     region = load_region()
 
-    # ===== OVERLAY =====
-    overlay = Overlay()
+    # ===== 2. Khởi tạo Overlay (Phụ đề nổi) =====
+    overlay = Overlay(
+        bg_hex=state.bg_color,
+        opacity_pct=state.bg_opacity,
+        text_hex=state.text_color
+    )
     overlay.show()
 
-    # ===== SCREEN CAPTURE =====
-    sct = mss.mss()
-    prev_text = ""
+    # ===== 3. Khởi tạo Background Worker =====
+    worker = TranslationWorker(state=state, region=region, interval_ms=500)
+    worker.set_overlay_rect(overlay.get_geometry_rect())
 
-    # ===== TIMER =====
-    timer = QTimer()
-    timer.setInterval(500)  
+    # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
+    worker.text_translated.connect(overlay.update_text)
+    worker.text_unchanged.connect(overlay.refresh)
+    worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error: {err}"))
 
-    def capture_and_process():
-        nonlocal prev_text, region
+    def sync_overlay_mask():
+        worker.set_overlay_rect(overlay.get_geometry_rect())
 
-        # Chụp màn hình (không dùng with cho grab, vì không cần)
-        monitor = {"top": region["top"], "left": region["left"], "width": region["width"], "height": region["height"]}
-        img_raw = sct.grab(monitor)  # ← Chỉ cần gọi grab bình thường
-        img = np.array(img_raw)
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Chuyển grayscale để tiết kiệm RAM
+    overlay.fade_anim.finished.connect(sync_overlay_mask)
 
-        img_gray = mask_overlay(img_gray, overlay, region)
-
-        # Map ngôn ngữ OCR
-        ocr_lang = 'en'
-        if state.source == 'Japanese':
-            ocr_lang = 'japan'
-
-        text = ocr_image(img_gray, lang=ocr_lang).strip()
-        del img_gray  # Giải phóng ngay
-        del img       # Giải phóng thêm array gốc
-        del img_raw   # Giải phóng ScreenShot object (mss khuyến nghị)
-
-        if not text:
-            gc.collect()
-            return
-
-        if text != prev_text:
-            translated = translate(
-                text,
-                source_lang=state.source,
-                target_lang=state.target
-            )
-            overlay.update_text(translated)
-            prev_text = text
-        else:
-            overlay.refresh()
-
-        gc.collect()  # Thu gom rác sau mỗi lần
-    timer.timeout.connect(capture_and_process)
-
-    # ===== CONTROLLER =====
+    # ===== 4. Controller & Selector =====
     controller = None
-    selector = None   # <<< GIỮ REFERENCE (RẤT QUAN TRỌNG)
+    selector = None
 
     def on_select_region():
-        nonlocal region, selector
+        nonlocal selector
 
-        # 1. Ẩn UI đang chiếm focus
+        # Tạm dừng worker trong lúc người dùng đang chọn vùng
+        was_running = worker.is_running()
+        if was_running:
+            worker.stop_worker()
+
         controller.hide()
         overlay.hide()
 
-        # 2. Tạo selector (GIỮ REFERENCE)
+        # Tạo và giữ reference của RegionSelector
         selector = RegionSelector()
         selector.show()
         selector.raise_()
         selector.activateWindow()
 
-        def on_region_selected(new_region):
-            nonlocal region
-            region = new_region
-
-            with open("config.json", "w", encoding="utf-8") as f:
-                json.dump({"region": region}, f, ensure_ascii=False, indent=2)
-
-            # 3. Hiện lại UI
+        def restore_ui():
             controller.show()
             overlay.show()
+            sync_overlay_mask()
+            if was_running:
+                worker.start_worker()
+
+        def on_region_selected(new_region):
+            nonlocal selector
+            save_region(new_region)
+            worker.set_region(new_region)
+            restore_ui()
 
         selector.region_selected.connect(on_region_selected)
+        selector.cancelled.connect(restore_ui)
+
 
     def on_quit():
-        timer.stop()
+        worker.stop_worker()
         overlay.close()
         app.quit()
 
     controller = ControllerWindow(
-        timer=timer,
+        worker=worker,
         state=state,
         on_select_region=on_select_region,
-        on_quit=on_quit
+        on_quit=on_quit,
+        overlay=overlay
     )
     controller.show()
 
