@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QColor
 
 
 class Overlay(QLabel):
@@ -8,7 +9,7 @@ class Overlay(QLabel):
     Có hiệu ứng mờ dần (fade), tự căn giữa màn hình và cho phép click chuột xuyên thấu vào game.
     """
 
-    def __init__(self):
+    def __init__(self, bg_hex="#1e1e2e", opacity_pct=80, text_hex="#ffffff"):
         super().__init__()
 
         # ===== 1. Cấu hình Window Flag =====
@@ -23,19 +24,36 @@ class Overlay(QLabel):
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Xuyên thấu chuột, không chặn click game
 
         # ===== 2. Styling =====
-        self.setStyleSheet("""
-            QLabel {
-                color: black;
-                background-color: white;
+        self.apply_style(bg_hex, opacity_pct, text_hex)
+        self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(True)
+
+    def apply_style(self, bg_hex: str = "#1e1e2e", opacity_pct: int = 80, text_hex: str = "#ffffff"):
+        """
+        Cập nhật màu nền, độ mờ đục và màu chữ cho phụ đề.
+        """
+        bg_col = QColor(bg_hex)
+        if not bg_col.isValid():
+            bg_col = QColor("#1e1e2e")
+
+        text_col = QColor(text_hex)
+        if not text_col.isValid():
+            text_col = QColor("#ffffff")
+
+        alpha = max(0.0, min(1.0, opacity_pct / 100.0))
+        r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
+
+        self.setStyleSheet(f"""
+            QLabel {{
+                color: {text_col.name()};
+                background-color: rgba({r}, {g}, {b}, {alpha:.2f});
                 font-size: 22px;
                 padding: 12px 20px;
                 border-radius: 10px;
-                border: 1px solid rgba(255, 255, 255, 60);
+                border: 1px solid rgba(255, 255, 255, 40);
                 font-family: 'Segoe UI', 'Arial';
-            }
+            }}
         """)
-        self.setAlignment(Qt.AlignCenter)
-        self.setWordWrap(True)
 
         # ===== 3. Auto hide =====
         self.hide_timer = QTimer(self)

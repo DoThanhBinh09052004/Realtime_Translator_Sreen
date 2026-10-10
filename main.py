@@ -33,7 +33,11 @@ def main():
     region = load_region()
 
     # ===== 2. Khởi tạo Overlay (Phụ đề nổi) =====
-    overlay = Overlay()
+    overlay = Overlay(
+        bg_hex=state.bg_color,
+        opacity_pct=state.bg_opacity,
+        text_hex=state.text_color
+    )
     overlay.show()
 
     # ===== 3. Khởi tạo Background Worker =====
@@ -97,7 +101,8 @@ def main():
         worker=worker,
         state=state,
         on_select_region=on_select_region,
-        on_quit=on_quit
+        on_quit=on_quit,
+        overlay=overlay
     )
     controller.show()
 

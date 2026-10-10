@@ -42,12 +42,20 @@ def save_config(key: str, value):
         print(f"⚠️ Lỗi lưu config: {e}")
 
 
+DEFAULT_BG_COLOR = "#1e1e2e"
+DEFAULT_BG_OPACITY = 80
+DEFAULT_TEXT_COLOR = "#ffffff"
+
+
 class State:
-    """Quản lý trạng thái ngôn ngữ toàn cục có tự động lưu"""
+    """Quản lý trạng thái ứng dụng (ngôn ngữ, kiểu dáng phụ đề) có tự động lưu"""
     def __init__(self):
         cfg = load_config()
         self.source = cfg.get("source_lang", "English")
         self.target = cfg.get("target_lang", "Vietnamese")
+        self.bg_color = cfg.get("bg_color", DEFAULT_BG_COLOR)
+        self.bg_opacity = int(cfg.get("bg_opacity", DEFAULT_BG_OPACITY))
+        self.text_color = cfg.get("text_color", DEFAULT_TEXT_COLOR)
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -56,6 +64,8 @@ class State:
                 save_config("source_lang", v)
             elif k == "target":
                 save_config("target_lang", v)
+            elif k in ("bg_color", "bg_opacity", "text_color"):
+                save_config(k, v)
 
 
 def load_region() -> dict:

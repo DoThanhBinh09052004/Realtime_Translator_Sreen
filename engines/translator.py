@@ -10,6 +10,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     print("⚠️ Cảnh báo: Chưa tìm thấy OPENAI_API_KEY trong file .env!")
 
+MODEL_ID = os.getenv("MODEL_ID", "gpt-4o-mini")
 _translation_cache = {}
 _client = None
 
@@ -59,8 +60,8 @@ def translate(text: str, source_lang="English", target_lang="Vietnamese") -> str
         )
         result = response.choices[0].message.content.strip()
 
-        # shortcut: In-memory FIFO cache 1000 items, nâng cấp lên SQLite/diskcache nếu cần lưu lịch sử dịch lâu dài.
-        if len(_translation_cache) >= 1000:
+        # shortcut: In-memory FIFO cache 300 items, nâng cấp lên SQLite/diskcache nếu cần lưu lịch sử dịch lâu dài.
+        if len(_translation_cache) >= 300:
             _translation_cache.pop(next(iter(_translation_cache)))
         _translation_cache[cache_key] = result
         return result

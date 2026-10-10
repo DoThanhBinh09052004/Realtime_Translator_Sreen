@@ -29,4 +29,10 @@ __pycache__/
 # Build & PyInstaller
 build/
 dist/
-*.spec
+*.spec
+
+# Scratch scripts
+scratch/
+
+# Agent documentation & planning
+docs/

@@ -1,4 +1,8 @@
+import sys
 import time
+import gc
+import ctypes
+from ctypes import wintypes
 import cv2
 import numpy as np
 import mss
@@ -7,6 +11,23 @@ from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
 from engines.ocr import ocr_image
 from engines.translator import translate
 from core.config import SUPPORTED_LANGUAGES
+
+
+def compact_memory():
+    """
+    Thu hồi bộ nhớ rác (GC) và giải phóng Working Set của Windows về OS.
+    An toàn trên mọi hệ điều hành.
+    """
+    try:
+        gc.collect()
+        if sys.platform == "win32":
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
+            psapi.EmptyWorkingSet(kernel32.GetCurrentProcess())
+    except Exception:
+        pass
 
 
 class TranslationWorker(QThread):
@@ -67,11 +88,12 @@ class TranslationWorker(QThread):
             self.start()
 
     def stop_worker(self):
-        """Dừng an toàn worker thread"""
+        """Dừng an toàn worker thread và dọn dẹp RAM"""
         with QMutexLocker(self._mutex):
             self._is_running = False
         self.requestInterruption()
         self.wait(3000)
+        compact_memory()
 
     # Hỗ trợ trực tiếp các phương thức start() và stop()
     def start(self, priority=QThread.InheritPriority):
@@ -125,7 +147,8 @@ class TranslationWorker(QThread):
 
     # ===== Worker Loop =====
     def run(self):
-        """Chạy vòng lặp nền độc lập"""
+        """Chạy vòng lặp nền độc lập với quản lý RAM tối ưu"""
+        idle_counter = 0
         with mss.mss() as sct:
             while True:
                 # Đọc cấu hình thread-safe
@@ -146,6 +169,9 @@ class TranslationWorker(QThread):
                     self._prev_target = target_lang
 
                 start_time = time.time()
+                img_raw = None
+                img = None
+                img_gray = None
 
                 try:
                     if region.get("width", 0) <= 0 or region.get("height", 0) <= 0:
@@ -173,7 +199,11 @@ class TranslationWorker(QThread):
                     if not frame_changed and self._prev_text:
                         # Màn hình tĩnh, giữ hiển thị overlay hiện tại
                         self.text_unchanged.emit()
+                        idle_counter += 1
+                        if idle_counter == 3 or (idle_counter > 0 and idle_counter % 20 == 0):
+                            compact_memory()
                     elif frame_changed:
+                        idle_counter = 0
                         # 4. Màn hình thay đổi -> Thực hiện OCR
                         # shortcut: OCR và dịch chạy tuần tự trong worker loop, nâng cấp sang queue nếu cần >20 FPS.
                         ocr_lang = SUPPORTED_LANGUAGES.get(source_lang, 'en')
@@ -193,11 +223,22 @@ class TranslationWorker(QThread):
                             self._prev_text = text
                         else:
                             self.text_unchanged.emit()
+                    else:
+                        idle_counter += 1
+                        if idle_counter == 3 or (idle_counter > 0 and idle_counter % 20 == 0):
+                            compact_memory()
 
                 except Exception as e:
                     self.error_occurred.emit(str(e))
+                finally:
+                    # Thu hồi bộ đệm hình ảnh
+                    del img_raw
+                    del img
+                    del img_gray
 
                 # 6. Tính thời gian nghỉ để duy trì đúng tần số
                 elapsed_ms = (time.time() - start_time) * 1000
                 sleep_needed_ms = max(20, interval - elapsed_ms)
                 time.sleep(sleep_needed_ms / 1000.0)
+
+        compact_memory()

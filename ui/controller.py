@@ -1,8 +1,9 @@
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
-    QLabel, QSpinBox, QComboBox, QFrame
+    QLabel, QSpinBox, QComboBox, QFrame, QSlider, QColorDialog
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
 
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, load_config, save_config
 
@@ -43,15 +44,16 @@ class Section(QFrame):
 
 class ControllerWindow(QWidget):
     """Cửa sổ bảng điều khiển chính của ứng dụng"""
-    def __init__(self, worker, state, on_select_region, on_quit):
+    def __init__(self, worker, state, on_select_region, on_quit, overlay=None):
         super().__init__()
 
         self.worker = worker
         self.state = state
+        self.overlay = overlay
 
         # ===== Cấu hình Window =====
         self.setWindowTitle("Game Translator")
-        self.setFixedSize(520, 600)
+        self.setFixedSize(520, 730)
 
         self.setStyleSheet("""
             QWidget {
@@ -172,15 +174,70 @@ class ControllerWindow(QWidget):
         ocr.layout.addWidget(QLabel("Interval (ms)"))
         interval = QSpinBox()
         interval.setRange(100, 2000)
-        saved_interval = load_config().get("interval_ms", worker.interval())
-        worker.setInterval(saved_interval)
+        if worker is not None:
+            saved_interval = load_config().get("interval_ms", worker.interval())
+            worker.setInterval(saved_interval)
+        else:
+            saved_interval = load_config().get("interval_ms", 500)
         interval.setValue(saved_interval)
         interval.valueChanged.connect(
-            lambda v: (worker.setInterval(v), save_config("interval_ms", v))
+            lambda v: ((worker.setInterval(v) if worker else None), save_config("interval_ms", v))
         )
         ocr.layout.addWidget(interval)
 
         root.addWidget(ocr)
+
+        # ===== SUBTITLE STYLE =====
+        style_sec = Section("Subtitle Style")
+
+        style_sec.layout.addWidget(QLabel("Background Color"))
+        self.bg_color_btn = QPushButton()
+        self.bg_color_btn.setFixedHeight(32)
+        self._update_color_btn_style(self.bg_color_btn, self.state.bg_color)
+        self.bg_color_btn.clicked.connect(self._pick_bg_color)
+        style_sec.layout.addWidget(self.bg_color_btn)
+
+        opacity_header = QHBoxLayout()
+        opacity_header.addWidget(QLabel("Background Opacity"))
+        self.opacity_val_lbl = QLabel(f"{self.state.bg_opacity}%")
+        self.opacity_val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.opacity_val_lbl.setStyleSheet("color: #89b4fa; font-weight: 600;")
+        opacity_header.addWidget(self.opacity_val_lbl)
+        style_sec.layout.addLayout(opacity_header)
+
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setRange(0, 100)
+        self.opacity_slider.setValue(self.state.bg_opacity)
+        self.opacity_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: #313244;
+                border-radius: 3px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #89b4fa;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #cdd6f4;
+                border: 1px solid #89b4fa;
+                width: 16px;
+                margin-top: -5px;
+                margin-bottom: -5px;
+                border-radius: 8px;
+            }
+        """)
+        self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
+        style_sec.layout.addWidget(self.opacity_slider)
+
+        style_sec.layout.addWidget(QLabel("Text Color"))
+        self.text_color_btn = QPushButton()
+        self.text_color_btn.setFixedHeight(32)
+        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
+        self.text_color_btn.clicked.connect(self._pick_text_color)
+        style_sec.layout.addWidget(self.text_color_btn)
+
+        root.addWidget(style_sec)
 
         root.addStretch()
 
@@ -191,12 +248,65 @@ class ControllerWindow(QWidget):
         quit_btn.clicked.connect(on_quit)
         root.addWidget(quit_btn)
 
+    def _update_color_btn_style(self, btn: QPushButton, hex_color: str):
+        col = QColor(hex_color)
+        if not col.isValid():
+            col = QColor("#1e1e2e")
+        text_col = "#000000" if (col.red() * 0.299 + col.green() * 0.587 + col.blue() * 0.114) > 150 else "#ffffff"
+        btn.setText(f"  {col.name().upper()}")
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {col.name()};
+                color: {text_col};
+                border: 1px solid rgba(255, 255, 255, 70);
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 12px;
+                text-align: left;
+                padding-left: 10px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #89b4fa;
+            }}
+        """)
+
+    def _pick_bg_color(self):
+        col = QColorDialog.getColor(QColor(self.state.bg_color), self, "Select Background Color")
+        if col.isValid():
+            hex_str = col.name()
+            self.state.update(bg_color=hex_str)
+            self._update_color_btn_style(self.bg_color_btn, hex_str)
+            self._sync_overlay_style()
+
+    def _pick_text_color(self):
+        col = QColorDialog.getColor(QColor(self.state.text_color), self, "Select Text Color")
+        if col.isValid():
+            hex_str = col.name()
+            self.state.update(text_color=hex_str)
+            self._update_color_btn_style(self.text_color_btn, hex_str)
+            self._sync_overlay_style()
+
+    def _on_opacity_changed(self, val: int):
+        self.opacity_val_lbl.setText(f"{val}%")
+        self.state.update(bg_opacity=val)
+        self._sync_overlay_style()
+
+    def _sync_overlay_style(self):
+        if self.overlay:
+            self.overlay.apply_style(
+                bg_hex=self.state.bg_color,
+                opacity_pct=self.state.bg_opacity,
+                text_hex=self.state.text_color
+            )
+
     def start_ocr(self):
-        self.worker.start_worker()
+        if self.worker:
+            self.worker.start_worker()
         self.status.setText("Running (Background Worker)")
         self.status.setStyleSheet("color: #a6e3a1; font-size: 12.5px;")
 
     def stop_ocr(self):
-        self.worker.stop_worker()
+        if self.worker:
+            self.worker.stop_worker()
         self.status.setText("Stopped")
         self.status.setStyleSheet("color: #f38ba8; font-size: 12.5px;")

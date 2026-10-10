@@ -1,24 +1,29 @@
 import os
+import gc
+
+# Cấu hình cờ tối ưu RAM cho PaddlePaddle trước khi nạp model
+os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+os.environ['FLAGS_fraction_of_cpu_memory_to_use'] = '0.05'
+
 import cv2
 import numpy as np
 from paddleocr import PaddleOCR
-import gc
-
-# Bỏ qua kiểm tra model source của Paddle
-os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
 
 
 class SimplePaddleOCR:
-    """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh"""
+    """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh với cấu hình RAM tối thiểu"""
     def __init__(self, lang='en'):
         try:
             self.ocr = PaddleOCR(
                 lang=lang,
-                use_angle_cls=False
+                use_angle_cls=False,
+                show_log=False,
+                enable_mkldnn=False,
+                cpu_threads=2
             )
-            print(f"✅ OCR Engine sẵn sàng với lang={lang}")
+            print(f"[OK] OCR Engine ready for lang={lang}")
         except Exception as e:
-            print(f"❌ Lỗi khởi tạo OCR: {e}")
+            print(f"[ERROR] OCR init failed: {e}")
             raise e
 
     def extract_text(self, img) -> str:
@@ -47,25 +52,47 @@ class SimplePaddleOCR:
             return full_text
 
         except Exception as e:
-            print(f"⚠️ Lỗi OCR: {e}")
+            print(f"[WARN] OCR Error: {e}")
             return ""
 
 
-# Caching engine theo từng ngôn ngữ để tránh nạp lại model nặng nề
-_ocr_engines = {}
+# Single active engine cache: chỉ giữ 1 model đang sử dụng, giải phóng model cũ khi đổi ngôn ngữ
+_current_engine = None
+_current_lang = None
+
+
+def release_ocr_engine():
+    """Giải phóng engine OCR hiện tại khỏi RAM và thu dọn rác"""
+    global _current_engine, _current_lang
+    if _current_engine is not None:
+        try:
+            del _current_engine
+        except Exception:
+            pass
+        _current_engine = None
+        _current_lang = None
+        gc.collect()
 
 
 def get_ocr_engine(lang='en'):
-    global _ocr_engines
-    if lang not in _ocr_engines:
-        try:
-            print(f"🔄 Đang tải mô hình OCR cho ngôn ngữ: {lang}...")
-            _ocr_engines[lang] = SimplePaddleOCR(lang=lang)
-        except Exception as e:
-            print(f"❌ Không thể nạp OCR engine cho {lang}: {e}")
-            return None
+    """Lấy OCR engine cho ngôn ngữ chỉ định; tự động giải phóng ngôn ngữ trước đó để tiết kiệm RAM"""
+    global _current_engine, _current_lang
+    if _current_engine is not None and _current_lang == lang:
+        return _current_engine
 
-    return _ocr_engines[lang]
+    if _current_engine is not None and _current_lang != lang:
+        print(f"[INFO] Release OCR model '{_current_lang}' for '{lang}'...")
+        release_ocr_engine()
+
+    try:
+        print(f"[INFO] Loading OCR model for lang={lang} (2 threads, low-memory)...")
+        _current_engine = SimplePaddleOCR(lang=lang)
+        _current_lang = lang
+    except Exception as e:
+        print(f"[ERROR] Failed to load OCR engine for {lang}: {e}")
+        return None
+
+    return _current_engine
 
 
 def ocr_image(img, lang='en') -> str:
