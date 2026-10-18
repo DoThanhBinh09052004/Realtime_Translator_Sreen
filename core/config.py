@@ -77,3 +77,91 @@ def save_region(region: dict):
     """Lưu tọa độ vùng chụp vào file config.json"""
     save_config("region", region)
 
+
+ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+
+DEFAULT_MODEL_ID = "gpt-4o-mini"
+
+AVAILABLE_MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+]
+
+
+def _read_env() -> dict:
+    env_vars = {}
+    if os.path.exists(ENV_PATH):
+        try:
+            with open(ENV_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        env_vars[k.strip()] = v.strip()
+        except Exception as e:
+            print(f"⚠️ Lỗi đọc .env: {e}")
+    return env_vars
+
+
+def _write_env_var(key: str, value: str):
+    try:
+        lines = []
+        key_found = False
+        if os.path.exists(ENV_PATH):
+            with open(ENV_PATH, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith(f"{key}=") or stripped == key:
+                new_lines.append(f"{key}={value}\n")
+                key_found = True
+            else:
+                new_lines.append(line)
+
+        if not key_found:
+            if new_lines and not new_lines[-1].endswith("\n"):
+                new_lines[-1] += "\n"
+            new_lines.append(f"{key}={value}\n")
+
+        with open(ENV_PATH, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+
+        os.environ[key] = value
+    except Exception as e:
+        print(f"⚠️ Lỗi ghi .env: {e}")
+
+
+def load_api_key() -> str:
+    """Đọc API key từ file .env (hoặc biến môi trường)"""
+    val = _read_env().get("OPENAI_API_KEY", "")
+    if not val:
+        val = os.environ.get("OPENAI_API_KEY", "")
+    if val == "key_ở_đây":
+        return ""
+    return val
+
+
+def save_api_key(key: str):
+    """Lưu API key vào file .env (tự động tạo .env nếu chưa có)"""
+    _write_env_var("OPENAI_API_KEY", key)
+
+
+def load_model_id() -> str:
+    """Đọc model ID từ file .env hoặc config.json"""
+    val = _read_env().get("MODEL_ID")
+    if not val:
+        val = load_config().get("model_id", DEFAULT_MODEL_ID)
+    return val or DEFAULT_MODEL_ID
+
+
+def save_model_id(model_id: str):
+    """Lưu model ID vào file .env"""
+    _write_env_var("MODEL_ID", model_id)
+    save_config("model_id", model_id)
+
+
+
