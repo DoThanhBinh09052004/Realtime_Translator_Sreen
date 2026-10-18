@@ -77,3 +77,34 @@ def save_region(region: dict):
     """Lưu tọa độ vùng chụp vào file config.json"""
     save_config("region", region)
 
+
+DEFAULT_MODEL_ID = "gpt-4o-mini"
+
+AVAILABLE_MODELS = [
+    "gpt-4o-mini",
+    "gpt-4o",
+    "gpt-4.1-mini",
+    "gpt-4.1-nano",
+]
+
+
+def load_api_key() -> str:
+    """Đọc API key từ config.json"""
+    return load_config().get("api_key", "")
+
+
+def save_api_key(key: str):
+    """Lưu API key vào config.json"""
+    save_config("api_key", key)
+
+
+def load_model_id() -> str:
+    """Đọc model ID từ config.json"""
+    return load_config().get("model_id", DEFAULT_MODEL_ID)
+
+
+def save_model_id(model_id: str):
+    """Lưu model ID vào config.json"""
+    save_config("model_id", model_id)
+
+
