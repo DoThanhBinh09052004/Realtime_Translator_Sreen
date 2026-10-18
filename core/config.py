@@ -89,8 +89,23 @@ AVAILABLE_MODELS = [
 
 
 def load_api_key() -> str:
-    """Đọc API key từ config.json"""
-    return load_config().get("api_key", "")
+    """Đọc API key từ config.json (tự động di chuyển từ .env nếu config chưa có)"""
+    key = load_config().get("api_key", "")
+    if not key:
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("OPENAI_API_KEY="):
+                            k = line.strip().split("=", 1)[1].strip()
+                            if k and k != "key_ở_đây":
+                                key = k
+                                save_api_key(key)
+                            break
+            except Exception:
+                pass
+    return key
 
 
 def save_api_key(key: str):

@@ -1,16 +1,6 @@
-import os
 from openai import OpenAI
-from dotenv import load_dotenv
+from core.config import load_api_key, load_model_id
 
-# Load file .env từ thư mục gốc
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-load_dotenv(os.path.join(ROOT_DIR, ".env"))
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    print("⚠️ Cảnh báo: Chưa tìm thấy OPENAI_API_KEY trong file .env!")
-
-MODEL_ID = os.getenv("MODEL_ID", "gpt-4o-mini")
 _translation_cache = {}
 _client = None
 
@@ -18,10 +8,16 @@ _client = None
 def get_client():
     global _client
     if _client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = load_api_key()
         if api_key:
             _client = OpenAI(api_key=api_key)
     return _client
+
+
+def reload_client():
+    """Reset client để dùng API key/model mới từ config"""
+    global _client
+    _client = None
 
 
 def translate(text: str, source_lang="English", target_lang="Vietnamese") -> str:
@@ -36,6 +32,7 @@ def translate(text: str, source_lang="English", target_lang="Vietnamese") -> str
         return "Loi: Chua cau hinh OPENAI_API_KEY."
 
     processed_text = text.strip()[:2000]
+    model_id = load_model_id()
 
     cache_key = (processed_text, source_lang, target_lang)
     if cache_key in _translation_cache:
@@ -43,7 +40,7 @@ def translate(text: str, source_lang="English", target_lang="Vietnamese") -> str
 
     try:
         response = client.chat.completions.create(
-            model=MODEL_ID,
+            model=model_id,
             messages=[
                 {
                     "role": "system",
