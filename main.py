@@ -1,6 +1,7 @@
 import sys
+import os
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtGui import QPalette, QColor
+from PyQt5.QtGui import QPalette, QColor, QIcon
 
 from core.config import State, load_region, save_region
 from core.worker import TranslationWorker
@@ -30,6 +31,10 @@ def setup_dark_theme(app: QApplication):
 def main():
     app = QApplication(sys.argv)
     setup_dark_theme(app)
+
+    logo_path = os.path.join(os.path.dirname(__file__), "ui", "logo.png")
+    if os.path.exists(logo_path):
+        app.setWindowIcon(QIcon(logo_path))
 
     # ===== 1. Cấu hình & Trạng thái =====
     state = State()
