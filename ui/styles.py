@@ -26,6 +26,7 @@ CYBER_PALETTE = {
     
     # Accent Colors (Professional SaaS Palette)
     "neon_green": "#10b981",
+    "neon_emerald": "#10b981",
     "neon_green_hover": "#059669",
     "neon_green_bg": "rgba(16, 185, 129, 0.12)",
     

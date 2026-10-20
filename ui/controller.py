@@ -288,6 +288,14 @@ class ControllerWindow(QWidget):
         content_v_layout.addWidget(self.pages, stretch=1)
         main_h_layout.addWidget(content_container, stretch=1)
 
+        # Kết nối sự kiện di chuyển overlay và khôi phục vị trí
+        if self.overlay:
+            self.overlay.position_changed.connect(self._on_overlay_position_changed)
+            if self.state.overlay_preset != "custom":
+                self.overlay.apply_preset(self.state.overlay_preset)
+            elif self.state.overlay_x is not None and self.state.overlay_y is not None:
+                self.overlay.move(self.state.overlay_x, self.state.overlay_y)
+
         # Đồng bộ ban đầu
         self._update_all_metric_cards()
 
@@ -620,8 +628,8 @@ class ControllerWindow(QWidget):
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
 
-        # Card 1: Colors & Opacity
-        style_card = ModernCard("Màu sắc & Độ trong suốt", "Tùy biến diện mạo hộp phụ đề nổi trên game")
+        # Card 1: Colors & Typography
+        style_card = ModernCard("Màu sắc & Kích thước Chữ", "Tùy biến diện mạo hộp phụ đề nổi trên game")
         
         color_row = QHBoxLayout()
         color_row.setSpacing(12)
@@ -655,7 +663,43 @@ class ControllerWindow(QWidget):
         color_row.addLayout(txt_col)
 
         style_card.layout.addLayout(color_row)
+        style_card.layout.addSpacing(6)
 
+        # Font Size Slider
+        font_header = QHBoxLayout()
+        font_lbl = QLabel("Cỡ chữ phụ đề (Font Size)")
+        font_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        self.font_size_val_lbl = QLabel(f"{self.state.font_size}px")
+        self.font_size_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
+        font_header.addWidget(font_lbl)
+        font_header.addStretch()
+        font_header.addWidget(self.font_size_val_lbl)
+        style_card.layout.addLayout(font_header)
+
+        self.font_size_slider = QSlider(Qt.Horizontal)
+        self.font_size_slider.setRange(14, 36)
+        self.font_size_slider.setValue(self.state.font_size)
+        self.font_size_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                height: 5px;
+                background: {CYBER_PALETTE['bg_input']};
+                border-radius: 2px;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {CYBER_PALETTE['neon_indigo']};
+                border-radius: 2px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {CYBER_PALETTE['text_primary']};
+                border: 1px solid {CYBER_PALETTE['neon_indigo']};
+                width: 14px;
+                margin-top: -5px;
+                margin-bottom: -5px;
+                border-radius: 7px;
+            }}
+        """)
+        self.font_size_slider.valueChanged.connect(self._on_font_size_changed)
+        style_card.layout.addWidget(self.font_size_slider)
         style_card.layout.addSpacing(6)
 
         # Opacity Slider
@@ -696,7 +740,46 @@ class ControllerWindow(QWidget):
 
         layout.addWidget(style_card)
 
-        # Card 2: LIVE PREVIEW BOX
+        # Card 2: Position & Drag Mode
+        pos_card = ModernCard("Vị trí & Định vị Màn hình", "Chọn vị trí xuất hiện cố định hoặc tự do kéo thả phụ đề")
+        
+        pos_row = QHBoxLayout()
+        pos_row.setSpacing(12)
+
+        # Preset Dropdown
+        preset_box = QVBoxLayout()
+        preset_box.setSpacing(4)
+        preset_lbl = QLabel("Vị trí hiển thị (Preset)")
+        preset_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        self.preset_combo = QComboBox()
+        self.preset_combo.setFixedHeight(34)
+        self.preset_combo.addItem("Dưới giữa (Mặc định)", "bottom_center")
+        self.preset_combo.addItem("Trên giữa (Top Center)", "top_center")
+        self.preset_combo.addItem("Dưới trái (Bottom Left)", "bottom_left")
+        self.preset_combo.addItem("Vị trí tùy chọn (Custom)", "custom")
+
+        idx = self.preset_combo.findData(self.state.overlay_preset)
+        if idx >= 0:
+            self.preset_combo.setCurrentIndex(idx)
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+
+        preset_box.addWidget(preset_lbl)
+        preset_box.addWidget(self.preset_combo)
+        pos_row.addLayout(preset_box)
+
+        pos_card.layout.addLayout(pos_row)
+        pos_card.layout.addSpacing(8)
+
+        # Drag Mode Action Button
+        self.drag_toggle_btn = QPushButton()
+        self.drag_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self._update_drag_btn_style(False)
+        self.drag_toggle_btn.clicked.connect(self._toggle_drag_mode)
+        pos_card.layout.addWidget(self.drag_toggle_btn)
+
+        layout.addWidget(pos_card)
+
+        # Card 3: LIVE PREVIEW BOX
         preview_card = ModernCard("Xem trước Thời gian thực", "Mô phỏng chính xác khung phụ đề nổi hiển thị trên màn hình game")
         
         sim_container = QFrame()
@@ -745,12 +828,12 @@ class ControllerWindow(QWidget):
             QLabel {{
                 color: {text_col.name()};
                 background-color: rgba({r}, {g}, {b}, {alpha:.2f});
-                font-size: 15px;
-                font-weight: 500;
-                padding: 10px 18px;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 30);
-                font-family: 'Segoe UI', 'Inter', 'Arial';
+                font-size: {self.state.font_size}px;
+                font-weight: 600;
+                padding: 10px 20px;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
             }}
         """)
 
@@ -800,12 +883,79 @@ class ControllerWindow(QWidget):
         self._update_live_preview_box()
         self._sync_overlay_style()
 
+    def _on_font_size_changed(self, val: int):
+        self.font_size_val_lbl.setText(f"{val}px")
+        self.state.update(font_size=val)
+        self._update_live_preview_box()
+        self._sync_overlay_style()
+
+    def _on_preset_changed(self, index: int):
+        preset = self.preset_combo.currentData()
+        if preset:
+            self.state.update(overlay_preset=preset)
+            if self.overlay and preset != "custom":
+                self.overlay.apply_preset(preset)
+
+    def _toggle_drag_mode(self):
+        if not self.overlay:
+            return
+        new_state = not self.overlay.is_drag_mode
+        self.overlay.set_drag_mode(new_state)
+        self._update_drag_btn_style(new_state)
+
+    def _update_drag_btn_style(self, is_active: bool):
+        if is_active:
+            self.drag_toggle_btn.setText("✓ Đã xong (Khóa vị trí phụ đề)")
+            self.drag_toggle_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {CYBER_PALETTE['neon_green']};
+                    color: #0b101b;
+                    border: 1px solid #34d399;
+                    border-radius: 6px;
+                    font-weight: 700;
+                    font-size: 12.5px;
+                    height: 34px;
+                }}
+                QPushButton:hover {{
+                    background-color: #34d399;
+                }}
+            """)
+        else:
+            self.drag_toggle_btn.setText("✥ Di chuyển phụ đề trên màn hình")
+            self.drag_toggle_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {CYBER_PALETTE['bg_input']};
+                    color: {CYBER_PALETTE['text_primary']};
+                    border: 1px solid {CYBER_PALETTE['border']};
+                    border-radius: 6px;
+                    font-weight: 600;
+                    font-size: 12px;
+                    height: 34px;
+                }}
+                QPushButton:hover {{
+                    border: 1px solid {CYBER_PALETTE['neon_indigo']};
+                    background-color: {CYBER_PALETTE['bg_card_hover']};
+                }}
+            """)
+
+    def set_preset_display(self, preset: str):
+        idx = self.preset_combo.findData(preset)
+        if idx >= 0:
+            self.preset_combo.blockSignals(True)
+            self.preset_combo.setCurrentIndex(idx)
+            self.preset_combo.blockSignals(False)
+
+    def _on_overlay_position_changed(self, x: int, y: int):
+        self.state.update(overlay_x=x, overlay_y=y, overlay_preset="custom")
+        self.set_preset_display("custom")
+
     def _sync_overlay_style(self):
         if self.overlay:
             self.overlay.apply_style(
                 bg_hex=self.state.bg_color,
                 opacity_pct=self.state.bg_opacity,
-                text_hex=self.state.text_color
+                text_hex=self.state.text_color,
+                font_size=self.state.font_size
             )
 
     def _populate_models_for_provider(self, provider: str):
