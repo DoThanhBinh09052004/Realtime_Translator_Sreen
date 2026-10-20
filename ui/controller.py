@@ -1,10 +1,11 @@
+import os
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QSpinBox, QComboBox, QFrame, QSlider, QColorDialog,
     QLineEdit, QScrollArea, QStackedWidget
 )
 from PyQt5.QtCore import Qt, QTimer, QSize
-from PyQt5.QtGui import QColor, QFont, QIcon
+from PyQt5.QtGui import QColor, QFont, QIcon, QPixmap, QPainter, QPainterPath
 
 from core.config import (
     SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, load_config, save_config,
@@ -121,10 +122,19 @@ class ControllerWindow(QWidget):
         self.on_quit_cb = on_quit
 
         # ===== Cấu hình Window =====
-        self.setWindowTitle("Game Translator - Screen HUD Dashboard")
+        # ===== Cấu hình Window =====
+        self.setWindowTitle("Translate HUD - Realtime Screen Translator")
         self.resize(740, 560)
         self.setMinimumSize(660, 480)
         self.setStyleSheet(get_app_stylesheet())
+
+        # Thiết lập Icon ứng dụng từ logo
+        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+        if not os.path.exists(logo_path):
+            logo_path = os.path.join(os.path.dirname(__file__), "clever-negative-space-logo-design--minimalist-tech.png")
+
+        if os.path.exists(logo_path):
+            self.setWindowIcon(QIcon(logo_path))
 
         # Layout chính dạng ngang: [Sidebar 205px] + [Main Content Stack]
         main_h_layout = QHBoxLayout(self)
@@ -141,13 +151,28 @@ class ControllerWindow(QWidget):
         sidebar_layout.setContentsMargins(14, 16, 14, 16)
         sidebar_layout.setSpacing(6)
 
-        # Brand Header với Lucide Zap Icon
+        # Brand Header với Logo mới
         brand_row = QHBoxLayout()
-        brand_row.setSpacing(8)
+        brand_row.setSpacing(10)
         
         brand_icon_lbl = QLabel()
-        zap_icon = get_lucide_icon("zap", color=CYBER_PALETTE['neon_indigo'], size=20)
-        brand_icon_lbl.setPixmap(zap_icon.pixmap(20, 20))
+        if os.path.exists(logo_path):
+            size = 28
+            radius = 6
+            src = QPixmap(logo_path).scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            rounded_pix = QPixmap(size, size)
+            rounded_pix.fill(Qt.transparent)
+            painter = QPainter(rounded_pix)
+            painter.setRenderHint(QPainter.Antialiasing)
+            clip_path = QPainterPath()
+            clip_path.addRoundedRect(0, 0, size, size, radius, radius)
+            painter.setClipPath(clip_path)
+            painter.drawPixmap(0, 0, src)
+            painter.end()
+            brand_icon_lbl.setPixmap(rounded_pix)
+        else:
+            zap_icon = get_lucide_icon("zap", color=CYBER_PALETTE['neon_indigo'], size=20)
+            brand_icon_lbl.setPixmap(zap_icon.pixmap(20, 20))
         brand_row.addWidget(brand_icon_lbl)
 
         brand_text_box = QVBoxLayout()
