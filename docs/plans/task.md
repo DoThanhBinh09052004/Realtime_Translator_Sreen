@@ -1,8 +1,7 @@
 | Task | Status | Details |
 | --- | --- | --- |
-| 1. Khám phá bối cảnh dự án & hiện trạng UI | COMPLETED | Đã xem xét main.py, ui/controller.py, ui/overlay.py, selector.py, git commits |
-| 2. Làm rõ định hướng & nhu cầu thiết kế lại | COMPLETED | Dashboard Controller dạng Sidebar/Tab, phong cách Modern Cyber/Gaming Dark |
-| 3. Đề xuất các phương án thiết kế (2-3 approaches) | COMPLETED | Thống nhất Phương án 1: Split View Sidebar + Content Panels hiện đại |
-| 4. Trình bày chi tiết thiết kế & nhận phản hồi | COMPLETED | Đã phê duyệt 3/3 phần thiết kế: Tokens, Bố cục Sidebar, Live Preview & Data Flow |
-| 5. Soạn thảo tài liệu thiết kế (design doc) | COMPLETED | Đã lưu tại docs/plans/2026-10-20-ui-redesign-design.md |
-| 6. Chuyển giao sang lập kế hoạch triển khai | COMPLETED | Đã tạo kế hoạch 5 task tại docs/plans/2026-10-20-ui-redesign.md |
+| Task 1: Design Tokens & Reusable UI Components | COMPLETED | Created ui/styles.py with Cyber Dark palette, stylesheets and helper tokens |
+| Task 2: Sidebar Navigation & Core Controller Layout | COMPLETED | Implemented split-view layout with Left Sidebar and QStackedWidget in ui/controller.py |
+| Task 3: Page 1 (Console) & Page 2 (AI Engine) | COMPLETED | Implemented Hero Start/Stop, 4 quick status cards, Provider/Model/Key settings |
+| Task 4: Page 3 (Translation/OCR) & Page 4 (Subtitle Preview) | COMPLETED | Implemented Language/Interval settings, Color pickers, and Live Subtitle Preview |
+| Task 5: End-to-End Integration, Visual Polish & Verification | COMPLETED | Verified signal plumbing, overlay sync, and passed full UI integration tests |
