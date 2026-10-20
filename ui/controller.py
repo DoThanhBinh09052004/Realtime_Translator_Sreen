@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QSpinBox, QComboBox, QFrame, QSlider, QColorDialog,
-    QLineEdit
+    QLineEdit, QScrollArea
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
@@ -31,7 +31,7 @@ class Section(QFrame):
             }
 
             QLabel {
-                font-size: 12.5px;
+                font-size: 12px;
                 color: #cdd6f4;
             }
 
@@ -43,13 +43,17 @@ class Section(QFrame):
             }
         """)
 
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(12, 10, 12, 12)
-        self.layout.setSpacing(8)
+        self.box_layout = QVBoxLayout(self)
+        self.box_layout.setContentsMargins(12, 10, 12, 12)
+        self.box_layout.setSpacing(8)
 
         title_label = QLabel(title)
         title_label.setObjectName("sectionTitle")
-        self.layout.addWidget(title_label)
+        self.box_layout.addWidget(title_label)
+
+    @property
+    def layout(self):
+        return self.box_layout
 
 
 class ControllerWindow(QWidget):
@@ -61,9 +65,10 @@ class ControllerWindow(QWidget):
         self.state = state
         self.overlay = overlay
 
-        # ===== Cấu hình Window =====
+        # ===== Cấu hình Window (Co giãn linh hoạt, không khóa cứng chiều cao) =====
         self.setWindowTitle("Game Translator")
-        self.setFixedSize(520, 890)
+        self.resize(500, 700)
+        self.setMinimumSize(450, 480)
 
         self.setStyleSheet("""
             QWidget {
@@ -76,7 +81,7 @@ class ControllerWindow(QWidget):
                 background-color: #45475a;
                 border-radius: 6px;
                 padding: 6px 10px;
-                font-size: 12.5px;
+                font-size: 12px;
                 font-weight: 600;
             }
 
@@ -104,17 +109,18 @@ class ControllerWindow(QWidget):
             }
 
             QComboBox, QSpinBox {
-                min-height: 30px;
-                padding: 4px 8px;
-                font-size: 12.5px;
+                min-height: 28px;
+                padding: 3px 6px;
+                font-size: 12px;
                 border-radius: 6px;
                 background-color: #2e2e44;
+                color: #cdd6f4;
             }
 
             QLineEdit {
                 min-height: 28px;
-                padding: 4px 8px;
-                font-size: 12.5px;
+                padding: 3px 6px;
+                font-size: 12px;
                 border-radius: 6px;
                 background-color: #2e2e44;
                 border: 1px solid #45475a;
@@ -124,34 +130,92 @@ class ControllerWindow(QWidget):
             QLineEdit:focus {
                 border: 1px solid #89b4fa;
             }
+
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+
+            QScrollBar:vertical {
+                border: none;
+                background: #1e1e2e;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:vertical {
+                background: #45475a;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background: #585b70;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
         """)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(12)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(14, 12, 14, 12)
+        main_layout.setSpacing(8)
 
-        # ===== HEADER =====
+        # ===== HEADER (Cố định ở trên) =====
         title = QLabel("Game Translator")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 17px; font-weight: 700;")
-        root.addWidget(title)
+        title.setStyleSheet("font-size: 16px; font-weight: 700;")
+        main_layout.addWidget(title)
 
         self.status = QLabel("Stopped")
         self.status.setAlignment(Qt.AlignCenter)
-        self.status.setStyleSheet("color: #f38ba8; font-size: 12.5px;")
-        root.addWidget(self.status)
+        self.status.setStyleSheet("color: #f38ba8; font-size: 12px; margin-bottom: 2px;")
+        main_layout.addWidget(self.status)
+
+        # ===== SCROLL AREA CHỨA NỘI DUNG THIẾT LẬP =====
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: transparent;")
+        root = QVBoxLayout(content_widget)
+        root.setContentsMargins(0, 4, 6, 4)
+        root.setSpacing(10)
 
         # ===== API SETTINGS =====
         api_sec = Section("API Settings")
 
-        api_sec.layout.addWidget(QLabel("Provider"))
+        # Row 1: Provider & Model gọn gàng trên 2 cột
+        prov_model_row = QHBoxLayout()
+        prov_model_row.setSpacing(10)
+
+        prov_col = QVBoxLayout()
+        prov_col.setSpacing(3)
+        prov_col.addWidget(QLabel("Provider"))
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(get_available_providers())
         active_provider = load_active_provider()
         self.provider_combo.setCurrentText(active_provider)
         self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
-        api_sec.layout.addWidget(self.provider_combo)
+        prov_col.addWidget(self.provider_combo)
+        prov_model_row.addLayout(prov_col)
 
+        model_col = QVBoxLayout()
+        model_col.setSpacing(3)
+        model_col.addWidget(QLabel("Model"))
+        self.model_combo = QComboBox()
+        self.model_combo.setEditable(True)
+        self._populate_models_for_provider(active_provider)
+        self.model_combo.currentTextChanged.connect(self._on_model_changed)
+        model_col.addWidget(self.model_combo)
+        prov_model_row.addLayout(model_col)
+
+        api_sec.layout.addLayout(prov_model_row)
+
+        # Row 2: API Key với nút ẩn/hiện
         api_sec.layout.addWidget(QLabel("API Key"))
         key_row = QHBoxLayout()
         key_row.setSpacing(6)
@@ -163,7 +227,7 @@ class ControllerWindow(QWidget):
         key_row.addWidget(self.api_key_input)
 
         self.toggle_key_btn = QPushButton("👁")
-        self.toggle_key_btn.setFixedSize(38, 30)
+        self.toggle_key_btn.setFixedSize(36, 28)
         self.toggle_key_btn.setToolTip("Hiện / Ẩn API Key")
         self.toggle_key_btn.setStyleSheet("""
             QPushButton {
@@ -181,20 +245,12 @@ class ControllerWindow(QWidget):
 
         api_sec.layout.addLayout(key_row)
 
-        api_sec.layout.addWidget(QLabel("Model"))
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self._populate_models_for_provider(active_provider)
-        self.model_combo.currentTextChanged.connect(self._on_model_changed)
-        api_sec.layout.addWidget(self.model_combo)
-
         self.api_status_lbl = QLabel()
         self._update_api_status()
         api_sec.layout.addWidget(self.api_status_lbl)
 
         self.api_section = api_sec
         root.addWidget(api_sec)
-
 
         # ===== CONTROL =====
         control = Section("Control")
@@ -204,12 +260,36 @@ class ControllerWindow(QWidget):
 
         self.start_btn = QPushButton("START")
         self.start_btn.setObjectName("start")
-        self.start_btn.setFixedHeight(36)
+        self.start_btn.setFixedHeight(34)
+        self.start_btn.setStyleSheet("""
+            QPushButton#start {
+                background-color: #a6e3a1;
+                color: #1e1e2e;
+                font-weight: 700;
+                font-size: 13px;
+                border-radius: 6px;
+            }
+            QPushButton#start:hover {
+                background-color: #94d88e;
+            }
+        """)
         self.start_btn.clicked.connect(self.start_ocr)
 
         self.stop_btn = QPushButton("STOP")
         self.stop_btn.setObjectName("stop")
-        self.stop_btn.setFixedHeight(36)
+        self.stop_btn.setFixedHeight(34)
+        self.stop_btn.setStyleSheet("""
+            QPushButton#stop {
+                background-color: #f38ba8;
+                color: #1e1e2e;
+                font-weight: 700;
+                font-size: 13px;
+                border-radius: 6px;
+            }
+            QPushButton#stop:hover {
+                background-color: #e27d99;
+            }
+        """)
         self.stop_btn.clicked.connect(self.stop_ocr)
 
         row.addWidget(self.start_btn)
@@ -218,39 +298,64 @@ class ControllerWindow(QWidget):
         control.layout.addLayout(row)
         root.addWidget(control)
 
-        # ===== LANGUAGE =====
+        # ===== LANGUAGE (2 Cột song song) =====
         lang = Section("Language")
+        lang_row = QHBoxLayout()
+        lang_row.setSpacing(10)
 
-        lang.layout.addWidget(QLabel("Source"))
+        src_col = QVBoxLayout()
+        src_col.setSpacing(3)
+        src_col.addWidget(QLabel("Source"))
         src = QComboBox()
         src.addItems(list(SUPPORTED_LANGUAGES.keys()))
         src.setCurrentText(self.state.source if self.state.source in SUPPORTED_LANGUAGES else "English")
         src.currentTextChanged.connect(
             lambda t: self.state.update(source=t)
         )
-        lang.layout.addWidget(src)
+        src_col.addWidget(src)
+        lang_row.addLayout(src_col)
 
-        lang.layout.addWidget(QLabel("Target"))
+        tgt_col = QVBoxLayout()
+        tgt_col.setSpacing(3)
+        tgt_col.addWidget(QLabel("Target"))
         tgt = QComboBox()
         tgt.addItems(SUPPORTED_TARGETS)
         tgt.setCurrentText(self.state.target if self.state.target in SUPPORTED_TARGETS else "Vietnamese")
         tgt.currentTextChanged.connect(
             lambda t: self.state.update(target=t)
         )
-        lang.layout.addWidget(tgt)
+        tgt_col.addWidget(tgt)
+        lang_row.addLayout(tgt_col)
 
+        lang.layout.addLayout(lang_row)
         root.addWidget(lang)
 
-        # ===== OCR SETTINGS =====
+        # ===== OCR SETTINGS (Bố cục ngang) =====
         ocr = Section("OCR Settings")
+        ocr_row = QHBoxLayout()
+        ocr_row.setSpacing(10)
 
         region_btn = QPushButton("Select OCR Region")
         region_btn.setObjectName("region")
-        region_btn.setFixedHeight(32)
+        region_btn.setFixedHeight(30)
+        region_btn.setStyleSheet("""
+            QPushButton#region {
+                background-color: #313244;
+                color: #cdd6f4;
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            QPushButton#region:hover {
+                background-color: #45475a;
+            }
+        """)
         region_btn.clicked.connect(on_select_region)
-        ocr.layout.addWidget(region_btn)
+        ocr_row.addWidget(region_btn, stretch=3)
 
-        ocr.layout.addWidget(QLabel("Interval (ms)"))
+        int_col = QVBoxLayout()
+        int_col.setSpacing(2)
+        int_col.addWidget(QLabel("Interval (ms)"))
         interval = QSpinBox()
         interval.setRange(100, 2000)
         if worker is not None:
@@ -262,19 +367,39 @@ class ControllerWindow(QWidget):
         interval.valueChanged.connect(
             lambda v: ((worker.setInterval(v) if worker else None), save_config("interval_ms", v))
         )
-        ocr.layout.addWidget(interval)
+        int_col.addWidget(interval)
+        ocr_row.addLayout(int_col, stretch=2)
 
+        ocr.layout.addLayout(ocr_row)
         root.addWidget(ocr)
 
-        # ===== SUBTITLE STYLE =====
+        # ===== SUBTITLE STYLE (2 Cột màu song song) =====
         style_sec = Section("Subtitle Style")
 
-        style_sec.layout.addWidget(QLabel("Background Color"))
+        color_row = QHBoxLayout()
+        color_row.setSpacing(10)
+
+        bg_col = QVBoxLayout()
+        bg_col.setSpacing(3)
+        bg_col.addWidget(QLabel("Background Color"))
         self.bg_color_btn = QPushButton()
-        self.bg_color_btn.setFixedHeight(32)
+        self.bg_color_btn.setFixedHeight(30)
         self._update_color_btn_style(self.bg_color_btn, self.state.bg_color)
         self.bg_color_btn.clicked.connect(self._pick_bg_color)
-        style_sec.layout.addWidget(self.bg_color_btn)
+        bg_col.addWidget(self.bg_color_btn)
+        color_row.addLayout(bg_col)
+
+        txt_col = QVBoxLayout()
+        txt_col.setSpacing(3)
+        txt_col.addWidget(QLabel("Text Color"))
+        self.text_color_btn = QPushButton()
+        self.text_color_btn.setFixedHeight(30)
+        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
+        self.text_color_btn.clicked.connect(self._pick_text_color)
+        txt_col.addWidget(self.text_color_btn)
+        color_row.addLayout(txt_col)
+
+        style_sec.layout.addLayout(color_row)
 
         opacity_header = QHBoxLayout()
         opacity_header.addWidget(QLabel("Background Opacity"))
@@ -309,23 +434,30 @@ class ControllerWindow(QWidget):
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         style_sec.layout.addWidget(self.opacity_slider)
 
-        style_sec.layout.addWidget(QLabel("Text Color"))
-        self.text_color_btn = QPushButton()
-        self.text_color_btn.setFixedHeight(32)
-        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
-        self.text_color_btn.clicked.connect(self._pick_text_color)
-        style_sec.layout.addWidget(self.text_color_btn)
-
         root.addWidget(style_sec)
 
         root.addStretch()
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll, stretch=1)
 
-        # ===== FOOTER =====
+        # ===== FOOTER (Cố định ở dưới cùng) =====
         quit_btn = QPushButton("Quit")
         quit_btn.setObjectName("quit")
-        quit_btn.setFixedHeight(32)
+        quit_btn.setFixedHeight(30)
+        quit_btn.setStyleSheet("""
+            QPushButton#quit {
+                background-color: #313244;
+                color: #cdd6f4;
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 12px;
+            }
+            QPushButton#quit:hover {
+                background-color: #45475a;
+            }
+        """)
         quit_btn.clicked.connect(on_quit)
-        root.addWidget(quit_btn)
+        main_layout.addWidget(quit_btn)
 
     def _update_color_btn_style(self, btn: QPushButton, hex_color: str):
         col = QColor(hex_color)
