@@ -45,10 +45,12 @@ def save_config(key: str, value):
 DEFAULT_BG_COLOR = "#1e1e2e"
 DEFAULT_BG_OPACITY = 80
 DEFAULT_TEXT_COLOR = "#ffffff"
+DEFAULT_FONT_SIZE = 22
+DEFAULT_OVERLAY_PRESET = "bottom_center"
 
 
 class State:
-    """Quản lý trạng thái ứng dụng (ngôn ngữ, kiểu dáng phụ đề) có tự động lưu"""
+    """Quản lý trạng thái ứng dụng (ngôn ngữ, kiểu dáng phụ đề, vị trí) có tự động lưu"""
     def __init__(self):
         cfg = load_config()
         self.source = cfg.get("source_lang", "English")
@@ -56,6 +58,10 @@ class State:
         self.bg_color = cfg.get("bg_color", DEFAULT_BG_COLOR)
         self.bg_opacity = int(cfg.get("bg_opacity", DEFAULT_BG_OPACITY))
         self.text_color = cfg.get("text_color", DEFAULT_TEXT_COLOR)
+        self.font_size = int(cfg.get("font_size", DEFAULT_FONT_SIZE))
+        self.overlay_preset = cfg.get("overlay_preset", DEFAULT_OVERLAY_PRESET)
+        self.overlay_x = cfg.get("overlay_x", None)
+        self.overlay_y = cfg.get("overlay_y", None)
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -64,7 +70,7 @@ class State:
                 save_config("source_lang", v)
             elif k == "target":
                 save_config("target_lang", v)
-            elif k in ("bg_color", "bg_opacity", "text_color"):
+            elif k in ("bg_color", "bg_opacity", "text_color", "font_size", "overlay_preset", "overlay_x", "overlay_y"):
                 save_config(k, v)
 
 
