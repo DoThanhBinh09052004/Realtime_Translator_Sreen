@@ -80,14 +80,45 @@ def save_region(region: dict):
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 
-DEFAULT_MODEL_ID = "gpt-4o-mini"
+PROVIDERS = {
+    "Google Gemini": {
+        "env_key": "GEMINI_API_KEY",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "default_model": "gemini-2.5-flash",
+        "models": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+        "placeholder": "AIzaSy...",
+    },
+    "OpenAI": {
+        "env_key": "OPENAI_API_KEY",
+        "base_url": None,
+        "default_model": "gpt-4o-mini",
+        "models": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1-nano"],
+        "placeholder": "sk-proj-...",
+    },
+}
 
-AVAILABLE_MODELS = [
-    "gpt-4o-mini",
-    "gpt-4o",
-    "gpt-4.1-mini",
-    "gpt-4.1-nano",
-]
+DEFAULT_PROVIDER = "Google Gemini"
+DEFAULT_MODEL_ID = PROVIDERS[DEFAULT_PROVIDER]["default_model"]
+AVAILABLE_MODELS = PROVIDERS[DEFAULT_PROVIDER]["models"]
+
+
+def get_available_providers() -> list:
+    """Trả về danh sách tên các LLM Provider được hỗ trợ"""
+    return list(PROVIDERS.keys())
+
+
+def load_active_provider() -> str:
+    """Đọc provider hiện đang được chọn từ config.json"""
+    val = load_config().get("current_provider")
+    if val in PROVIDERS:
+        return val
+    return DEFAULT_PROVIDER
+
+
+def save_active_provider(provider: str):
+    """Lưu provider được chọn vào config.json"""
+    if provider in PROVIDERS:
+        save_config("current_provider", provider)
 
 
 def _read_env() -> dict:
@@ -135,33 +166,71 @@ def _write_env_var(key: str, value: str):
         print(f"⚠️ Lỗi ghi .env: {e}")
 
 
-def load_api_key() -> str:
-    """Đọc API key từ file .env (hoặc biến môi trường)"""
-    val = _read_env().get("OPENAI_API_KEY", "")
+def load_provider_api_key(provider: str = None) -> str:
+    """Đọc API key của provider từ file .env (hoặc biến môi trường)"""
+    if not provider or provider not in PROVIDERS:
+        provider = load_active_provider()
+    env_key = PROVIDERS[provider]["env_key"]
+    val = _read_env().get(env_key, "")
     if not val:
-        val = os.environ.get("OPENAI_API_KEY", "")
+        val = os.environ.get(env_key, "")
     if val == "key_ở_đây":
         return ""
     return val
 
 
+def save_provider_api_key(provider: str, key: str):
+    """Lưu API key của provider vào file .env"""
+    if not provider or provider not in PROVIDERS:
+        provider = load_active_provider()
+    env_key = PROVIDERS[provider]["env_key"]
+    _write_env_var(env_key, key)
+
+
+def load_provider_model_id(provider: str = None) -> str:
+    """Đọc model ID đã lưu của provider từ config.json"""
+    if not provider or provider not in PROVIDERS:
+        provider = load_active_provider()
+    cfg = PROVIDERS[provider]
+    models_map = load_config().get("provider_models", {})
+    val = models_map.get(provider)
+    if not val and provider == "OpenAI":
+        val = _read_env().get("MODEL_ID") or load_config().get("model_id")
+    return val or cfg["default_model"]
+
+
+def save_provider_model_id(provider: str, model_id: str):
+    """Lưu model ID của provider vào config.json"""
+    if not provider or provider not in PROVIDERS:
+        provider = load_active_provider()
+    models_map = load_config().get("provider_models", {})
+    models_map[provider] = model_id
+    save_config("provider_models", models_map)
+    save_config("model_id", model_id)
+    if provider == "OpenAI":
+        _write_env_var("MODEL_ID", model_id)
+
+
+# ===== Backward Compatibility Aliases =====
+def load_api_key() -> str:
+    """[Alias] Đọc API key của active provider"""
+    return load_provider_api_key(load_active_provider())
+
+
 def save_api_key(key: str):
-    """Lưu API key vào file .env (tự động tạo .env nếu chưa có)"""
-    _write_env_var("OPENAI_API_KEY", key)
+    """[Alias] Lưu API key cho active provider"""
+    save_provider_api_key(load_active_provider(), key)
 
 
 def load_model_id() -> str:
-    """Đọc model ID từ file .env hoặc config.json"""
-    val = _read_env().get("MODEL_ID")
-    if not val:
-        val = load_config().get("model_id", DEFAULT_MODEL_ID)
-    return val or DEFAULT_MODEL_ID
+    """[Alias] Đọc model ID của active provider"""
+    return load_provider_model_id(load_active_provider())
 
 
 def save_model_id(model_id: str):
-    """Lưu model ID vào file .env"""
-    _write_env_var("MODEL_ID", model_id)
-    save_config("model_id", model_id)
+    """[Alias] Lưu model ID cho active provider"""
+    save_provider_model_id(load_active_provider(), model_id)
+
 
 
 

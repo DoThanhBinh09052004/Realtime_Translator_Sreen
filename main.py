@@ -9,18 +9,21 @@ from ui.controller import ControllerWindow
 from ui.selector import RegionSelector
 
 
+from ui.styles import CYBER_PALETTE
+
+
 def setup_dark_theme(app: QApplication):
-    """Thiết lập giao diện Dark Theme phong cách Catppuccin"""
+    """Thiết lập giao diện Modern Cyber Dark Theme"""
     app.setStyle("Fusion")
     palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(30, 30, 46))
-    palette.setColor(QPalette.WindowText, QColor(205, 214, 244))
-    palette.setColor(QPalette.Base, QColor(46, 46, 68))
-    palette.setColor(QPalette.Text, QColor(205, 214, 244))
-    palette.setColor(QPalette.Button, QColor(69, 71, 90))
-    palette.setColor(QPalette.ButtonText, QColor(205, 214, 244))
-    palette.setColor(QPalette.Highlight, QColor(88, 91, 112))
-    palette.setColor(QPalette.HighlightedText, QColor(205, 214, 244))
+    palette.setColor(QPalette.Window, QColor(CYBER_PALETTE["bg_main"]))
+    palette.setColor(QPalette.WindowText, QColor(CYBER_PALETTE["text_primary"]))
+    palette.setColor(QPalette.Base, QColor(CYBER_PALETTE["bg_input"]))
+    palette.setColor(QPalette.Text, QColor(CYBER_PALETTE["text_primary"]))
+    palette.setColor(QPalette.Button, QColor(CYBER_PALETTE["bg_card"]))
+    palette.setColor(QPalette.ButtonText, QColor(CYBER_PALETTE["text_primary"]))
+    palette.setColor(QPalette.Highlight, QColor(CYBER_PALETTE["neon_indigo"]))
+    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
     app.setPalette(palette)
 
 
