@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QLineEdit
 from PyQt5.QtCore import QObject, pyqtSignal
 from ui.controller import ControllerWindow
 from ui.overlay import Overlay
@@ -72,9 +72,11 @@ def run_full_integration_test():
     controller._switch_to_page(1)
     # Check eye toggle
     controller._toggle_key_visibility()
-    assert controller.toggle_key_btn.text() == "🔒"
+    assert not controller.toggle_key_btn.icon().isNull()
+    assert controller.api_key_input.echoMode() == QLineEdit.Normal
     controller._toggle_key_visibility()
-    assert controller.toggle_key_btn.text() == "👁"
+    assert not controller.toggle_key_btn.icon().isNull()
+    assert controller.api_key_input.echoMode() == QLineEdit.Password
 
     # 3. Test Subtitle Page & Live Preview Sync
     controller._switch_to_page(3)
@@ -97,10 +99,10 @@ def run_full_integration_test():
     if key.strip():
         controller.start_ocr()
         assert worker.is_running() is True
-        assert "Active" in controller.status.text()
+        assert ("hoạt động" in controller.status.text() or "Active" in controller.status.text())
         controller.stop_ocr()
         assert worker.is_running() is False
-        assert "Stopped" in controller.status.text()
+        assert ("dừng" in controller.status.text() or "Stopped" in controller.status.text())
     else:
         controller.start_ocr()
         # Should redirect to AI page

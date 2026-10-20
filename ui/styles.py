@@ -1,57 +1,55 @@
 """
-Modern Cyber/Gaming Dark Theme - Design Tokens & Stylesheets
+Linear / Raycast Pro Dark Theme - Design Tokens & Stylesheets
 """
 
 CYBER_PALETTE = {
-    # Nền
-    "bg_main": "#0d0e17",
-    "bg_primary": "#0d0e17",
-    "bg_sidebar": "#131522",
-    "bg_card": "#1a1d2e",
-    "bg_card_hover": "#202439",
-    "bg_input": "#22263d",
-    "bg_input_hover": "#292e49",
+    # Nền (Linear Pro Matte Dark)
+    "bg_main": "#0e0f12",
+    "bg_primary": "#0e0f12",
+    "bg_sidebar": "#14151a",
+    "bg_card": "#191a21",
+    "bg_card_hover": "#20222b",
+    "bg_input": "#1f212a",
+    "bg_input_hover": "#252834",
     
-    # Viền
-    "border": "#282c44",
-    "border_light": "#363c5d",
+    # Viền (Subtle Precision 1px Borders)
+    "border": "#23252e",
+    "border_card": "#282a36",
+    "border_light": "#323544",
     "border_focus": "#6366f1",
     
-    # Chữ
-    "text_primary": "#f1f5f9",
-    "text_secondary": "#cbd5e1",
-    "text_muted": "#94a3b8",
-    "text_dim": "#64748b",
+    # Chữ (High-clarity Typography)
+    "text_primary": "#f4f4f7",
+    "text_secondary": "#c5c8d8",
+    "text_muted": "#8c90a4",
+    "text_dim": "#616578",
     
-    # Màu Neon Accents
+    # Accent Colors (Professional SaaS Palette)
     "neon_green": "#10b981",
-    "neon_green_hover": "#34d399",
-    "neon_green_bg": "rgba(16, 185, 129, 0.15)",
+    "neon_green_hover": "#059669",
+    "neon_green_bg": "rgba(16, 185, 129, 0.12)",
     
-    # Neon Rose (Danger)
     "neon_rose": "#f43f5e",
-    "neon_rose_hover": "#fb7185",
-    "neon_rose_bg": "rgba(244, 63, 94, 0.15)",
+    "neon_rose_hover": "#e11d48",
+    "neon_rose_bg": "rgba(244, 63, 94, 0.12)",
     
-    # Neon Indigo (Primary Accent)
     "neon_indigo": "#6366f1",
-    "neon_indigo_hover": "#818cf8",
-    "neon_indigo_bg": "rgba(99, 102, 241, 0.15)",
+    "neon_indigo_hover": "#4f46e5",
+    "neon_indigo_bg": "rgba(99, 102, 241, 0.12)",
     
-    # Amber (Warning)
-    "neon_amber": "#fbbf24",
-    "neon_amber_bg": "rgba(251, 191, 36, 0.15)"
+    "neon_amber": "#f59e0b",
+    "neon_amber_bg": "rgba(245, 158, 11, 0.12)"
 }
 
 
 def get_app_stylesheet() -> str:
-    """Trả về CSS toàn cục cho ứng dụng"""
+    """Trả về CSS toàn cục phong cách Linear / Raycast Pro"""
     p = CYBER_PALETTE
     return f"""
         QWidget {{
             background-color: {p['bg_main']};
             color: {p['text_primary']};
-            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", sans-serif;
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", "Roboto", sans-serif;
             font-size: 13px;
         }}
 
@@ -69,14 +67,14 @@ def get_app_stylesheet() -> str:
         QScrollBar:vertical {{
             border: none;
             background: {p['bg_main']};
-            width: 7px;
+            width: 6px;
             margin: 0px;
             border-radius: 3px;
         }}
 
         QScrollBar::handle:vertical {{
             background: {p['border_light']};
-            min-height: 24px;
+            min-height: 20px;
             border-radius: 3px;
         }}
 
@@ -96,7 +94,7 @@ def get_app_stylesheet() -> str:
         QLineEdit, QComboBox, QSpinBox {{
             min-height: 32px;
             padding: 4px 10px;
-            border-radius: 7px;
+            border-radius: 6px;
             background-color: {p['bg_input']};
             border: 1px solid {p['border']};
             color: {p['text_primary']};
@@ -116,19 +114,19 @@ def get_app_stylesheet() -> str:
         QComboBox::drop-down {{
             subcontrol-origin: padding;
             subcontrol-position: top right;
-            width: 26px;
+            width: 24px;
             border-left: 1px solid {p['border']};
-            border-top-right-radius: 7px;
-            border-bottom-right-radius: 7px;
+            border-top-right-radius: 6px;
+            border-bottom-right-radius: 6px;
         }}
 
         QComboBox QAbstractItemView {{
             background-color: {p['bg_card']};
             color: {p['text_primary']};
-            border: 1px solid {p['border']};
-            border-radius: 7px;
+            border: 1px solid {p['border_card']};
+            border-radius: 6px;
             selection-background-color: {p['neon_indigo_bg']};
-            selection-color: {p['text_primary']};
+            selection-color: #ffffff;
             padding: 4px;
             outline: none;
         }}
@@ -143,9 +141,9 @@ def get_app_stylesheet() -> str:
         QToolTip {{
             background-color: {p['bg_card']};
             color: {p['text_primary']};
-            border: 1px solid {p['neon_indigo']};
-            border-radius: 5px;
-            padding: 5px 8px;
+            border: 1px solid {p['border_card']};
+            border-radius: 6px;
+            padding: 6px 10px;
             font-size: 12px;
         }}
     """
@@ -154,8 +152,8 @@ def get_app_stylesheet() -> str:
 CARD_FRAME_STYLE = f"""
     QFrame#cardFrame {{
         background-color: {CYBER_PALETTE['bg_card']};
-        border: 1px solid {CYBER_PALETTE['border']};
-        border-radius: 10px;
+        border: 1px solid {CYBER_PALETTE['border_card']};
+        border-radius: 8px;
     }}
 """
 
@@ -173,10 +171,10 @@ NAV_BUTTON_NORMAL = f"""
         border: none;
         border-left: 3px solid transparent;
         border-radius: 6px;
-        padding: 9px 14px;
+        padding: 8px 12px;
         text-align: left;
         font-size: 13px;
-        font-weight: 600;
+        font-weight: 500;
     }}
     QPushButton:hover {{
         background-color: rgba(255, 255, 255, 0.04);
@@ -191,46 +189,46 @@ NAV_BUTTON_ACTIVE = f"""
         border: none;
         border-left: 3px solid {CYBER_PALETTE['neon_indigo']};
         border-radius: 6px;
-        padding: 9px 14px;
+        padding: 8px 12px;
         text-align: left;
         font-size: 13px;
-        font-weight: 700;
+        font-weight: 600;
     }}
 """
 
 HERO_START_STYLE = f"""
     QPushButton {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #34d399);
-        color: #0b1511;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 18px;
-        font-size: 14px;
-        font-weight: 700;
+        background-color: #10b981;
+        color: #ffffff;
+        border: 1px solid #059669;
+        border-radius: 6px;
+        padding: 9px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
     }}
     QPushButton:hover {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34d399, stop:1 #6ee7b7);
+        background-color: #059669;
     }}
     QPushButton:pressed {{
-        background: #059669;
+        background-color: #047857;
     }}
 """
 
 HERO_STOP_STYLE = f"""
     QPushButton {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #f43f5e, stop:1 #fb7185);
-        color: #17070b;
-        border: none;
-        border-radius: 8px;
-        padding: 10px 18px;
-        font-size: 14px;
-        font-weight: 700;
+        background-color: #f43f5e;
+        color: #ffffff;
+        border: 1px solid #e11d48;
+        border-radius: 6px;
+        padding: 9px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
     }}
     QPushButton:hover {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fb7185, stop:1 #fda4af);
+        background-color: #e11d48;
     }}
     QPushButton:pressed {{
-        background: #e11d48;
+        background-color: #be123c;
     }}
 """
 
@@ -238,15 +236,15 @@ SECONDARY_BUTTON_STYLE = f"""
     QPushButton {{
         background-color: {CYBER_PALETTE['bg_input']};
         color: {CYBER_PALETTE['text_primary']};
-        border: 1px solid {CYBER_PALETTE['border']};
-        border-radius: 7px;
+        border: 1px solid {CYBER_PALETTE['border_card']};
+        border-radius: 6px;
         padding: 7px 12px;
         font-size: 12.5px;
-        font-weight: 600;
+        font-weight: 500;
     }}
     QPushButton:hover {{
         background-color: {CYBER_PALETTE['bg_input_hover']};
-        border: 1px solid {CYBER_PALETTE['neon_indigo']};
+        border: 1px solid {CYBER_PALETTE['border_light']};
     }}
     QPushButton:pressed {{
         background-color: {CYBER_PALETTE['bg_card']};

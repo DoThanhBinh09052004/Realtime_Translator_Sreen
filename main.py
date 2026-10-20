@@ -13,7 +13,7 @@ from ui.styles import CYBER_PALETTE
 
 
 def setup_dark_theme(app: QApplication):
-    """Thiết lập giao diện Modern Cyber Dark Theme"""
+    """Thiết lập giao diện Linear / Raycast Pro Dark Theme"""
     app.setStyle("Fusion")
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(CYBER_PALETTE["bg_main"]))
