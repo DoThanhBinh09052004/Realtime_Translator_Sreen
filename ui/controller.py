@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QSpinBox, QComboBox, QFrame, QSlider, QColorDialog,
-    QLineEdit, QScrollArea, QStackedWidget, QSizePolicy
+    QLineEdit, QScrollArea, QStackedWidget
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt5.QtGui import QColor, QFont, QIcon
 
 from core.config import (
     SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, load_config, save_config,
@@ -21,10 +21,11 @@ from ui.styles import (
     HERO_START_STYLE, HERO_STOP_STYLE, SECONDARY_BUTTON_STYLE,
     CARD_FRAME_STYLE
 )
+from ui.icons import get_lucide_icon
 
 
 class ModernCard(QFrame):
-    """Thẻ container nội dung phong cách Cyber Card"""
+    """Thẻ container nội dung phong cách Linear Pro Card"""
     def __init__(self, title: str = "", subtitle: str = ""):
         super().__init__()
         self.setObjectName("cardFrame")
@@ -40,8 +41,8 @@ class ModernCard(QFrame):
             
             t_lbl = QLabel(title)
             t_lbl.setStyleSheet(f"""
-                font-size: 13.5px;
-                font-weight: 700;
+                font-size: 13px;
+                font-weight: 600;
                 color: {CYBER_PALETTE['text_primary']};
             """)
             header_layout.addWidget(t_lbl)
@@ -62,14 +63,14 @@ class ModernCard(QFrame):
 
 
 class MetricCard(QFrame):
-    """Thẻ tóm tắt thông số nhỏ trong Console"""
-    def __init__(self, title: str, value: str = "--", icon: str = "⚡"):
+    """Thẻ tóm tắt thông số với vector Lucide Icon"""
+    def __init__(self, title: str, value: str = "--", icon_name: str = "activity", icon_color: str = "#8c90a4"):
         super().__init__()
         self.setStyleSheet(f"""
             QFrame {{
                 background-color: {CYBER_PALETTE['bg_input']};
                 border: 1px solid {CYBER_PALETTE['border']};
-                border-radius: 8px;
+                border-radius: 7px;
                 padding: 4px;
             }}
             QFrame:hover {{
@@ -78,22 +79,26 @@ class MetricCard(QFrame):
         """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(3)
+        layout.setSpacing(4)
         
         header_row = QHBoxLayout()
-        icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet("font-size: 14px;")
-        t_lbl = QLabel(title)
-        t_lbl.setStyleSheet(f"font-size: 11px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        header_row.setSpacing(6)
+
+        icon_lbl = QLabel()
+        icon = get_lucide_icon(icon_name, color=icon_color, size=15)
+        icon_lbl.setPixmap(icon.pixmap(15, 15))
         header_row.addWidget(icon_lbl)
+
+        t_lbl = QLabel(title)
+        t_lbl.setStyleSheet(f"font-size: 10.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']}; letter-spacing: 0.3px;")
         header_row.addWidget(t_lbl)
         header_row.addStretch()
         layout.addLayout(header_row)
         
         self.val_lbl = QLabel(value)
         self.val_lbl.setStyleSheet(f"""
-            font-size: 12.5px;
-            font-weight: 700;
+            font-size: 12px;
+            font-weight: 600;
             color: {CYBER_PALETTE['text_primary']};
         """)
         self.val_lbl.setWordWrap(True)
@@ -104,7 +109,7 @@ class MetricCard(QFrame):
 
 
 class ControllerWindow(QWidget):
-    """Cửa sổ Dashboard điều khiển chính - Phong cách Modern Cyber Dark Split View"""
+    """Cửa sổ Dashboard điều khiển chính - Phong cách Linear / Raycast Pro & Lucide Icons"""
 
     def __init__(self, worker, state, on_select_region, on_quit, overlay=None):
         super().__init__()
@@ -116,12 +121,12 @@ class ControllerWindow(QWidget):
         self.on_quit_cb = on_quit
 
         # ===== Cấu hình Window =====
-        self.setWindowTitle("Game Translator - Cyber HUD Dashboard")
+        self.setWindowTitle("Game Translator - Screen HUD Dashboard")
         self.resize(740, 560)
         self.setMinimumSize(660, 480)
         self.setStyleSheet(get_app_stylesheet())
 
-        # Layout chính dạng ngang: [Sidebar 200px] + [Main Content Stack]
+        # Layout chính dạng ngang: [Sidebar 205px] + [Main Content Stack]
         main_h_layout = QHBoxLayout(self)
         main_h_layout.setContentsMargins(0, 0, 0, 0)
         main_h_layout.setSpacing(0)
@@ -134,19 +139,21 @@ class ControllerWindow(QWidget):
 
         sidebar_layout = QVBoxLayout(self.sidebar_frame)
         sidebar_layout.setContentsMargins(14, 16, 14, 16)
-        sidebar_layout.setSpacing(8)
+        sidebar_layout.setSpacing(6)
 
-        # Brand / Header
+        # Brand Header với Lucide Zap Icon
         brand_row = QHBoxLayout()
         brand_row.setSpacing(8)
-        brand_icon = QLabel("⚡")
-        brand_icon.setStyleSheet(f"font-size: 22px; color: {CYBER_PALETTE['neon_green']};")
-        brand_row.addWidget(brand_icon)
+        
+        brand_icon_lbl = QLabel()
+        zap_icon = get_lucide_icon("zap", color=CYBER_PALETTE['neon_indigo'], size=20)
+        brand_icon_lbl.setPixmap(zap_icon.pixmap(20, 20))
+        brand_row.addWidget(brand_icon_lbl)
 
         brand_text_box = QVBoxLayout()
         brand_text_box.setSpacing(1)
-        brand_title = QLabel("TRANSLATE HUD")
-        brand_title.setStyleSheet("font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;")
+        brand_title = QLabel("Translate HUD")
+        brand_title.setStyleSheet("font-size: 13.5px; font-weight: 700; letter-spacing: 0.2px;")
         brand_sub = QLabel("Realtime Screen OCR")
         brand_sub.setStyleSheet(f"font-size: 10.5px; color: {CYBER_PALETTE['text_muted']};")
         brand_text_box.addWidget(brand_title)
@@ -156,20 +163,24 @@ class ControllerWindow(QWidget):
 
         sidebar_layout.addSpacing(14)
 
-        # Navigation Buttons
+        # Navigation Buttons (Lucide Vector Icons, Không Emoji)
         self.nav_buttons = []
-        nav_items = [
-            ("🕹️  Tổng quan", "Bảng điều khiển nhanh & trạng thái"),
-            ("🤖  AI Engine", "Cấu hình Provider, Model & API Key"),
-            ("🌐  Dịch & OCR", "Ngôn ngữ nguồn/đích & tần suất quét"),
-            ("🎨  Giao diện Phụ đề", "Màu sắc, độ mờ & xem trước trực tiếp")
+        self.nav_item_defs = [
+            ("layout-dashboard", "Tổng quan", "Bảng điều khiển nhanh và trạng thái"),
+            ("bot", "Cấu hình AI", "Quản lý Provider, Model và API Key"),
+            ("languages", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
+            ("palette", "Giao diện Phụ đề", "Màu sắc, độ trong suốt và xem trước trực tiếp")
         ]
 
-        for idx, (label_text, tooltip_text) in enumerate(nav_items):
-            btn = QPushButton(label_text)
+        for idx, (icon_name, label_text, tooltip_text) in enumerate(self.nav_item_defs):
+            btn = QPushButton(f"  {label_text}")
             btn.setToolTip(tooltip_text)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(38)
+            btn.setFixedHeight(36)
+            btn.setIconSize(QSize(17, 17))
+            
+            icon_col = "#ffffff" if idx == 0 else CYBER_PALETTE['text_muted']
+            btn.setIcon(get_lucide_icon(icon_name, color=icon_col, size=17))
             btn.setStyleSheet(NAV_BUTTON_ACTIVE if idx == 0 else NAV_BUTTON_NORMAL)
             btn.clicked.connect(lambda checked, i=idx: self._switch_to_page(i))
             sidebar_layout.addWidget(btn)
@@ -183,27 +194,29 @@ class ControllerWindow(QWidget):
             QFrame {{
                 background-color: {CYBER_PALETTE['bg_main']};
                 border: 1px solid {CYBER_PALETTE['border']};
-                border-radius: 8px;
+                border-radius: 7px;
                 padding: 6px;
             }}
         """)
         status_layout = QVBoxLayout(status_box)
         status_layout.setContentsMargins(8, 6, 8, 6)
-        status_layout.setSpacing(2)
+        status_layout.setSpacing(3)
 
         sys_status_lbl = QLabel("TRẠNG THÁI HỆ THỐNG")
-        sys_status_lbl.setStyleSheet(f"font-size: 9.5px; font-weight: 700; color: {CYBER_PALETTE['text_dim']};")
+        sys_status_lbl.setStyleSheet(f"font-size: 9.5px; font-weight: 600; color: {CYBER_PALETTE['text_dim']};")
         status_layout.addWidget(sys_status_lbl)
 
-        self.status = QLabel("● Đã dừng (Stopped)")
-        self.status.setStyleSheet(f"font-size: 11.5px; font-weight: 700; color: {CYBER_PALETTE['neon_rose']};")
+        self.status = QLabel("Đã dừng")
+        self.status.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['neon_rose']};")
         status_layout.addWidget(self.status)
         sidebar_layout.addWidget(status_box)
 
         sidebar_layout.addSpacing(4)
 
-        quit_btn = QPushButton("Thoát (Quit)")
+        quit_btn = QPushButton("  Thoát")
         quit_btn.setFixedHeight(32)
+        quit_btn.setIcon(get_lucide_icon("log-out", color=CYBER_PALETTE['text_muted'], size=14))
+        quit_btn.setIconSize(QSize(14, 14))
         quit_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         quit_btn.setCursor(Qt.PointingHandCursor)
         quit_btn.clicked.connect(self.on_quit_cb)
@@ -222,8 +235,8 @@ class ControllerWindow(QWidget):
         header_text_box = QVBoxLayout()
         header_text_box.setSpacing(2)
 
-        self.page_title_lbl = QLabel("Tổng quan (Console)")
-        self.page_title_lbl.setStyleSheet("font-size: 17px; font-weight: 800;")
+        self.page_title_lbl = QLabel("Tổng quan")
+        self.page_title_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
         self.page_desc_lbl = QLabel("Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực")
         self.page_desc_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
         header_text_box.addWidget(self.page_title_lbl)
@@ -259,13 +272,17 @@ class ControllerWindow(QWidget):
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
-            btn.setStyleSheet(NAV_BUTTON_ACTIVE if i == index else NAV_BUTTON_NORMAL)
+            is_active = (i == index)
+            btn.setStyleSheet(NAV_BUTTON_ACTIVE if is_active else NAV_BUTTON_NORMAL)
+            icon_name = self.nav_item_defs[i][0]
+            icon_col = "#ffffff" if is_active else CYBER_PALETTE['text_muted']
+            btn.setIcon(get_lucide_icon(icon_name, color=icon_col, size=17))
 
         titles = [
-            ("Tổng quan (Console)", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
+            ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
             ("Cấu hình AI Engine", "Quản lý nhà cung cấp API, mô hình LLM và khóa bảo mật"),
             ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
-            ("Tùy biến Phụ đề (Subtitle)", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
+            ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
         ]
         if 0 <= index < len(titles):
             title, desc = titles[index]
@@ -281,20 +298,24 @@ class ControllerWindow(QWidget):
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
 
-        # Hero Action Card (Nút START & STOP to bản)
+        # Hero Action Card (Nút START & STOP chuẩn Lucide Icons)
         hero_card = ModernCard("Thao tác Điều khiển", "Khởi động hoặc dừng tiến trình quét và dịch màn hình")
         hero_row = QHBoxLayout()
         hero_row.setSpacing(12)
 
-        self.start_btn = QPushButton("▶  BẮT ĐẦU (START)")
-        self.start_btn.setFixedHeight(44)
+        self.start_btn = QPushButton("  Bắt đầu (Start)")
+        self.start_btn.setFixedHeight(40)
         self.start_btn.setCursor(Qt.PointingHandCursor)
+        self.start_btn.setIcon(get_lucide_icon("play", color="#ffffff", size=15))
+        self.start_btn.setIconSize(QSize(15, 15))
         self.start_btn.setStyleSheet(HERO_START_STYLE)
         self.start_btn.clicked.connect(self.start_ocr)
 
-        self.stop_btn = QPushButton("⏹  DỪNG (STOP)")
-        self.stop_btn.setFixedHeight(44)
+        self.stop_btn = QPushButton("  Dừng (Stop)")
+        self.stop_btn.setFixedHeight(40)
         self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setIcon(get_lucide_icon("square", color="#ffffff", size=14))
+        self.stop_btn.setIconSize(QSize(14, 14))
         self.stop_btn.setStyleSheet(HERO_STOP_STYLE)
         self.stop_btn.clicked.connect(self.stop_ocr)
 
@@ -303,20 +324,20 @@ class ControllerWindow(QWidget):
         hero_card.layout.addLayout(hero_row)
         layout.addWidget(hero_card)
 
-        # Status Metrics Grid (4 thẻ tóm tắt)
-        metrics_card = ModernCard("Chỉ số Trực tiếp (Live Metrics)", "Tóm tắt cấu hình đang hoạt động")
+        # Status Metrics Grid (4 thẻ tóm tắt với Lucide Icons)
+        metrics_card = ModernCard("Chỉ số Trực tiếp", "Tóm tắt cấu hình đang hoạt động")
         grid_row1 = QHBoxLayout()
         grid_row1.setSpacing(10)
         grid_row2 = QHBoxLayout()
         grid_row2.setSpacing(10)
 
-        card_status = MetricCard("TRẠNG THÁI", "Đã dừng", "●")
-        card_ai = MetricCard("AI MODEL", f"{load_active_provider()}", "🤖")
-        card_lang = MetricCard("NGÔN NGỮ", f"{self.state.source} ➔ {self.state.target}", "🌐")
+        card_status = MetricCard("TRẠNG THÁI", "Đã dừng", icon_name="activity", icon_color=CYBER_PALETTE['neon_rose'])
+        card_ai = MetricCard("AI MODEL", f"{load_active_provider()}", icon_name="cpu", icon_color=CYBER_PALETTE['neon_indigo'])
+        card_lang = MetricCard("NGÔN NGỮ", f"{self.state.source} -> {self.state.target}", icon_name="languages", icon_color=CYBER_PALETTE['text_muted'])
         
         reg = load_region()
         reg_txt = f"{reg.get('width', 0)} x {reg.get('height', 0)} px" if reg else "Chưa chọn vùng"
-        card_reg = MetricCard("VÙNG QUÉT OCR", reg_txt, "📐")
+        card_reg = MetricCard("VÙNG QUÉT OCR", reg_txt, icon_name="maximize-2", icon_color=CYBER_PALETTE['text_muted'])
 
         self.metric_cards["status"] = card_status
         self.metric_cards["ai"] = card_ai
@@ -337,15 +358,19 @@ class ControllerWindow(QWidget):
         q_row = QHBoxLayout()
         q_row.setSpacing(10)
 
-        quick_select_btn = QPushButton("🎯 Chọn lại vùng quét màn hình")
-        quick_select_btn.setFixedHeight(34)
+        quick_select_btn = QPushButton("  Chọn lại vùng quét")
+        quick_select_btn.setFixedHeight(32)
+        quick_select_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=14))
+        quick_select_btn.setIconSize(QSize(14, 14))
         quick_select_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         quick_select_btn.setCursor(Qt.PointingHandCursor)
         quick_select_btn.clicked.connect(self._on_select_region_clicked)
         q_row.addWidget(quick_select_btn)
 
-        quick_sub_btn = QPushButton("🎨 Chỉnh nhanh phụ đề")
-        quick_sub_btn.setFixedHeight(34)
+        quick_sub_btn = QPushButton("  Chỉnh phụ đề")
+        quick_sub_btn.setFixedHeight(32)
+        quick_sub_btn.setIcon(get_lucide_icon("sliders", color=CYBER_PALETTE['text_muted'], size=14))
+        quick_sub_btn.setIconSize(QSize(14, 14))
         quick_sub_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         quick_sub_btn.setCursor(Qt.PointingHandCursor)
         quick_sub_btn.clicked.connect(lambda: self._switch_to_page(3))
@@ -382,7 +407,7 @@ class ControllerWindow(QWidget):
         p_col = QVBoxLayout()
         p_col.setSpacing(4)
         p_lbl = QLabel("AI Provider")
-        p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(get_available_providers())
         self.provider_combo.setCurrentText(active_provider)
@@ -395,7 +420,7 @@ class ControllerWindow(QWidget):
         m_col = QVBoxLayout()
         m_col.setSpacing(4)
         m_lbl = QLabel("Mô hình (Model ID)")
-        m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self._populate_models_for_provider(active_provider)
@@ -423,21 +448,13 @@ class ControllerWindow(QWidget):
         self.api_key_input.textChanged.connect(self._on_api_key_changed)
         k_input_row.addWidget(self.api_key_input)
 
-        self.toggle_key_btn = QPushButton("👁")
-        self.toggle_key_btn.setFixedSize(38, 34)
+        self.toggle_key_btn = QPushButton()
+        self.toggle_key_btn.setFixedSize(36, 32)
         self.toggle_key_btn.setToolTip("Hiện / Ẩn API Key")
         self.toggle_key_btn.setCursor(Qt.PointingHandCursor)
-        self.toggle_key_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {CYBER_PALETTE['bg_input']};
-                border: 1px solid {CYBER_PALETTE['border']};
-                border-radius: 7px;
-                font-size: 14px;
-            }}
-            QPushButton:hover {{
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
-            }}
-        """)
+        self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
+        self.toggle_key_btn.setIconSize(QSize(16, 16))
+        self.toggle_key_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         self.toggle_key_btn.clicked.connect(self._toggle_key_visibility)
         k_input_row.addWidget(self.toggle_key_btn)
 
@@ -451,11 +468,11 @@ class ControllerWindow(QWidget):
         layout.addWidget(self.key_card)
 
         # Card 3: Guide Note
-        note_card = ModernCard("💡 Hướng dẫn Lấy API Key")
+        note_card = ModernCard("Hướng dẫn lấy API Key")
         note_text = QLabel(
             "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
-            "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng hàng trăm model\n"
-            "• Groq: Truy cập console.groq.com để nhận key tốc độ siêu cao miễn phí"
+            "• OpenAI: Truy cập platform.openai.com/api-keys\n"
+            "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng nhiều model"
         )
         note_text.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 12px; line-height: 1.5;")
         note_card.layout.addWidget(note_text)
@@ -486,7 +503,7 @@ class ControllerWindow(QWidget):
         src_col = QVBoxLayout()
         src_col.setSpacing(4)
         src_lbl = QLabel("Ngôn ngữ nguồn (Source)")
-        src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.src_combo = QComboBox()
         self.src_combo.addItems(list(SUPPORTED_LANGUAGES.keys()))
         self.src_combo.setCurrentText(self.state.source if self.state.source in SUPPORTED_LANGUAGES else "English")
@@ -495,15 +512,15 @@ class ControllerWindow(QWidget):
         src_col.addWidget(self.src_combo)
         lang_row.addLayout(src_col)
 
-        arrow_lbl = QLabel("➔")
+        arrow_lbl = QLabel("->")
         arrow_lbl.setAlignment(Qt.AlignCenter)
-        arrow_lbl.setStyleSheet(f"font-size: 18px; color: {CYBER_PALETTE['neon_indigo']}; margin-top: 18px;")
+        arrow_lbl.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']}; margin-top: 18px;")
         lang_row.addWidget(arrow_lbl)
 
         tgt_col = QVBoxLayout()
         tgt_col.setSpacing(4)
         tgt_lbl = QLabel("Ngôn ngữ dịch (Target)")
-        tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.tgt_combo = QComboBox()
         self.tgt_combo.addItems(SUPPORTED_TARGETS)
         self.tgt_combo.setCurrentText(self.state.target if self.state.target in SUPPORTED_TARGETS else "Vietnamese")
@@ -535,7 +552,7 @@ class ControllerWindow(QWidget):
 
         timing_row.addWidget(self.interval_spin)
 
-        timing_info = QLabel("Khuyến nghị: 500ms cho đối thoại game thông thường, 300ms cho game hành động")
+        timing_info = QLabel("Khuyến nghị: 500ms cho đối thoại game thông thường, 300ms cho game nhịp độ nhanh")
         timing_info.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 11.5px;")
         timing_info.setWordWrap(True)
         timing_row.addWidget(timing_info, stretch=1)
@@ -544,14 +561,16 @@ class ControllerWindow(QWidget):
         layout.addWidget(ocr_timing_card)
 
         # Card 3: Region Inspector
-        reg_card = ModernCard("Vùng màn hình đang theo dõi", "Tọa độ và kích thước khung hình camera OCR quét phụ đề")
+        reg_card = ModernCard("Vùng màn hình theo dõi", "Tọa độ và kích thước khung hình camera OCR quét phụ đề")
         
         self.reg_info_lbl = QLabel()
         self._update_region_info_lbl()
         reg_card.layout.addWidget(self.reg_info_lbl)
 
-        reg_btn = QPushButton("🎯 Chọn lại vùng quét màn hình (Kéo chuột)")
-        reg_btn.setFixedHeight(36)
+        reg_btn = QPushButton("  Chọn lại vùng quét (Kéo chuột)")
+        reg_btn.setFixedHeight(34)
+        reg_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=15))
+        reg_btn.setIconSize(QSize(15, 15))
         reg_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         reg_btn.setCursor(Qt.PointingHandCursor)
         reg_btn.clicked.connect(self._on_select_region_clicked)
@@ -586,7 +605,7 @@ class ControllerWindow(QWidget):
         bg_col = QVBoxLayout()
         bg_col.setSpacing(4)
         bg_lbl = QLabel("Màu nền (Background)")
-        bg_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        bg_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.bg_color_btn = QPushButton()
         self.bg_color_btn.setFixedHeight(34)
         self.bg_color_btn.setCursor(Qt.PointingHandCursor)
@@ -600,7 +619,7 @@ class ControllerWindow(QWidget):
         txt_col = QVBoxLayout()
         txt_col.setSpacing(4)
         txt_lbl = QLabel("Màu chữ (Text)")
-        txt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        txt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.text_color_btn = QPushButton()
         self.text_color_btn.setFixedHeight(34)
         self.text_color_btn.setCursor(Qt.PointingHandCursor)
@@ -617,9 +636,9 @@ class ControllerWindow(QWidget):
         # Opacity Slider
         opacity_header = QHBoxLayout()
         op_lbl = QLabel("Độ trong suốt nền (Background Opacity)")
-        op_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']};")
+        op_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.opacity_val_lbl = QLabel(f"{self.state.bg_opacity}%")
-        self.opacity_val_lbl.setStyleSheet(f"font-size: 12.5px; font-weight: 700; color: {CYBER_PALETTE['neon_indigo']};")
+        self.opacity_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
         opacity_header.addWidget(op_lbl)
         opacity_header.addStretch()
         opacity_header.addWidget(self.opacity_val_lbl)
@@ -630,21 +649,21 @@ class ControllerWindow(QWidget):
         self.opacity_slider.setValue(self.state.bg_opacity)
         self.opacity_slider.setStyleSheet(f"""
             QSlider::groove:horizontal {{
-                height: 6px;
+                height: 5px;
                 background: {CYBER_PALETTE['bg_input']};
-                border-radius: 3px;
+                border-radius: 2px;
             }}
             QSlider::sub-page:horizontal {{
                 background: {CYBER_PALETTE['neon_indigo']};
-                border-radius: 3px;
+                border-radius: 2px;
             }}
             QSlider::handle:horizontal {{
                 background: {CYBER_PALETTE['text_primary']};
-                border: 2px solid {CYBER_PALETTE['neon_indigo']};
-                width: 16px;
+                border: 1px solid {CYBER_PALETTE['neon_indigo']};
+                width: 14px;
                 margin-top: -5px;
                 margin-bottom: -5px;
-                border-radius: 8px;
+                border-radius: 7px;
             }}
         """)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
@@ -653,15 +672,14 @@ class ControllerWindow(QWidget):
         layout.addWidget(style_card)
 
         # Card 2: LIVE PREVIEW BOX
-        preview_card = ModernCard("Xem trước Thời gian thực (Live Subtitle Preview)", "Mô phỏng chính xác khung phụ đề nổi hiển thị trên màn hình game")
+        preview_card = ModernCard("Xem trước Thời gian thực", "Mô phỏng chính xác khung phụ đề nổi hiển thị trên màn hình game")
         
-        # Container giả lập game nền tối
         sim_container = QFrame()
         sim_container.setStyleSheet(f"""
             QFrame {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #121420, stop:1 #1e2235);
-                border: 1px dashed {CYBER_PALETTE['border_light']};
-                border-radius: 10px;
+                background-color: #08090b;
+                border: 1px dashed {CYBER_PALETTE['border_card']};
+                border-radius: 8px;
                 min-height: 120px;
             }}
         """)
@@ -690,7 +708,7 @@ class ControllerWindow(QWidget):
     def _update_live_preview_box(self):
         bg_col = QColor(self.state.bg_color)
         if not bg_col.isValid():
-            bg_col = QColor("#1e1e2e")
+            bg_col = QColor("#0e0f12")
         text_col = QColor(self.state.text_color)
         if not text_col.isValid():
             text_col = QColor("#ffffff")
@@ -702,19 +720,19 @@ class ControllerWindow(QWidget):
             QLabel {{
                 color: {text_col.name()};
                 background-color: rgba({r}, {g}, {b}, {alpha:.2f});
-                font-size: 16px;
-                font-weight: 600;
+                font-size: 15px;
+                font-weight: 500;
                 padding: 10px 18px;
                 border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 40);
-                font-family: 'Segoe UI', 'Arial';
+                border: 1px solid rgba(255, 255, 255, 30);
+                font-family: 'Segoe UI', 'Inter', 'Arial';
             }}
         """)
 
     def _update_color_btn_style(self, btn: QPushButton, hex_color: str):
         col = QColor(hex_color)
         if not col.isValid():
-            col = QColor("#1e1e2e")
+            col = QColor("#14151a")
         text_col = "#000000" if (col.red() * 0.299 + col.green() * 0.587 + col.blue() * 0.114) > 150 else "#ffffff"
         btn.setText(f"  {col.name().upper()}")
         btn.setStyleSheet(f"""
@@ -722,14 +740,14 @@ class ControllerWindow(QWidget):
                 background-color: {col.name()};
                 color: {text_col};
                 border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 7px;
-                font-weight: 700;
-                font-size: 12.5px;
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 12px;
                 text-align: left;
                 padding-left: 12px;
             }}
             QPushButton:hover {{
-                border: 2px solid {CYBER_PALETTE['neon_indigo']};
+                border: 1px solid {CYBER_PALETTE['neon_indigo']};
             }}
         """)
 
@@ -808,19 +826,19 @@ class ControllerWindow(QWidget):
     def _toggle_key_visibility(self):
         if self.api_key_input.echoMode() == QLineEdit.Password:
             self.api_key_input.setEchoMode(QLineEdit.Normal)
-            self.toggle_key_btn.setText("🔒")
+            self.toggle_key_btn.setIcon(get_lucide_icon("eye-off", color=CYBER_PALETTE['neon_indigo'], size=16))
         else:
             self.api_key_input.setEchoMode(QLineEdit.Password)
-            self.toggle_key_btn.setText("👁")
+            self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
 
     def _update_api_status(self):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         if load_provider_api_key(provider).strip():
-            self.api_status_lbl.setText(f"Trạng thái: ✅ {provider} sẵn sàng (.env)")
-            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
+            self.api_status_lbl.setText(f"Trạng thái: {provider} sẵn sàng (.env)")
+            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 500;")
         else:
-            self.api_status_lbl.setText(f"Trạng thái: ⚠️ Chưa có API Key cho {provider}")
-            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 11.5px; font-weight: 600;")
+            self.api_status_lbl.setText(f"Trạng thái: Chưa có API Key cho {provider}")
+            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 11.5px; font-weight: 500;")
 
     def _on_source_lang_changed(self, lang: str):
         self.state.update(source=lang)
@@ -842,15 +860,14 @@ class ControllerWindow(QWidget):
                 f"Tọa độ: X={reg.get('left', 0)}, Y={reg.get('top', 0)} | "
                 f"Kích thước: {reg.get('width', 0)} x {reg.get('height', 0)} px"
             )
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 12px; font-weight: 600;")
+            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 12px; font-weight: 500;")
         else:
-            self.reg_info_lbl.setText("Chưa chọn vùng quét màn hình. Vui lòng bấm nút bên dưới để chọn.")
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px; font-weight: 600;")
+            self.reg_info_lbl.setText("Chưa chọn vùng quét màn hình. Bấm nút bên dưới để chọn.")
+            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px; font-weight: 500;")
 
     def _on_select_region_clicked(self):
         if callable(self.on_select_region_cb):
             self.on_select_region_cb()
-        # Cập nhật thông số sau khi chọn
         self._update_region_info_lbl()
         self._update_all_metric_cards()
 
@@ -861,7 +878,7 @@ class ControllerWindow(QWidget):
         model = self.model_combo.currentText() if hasattr(self, "model_combo") else load_provider_model_id(provider)
         
         self.metric_cards["ai"].set_value(f"{provider}\n{model}")
-        self.metric_cards["lang"].set_value(f"{self.state.source} ➔ {self.state.target}")
+        self.metric_cards["lang"].set_value(f"{self.state.source} -> {self.state.target}")
         
         reg = load_region()
         reg_txt = f"{reg.get('width', 0)} x {reg.get('height', 0)} px" if reg else "Chưa chọn vùng"
@@ -870,18 +887,18 @@ class ControllerWindow(QWidget):
     def start_ocr(self):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         if not load_provider_api_key(provider).strip():
-            self.status.setText("● Lỗi: Thiếu API Key")
-            self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 700;")
+            self.status.setText("Lỗi: Thiếu API Key")
+            self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
             
-            # Tự động chuyển người dùng sang tab AI Engine
+            # Chuyển người dùng sang tab AI Engine
             self._switch_to_page(1)
             
-            # Hiệu ứng viền cảnh báo ô nhập API Key
+            # Cảnh báo viền thẻ API Key
             self.key_card.setStyleSheet(f"""
                 QFrame#cardFrame {{
                     background-color: {CYBER_PALETTE['bg_card']};
-                    border: 2px solid {CYBER_PALETTE['neon_rose']};
-                    border-radius: 10px;
+                    border: 1px solid {CYBER_PALETTE['neon_rose']};
+                    border-radius: 8px;
                 }}
             """)
             QTimer.singleShot(2500, lambda: self.key_card.setStyleSheet(CARD_FRAME_STYLE))
@@ -890,15 +907,15 @@ class ControllerWindow(QWidget):
         if self.worker:
             self.worker.start_worker()
         
-        self.status.setText("● Đang chạy (Active)")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 700;")
+        self.status.setText("Đang hoạt động")
+        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
         if "status" in self.metric_cards:
-            self.metric_cards["status"].set_value("Đang chạy (Active)")
+            self.metric_cards["status"].set_value("Đang hoạt động")
 
     def stop_ocr(self):
         if self.worker:
             self.worker.stop_worker()
-        self.status.setText("● Đã dừng (Stopped)")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 700;")
+        self.status.setText("Đã dừng")
+        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
         if "status" in self.metric_cards:
             self.metric_cards["status"].set_value("Đã dừng")
