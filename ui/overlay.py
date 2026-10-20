@@ -35,12 +35,8 @@ class Overlay(QLabel):
         self.is_drag_mode = False
         self._last_normal_text = "Subtitle Ready"
 
-        # Drop Shadow Effect tạo độ sâu nổi bật trên game
-        self.shadow_effect = QGraphicsDropShadowEffect(self)
-        self.shadow_effect.setBlurRadius(18)
-        self.shadow_effect.setColor(QColor(0, 0, 0, 190))
-        self.shadow_effect.setOffset(0, 4)
-        self.setGraphicsEffect(self.shadow_effect)
+        # Note: Tránh gán QGraphicsDropShadowEffect trực tiếp lên Top-Level Translucent Window
+        # vì Windows Layered Window API sẽ báo lỗi UpdateLayeredWindowIndirect (dirty rect âm).
 
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)

@@ -1,12 +1,12 @@
 {
   "region": {
-    "top": 456,
-    "left": 568,
-    "width": 1057,
-    "height": 273
+    "top": 409,
+    "left": 485,
+    "width": 1007,
+    "height": 246
   },
   "bg_color": "#1e1e2e",
-  "bg_opacity": 80,
+  "bg_opacity": 45,
   "text_color": "#ffffff",
   "current_provider": "Google Gemini",
   "provider_models": {
