@@ -1062,7 +1062,7 @@ class ControllerWindow(QWidget):
     def start_ocr(self):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         if not load_provider_api_key(provider).strip():
-            self.status.setText("Lỗi: Thiếu API Key")
+            self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
             self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
             
             # Chuyển người dùng sang tab AI Engine

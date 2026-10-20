@@ -13,5 +13,12 @@
     "Google Gemini": "gemini-2.5-flash",
     "OpenAI": "gpt-4o-mini"
   },
-  "model_id": "gpt-4o-mini"
+  "model_id": "gpt-4o-mini",
+  "font_size": 28,
+  "overlay_preset": "custom",
+  "overlay_x": 350,
+  "overlay_y": 450,
+  "source_lang": "Japanese",
+  "target_lang": "English",
+  "interval_ms": 650
 }
