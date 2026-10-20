@@ -44,8 +44,13 @@ def main():
     overlay = Overlay(
         bg_hex=state.bg_color,
         opacity_pct=state.bg_opacity,
-        text_hex=state.text_color
+        text_hex=state.text_color,
+        font_size=state.font_size
     )
+    if state.overlay_preset == "custom" and state.overlay_x is not None and state.overlay_y is not None:
+        overlay.move(state.overlay_x, state.overlay_y)
+    else:
+        overlay.apply_preset(state.overlay_preset)
     overlay.show()
 
     # ===== 3. Khởi tạo Background Worker =====
@@ -61,6 +66,7 @@ def main():
         worker.set_overlay_rect(overlay.get_geometry_rect())
 
     overlay.fade_anim.finished.connect(sync_overlay_mask)
+    overlay.position_changed.connect(lambda x, y: sync_overlay_mask())
 
     # ===== 4. Controller & Selector =====
     controller = None
