@@ -8,6 +8,10 @@ from PyQt5.QtGui import QColor
 
 from core.config import (
     SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, load_config, save_config,
+    PROVIDERS, DEFAULT_PROVIDER, get_available_providers,
+    load_active_provider, save_active_provider,
+    load_provider_api_key, save_provider_api_key,
+    load_provider_model_id, save_provider_model_id,
     load_api_key, save_api_key, load_model_id, save_model_id,
     AVAILABLE_MODELS
 )
@@ -59,7 +63,7 @@ class ControllerWindow(QWidget):
 
         # ===== Cấu hình Window =====
         self.setWindowTitle("Game Translator")
-        self.setFixedSize(520, 860)
+        self.setFixedSize(520, 890)
 
         self.setStyleSheet("""
             QWidget {
@@ -140,13 +144,21 @@ class ControllerWindow(QWidget):
         # ===== API SETTINGS =====
         api_sec = Section("API Settings")
 
-        api_sec.layout.addWidget(QLabel("OpenAI API Key"))
+        api_sec.layout.addWidget(QLabel("Provider"))
+        self.provider_combo = QComboBox()
+        self.provider_combo.addItems(get_available_providers())
+        active_provider = load_active_provider()
+        self.provider_combo.setCurrentText(active_provider)
+        self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
+        api_sec.layout.addWidget(self.provider_combo)
+
+        api_sec.layout.addWidget(QLabel("API Key"))
         key_row = QHBoxLayout()
         key_row.setSpacing(6)
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.Password)
-        self.api_key_input.setPlaceholderText("sk-proj-...")
-        self.api_key_input.setText(load_api_key())
+        self.api_key_input.setPlaceholderText(PROVIDERS[active_provider]["placeholder"])
+        self.api_key_input.setText(load_provider_api_key(active_provider))
         self.api_key_input.textChanged.connect(self._on_api_key_changed)
         key_row.addWidget(self.api_key_input)
 
@@ -172,11 +184,7 @@ class ControllerWindow(QWidget):
         api_sec.layout.addWidget(QLabel("Model"))
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
-        self.model_combo.addItems(AVAILABLE_MODELS)
-        saved_model = load_model_id()
-        if saved_model not in AVAILABLE_MODELS:
-            self.model_combo.addItem(saved_model)
-        self.model_combo.setCurrentText(saved_model)
+        self._populate_models_for_provider(active_provider)
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
         api_sec.layout.addWidget(self.model_combo)
 
@@ -370,15 +378,41 @@ class ControllerWindow(QWidget):
                 text_hex=self.state.text_color
             )
 
+    def _populate_models_for_provider(self, provider: str):
+        cfg = PROVIDERS.get(provider, PROVIDERS[DEFAULT_PROVIDER])
+        saved_model = load_provider_model_id(provider)
+        models = list(cfg["models"])
+        if saved_model not in models:
+            models.append(saved_model)
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        self.model_combo.addItems(models)
+        self.model_combo.setCurrentText(saved_model)
+        self.model_combo.blockSignals(False)
+
+    def _on_provider_changed(self, provider: str):
+        if provider not in PROVIDERS:
+            return
+        save_active_provider(provider)
+        self.api_key_input.blockSignals(True)
+        self.api_key_input.setText(load_provider_api_key(provider))
+        self.api_key_input.setPlaceholderText(PROVIDERS[provider]["placeholder"])
+        self.api_key_input.blockSignals(False)
+        self._populate_models_for_provider(provider)
+        self._update_api_status()
+        reload_client()
+
     def _on_api_key_changed(self, text: str = ""):
+        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         key = self.api_key_input.text().strip()
-        save_api_key(key)
+        save_provider_api_key(provider, key)
         reload_client()
         self._update_api_status()
 
     def _on_model_changed(self, model: str):
+        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         if model.strip():
-            save_model_id(model.strip())
+            save_provider_model_id(provider, model.strip())
             reload_client()
 
     def _toggle_key_visibility(self):
@@ -390,16 +424,18 @@ class ControllerWindow(QWidget):
             self.toggle_key_btn.setText("👁")
 
     def _update_api_status(self):
-        if load_api_key().strip():
-            self.api_status_lbl.setText("Trạng thái: ✅ Sẵn sàng (.env)")
+        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
+        if load_provider_api_key(provider).strip():
+            self.api_status_lbl.setText(f"Trạng thái: ✅ {provider} sẵn sàng (.env)")
             self.api_status_lbl.setStyleSheet("color: #a6e3a1; font-size: 11.5px; font-weight: 600;")
         else:
-            self.api_status_lbl.setText("Trạng thái: ⚠️ Chưa có API Key (Cần nhập để dịch)")
+            self.api_status_lbl.setText(f"Trạng thái: ⚠️ Chưa có API Key cho {provider}")
             self.api_status_lbl.setStyleSheet("color: #fab387; font-size: 11.5px; font-weight: 600;")
 
     def start_ocr(self):
-        if not load_api_key().strip():
-            self.status.setText("⚠️ Vui lòng nhập OpenAI API Key trước khi bắt đầu!")
+        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
+        if not load_provider_api_key(provider).strip():
+            self.status.setText(f"⚠️ Vui lòng nhập {provider} API Key trước khi bắt đầu!")
             self.status.setStyleSheet("color: #f38ba8; font-size: 12.5px; font-weight: 600;")
             self.api_section.setStyleSheet("""
                 QFrame {
