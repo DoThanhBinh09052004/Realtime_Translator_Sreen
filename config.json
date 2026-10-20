@@ -7,5 +7,11 @@
   },
   "bg_color": "#1e1e2e",
   "bg_opacity": 80,
-  "text_color": "#ffffff"
+  "text_color": "#ffffff",
+  "current_provider": "Google Gemini",
+  "provider_models": {
+    "Google Gemini": "gemini-2.5-flash",
+    "OpenAI": "gpt-4o-mini"
+  },
+  "model_id": "gpt-4o-mini"
 }
