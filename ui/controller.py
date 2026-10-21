@@ -1,3 +1,4 @@
+from ui.settings_coordinator import SettingsCoordinator
 from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.pages.ocr_settings_page import OcrSettingsPage
 from ui.pages.ai_settings_page import AiSettingsPage
@@ -45,7 +46,8 @@ class ControllerWindow(QWidget):
 
         self.worker = worker
         self.state = state
-        self.overlay = overlay
+        self._overlay = overlay
+        self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
 
@@ -135,6 +137,9 @@ class ControllerWindow(QWidget):
 
         # Đồng bộ ban đầu
         self._update_all_metric_cards()
+        self.settings_coordinator.settings_changed.connect(self._render_snapshot)
+        self.settings_coordinator.save_failed.connect(self._show_save_error)
+        self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
 
     # ========================================================
     # NAVIGATION CHUYỂN TRANG
@@ -222,57 +227,19 @@ class ControllerWindow(QWidget):
         return self.subtitle_page
 
     def _on_subtitle_style_changed(self, changes):
-        if self._commit_settings(lambda: self.state.update(**changes)):
-            self._sync_overlay_style()
-            self.subtitle_page.render(self._snapshot_for_pages().subtitle)
+        return self.settings_coordinator.set_subtitle_style(changes)
 
     # ========================================================
     # LOGIC XỬ LÝ SỰ KIỆN & CẬP NHẬT
     # ========================================================
     def _configure_worker(self):
-        if self.worker is not None:
-            self.worker.configure(load_runtime_settings(self.state, load_config()["interval_ms"]))
+        self.settings_coordinator._configure_worker()
 
     def _commit_settings(self, action: Callable[[], None]) -> bool:
-        try:
-            action()
-        except ConfigError:
-            self._restore_settings_widgets()
-            self.status.setText("Không thể lưu thiết lập. Kiểm tra quyền ghi và dung lượng ổ đĩa.")
-            self.status.setStyleSheet(
-                f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;"
-            )
-            return False
-        return True
+        return self.settings_coordinator._commit(action, field='region')
 
     def _restore_settings_widgets(self):
-        # Block signals during rollback to avoid another write from a Qt slot.
-        provider = load_active_provider()
-        controls = (
-            (self.src_combo, self.src_combo.setCurrentText, self.state.source),
-            (self.tgt_combo, self.tgt_combo.setCurrentText, self.state.target),
-            (self.font_size_slider, self.font_size_slider.setValue, self.state.font_size),
-            (self.opacity_slider, self.opacity_slider.setValue, self.state.bg_opacity),
-            (self.provider_combo, self.provider_combo.setCurrentText, provider),
-            (self.api_key_input, self.api_key_input.setText, load_provider_api_key(provider)),
-            (self.interval_spin, self.interval_spin.setValue, load_config()["interval_ms"]),
-        )
-        for control, setter, value in controls:
-            blocked = control.blockSignals(True)
-            try:
-                setter(value)
-            finally:
-                control.blockSignals(blocked)
-        self.api_key_input.setPlaceholderText(PROVIDERS[provider]["placeholder"])
-        self._populate_models_for_provider(provider)
-        self.set_preset_display(self.state.overlay_preset)
-        self.font_size_val_lbl.setText(f"{self.state.font_size}px")
-        self.opacity_val_lbl.setText(f"{self.state.bg_opacity}%")
-        self._update_color_btn_style(self.bg_color_btn, self.state.bg_color)
-        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
-        self._update_live_preview_box()
-        self._update_api_status()
-        self._update_all_metric_cards()
+        self._render_snapshot(self.settings_coordinator.snapshot(), 'rollback')
 
     def _update_live_preview_box(self):
         self.live_preview_box.setStyleSheet(subtitle_preview_style(self._snapshot_for_pages().subtitle))
@@ -289,101 +256,41 @@ class ControllerWindow(QWidget):
         self.subtitle_page.pick_text_color()
 
     def _on_opacity_changed(self, val: int):
-        if not self._commit_settings(lambda: self.state.update(bg_opacity=val)):
-            return
-        self.opacity_val_lbl.setText(f"{val}%")
-        self._update_live_preview_box()
-        self._sync_overlay_style()
+        return self.settings_coordinator.set_subtitle_style({'bg_opacity': val})
 
     def _on_font_size_changed(self, val: int):
-        if not self._commit_settings(lambda: self.state.update(font_size=val)):
-            return
-        self.font_size_val_lbl.setText(f"{val}px")
-        self._update_live_preview_box()
-        self._sync_overlay_style()
+        return self.settings_coordinator.set_subtitle_style({'font_size': val})
 
     def _on_preset_changed(self, index: int):
-        preset = self.preset_combo.currentData()
-        if preset:
-            if not self._commit_settings(lambda: self.state.update(overlay_preset=preset)):
-                return
-            if self.overlay and preset != "custom":
-                self.overlay.apply_preset(preset)
+        return self.settings_coordinator.set_overlay_preset(self.preset_combo.currentData())
 
     def _toggle_drag_mode(self):
-        if not self.overlay:
-            return
-        new_state = not self.overlay.is_drag_mode
-        self.overlay.set_drag_mode(new_state)
-        self._update_drag_btn_style(new_state)
+        return self.settings_coordinator.toggle_overlay_drag()
 
     def _update_drag_btn_style(self, is_active):
         self.drag_toggle_btn.setText("✓ Đã xong (Khóa vị trí phụ đề)" if is_active else "✥ Di chuyển phụ đề trên màn hình")
         self.drag_toggle_btn.setStyleSheet(drag_button_style(is_active))
 
     def set_preset_display(self, preset: str):
-        idx = self.preset_combo.findData(preset)
-        if idx >= 0:
-            self.preset_combo.blockSignals(True)
-            self.preset_combo.setCurrentIndex(idx)
-            self.preset_combo.blockSignals(False)
+        self.subtitle_page.set_preset_display(preset)
 
     def _on_overlay_position_changed(self, x: int, y: int):
-        if not self._commit_settings(
-            lambda: self.state.update(overlay_x=x, overlay_y=y, overlay_preset="custom")
-        ):
-            if self.overlay:
-                if (self.state.overlay_preset == "custom"
-                        and self.state.overlay_x is not None and self.state.overlay_y is not None):
-                    self.overlay.move(self.state.overlay_x, self.state.overlay_y)
-                    self.overlay.current_preset = "custom"
-                else:
-                    self.overlay.apply_preset(self.state.overlay_preset)
-            return
-        self.set_preset_display("custom")
+        return self.settings_coordinator.save_overlay_position(x, y)
 
     def _sync_overlay_style(self):
-        if self.overlay:
-            self.overlay.apply_style(
-                bg_hex=self.state.bg_color,
-                opacity_pct=self.state.bg_opacity,
-                text_hex=self.state.text_color,
-                font_size=self.state.font_size
-            )
+        self.settings_coordinator._apply_style()
 
     def _populate_models_for_provider(self, provider):
         self.ai_page.render(self._snapshot_for_pages().ai, changed_field="provider")
 
     def _on_provider_changed(self, provider: str):
-        if provider not in PROVIDERS:
-            return
-        if not self._commit_settings(lambda: save_active_provider(provider)):
-            return
-        self.api_key_input.blockSignals(True)
-        self.api_key_input.setText(load_provider_api_key(provider))
-        self.api_key_input.setPlaceholderText(PROVIDERS[provider]["placeholder"])
-        self.api_key_input.blockSignals(False)
-        self._populate_models_for_provider(provider)
-        self._update_api_status()
-        self._update_all_metric_cards()
-        self._configure_worker()
+        return self.settings_coordinator.set_provider(provider)
 
     def _on_api_key_changed(self, text: str = ""):
-        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
-        key = self.api_key_input.text().strip()
-        if not self._commit_settings(lambda: save_provider_api_key(provider, key)):
-            return
-        self._configure_worker()
-        self._update_api_status()
-        self._update_all_metric_cards()
+        return self.settings_coordinator.set_api_key(text)
 
     def _on_model_changed(self, model: str):
-        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
-        if model.strip():
-            if not self._commit_settings(lambda: save_provider_model_id(provider, model.strip())):
-                return
-            self._configure_worker()
-            self._update_all_metric_cards()
+        return self.settings_coordinator.set_model(model)
 
     def _toggle_key_visibility(self):
         self.ai_page.toggle_key_visibility()
@@ -392,21 +299,13 @@ class ControllerWindow(QWidget):
         self.ai_page.render(self._snapshot_for_pages().ai, changed_field="api_key")
 
     def _on_source_lang_changed(self, lang: str):
-        if not self._commit_settings(lambda: self.state.update(source=lang)):
-            return
-        self._configure_worker()
-        self._update_all_metric_cards()
+        return self.settings_coordinator.set_source(lang)
 
     def _on_target_lang_changed(self, lang: str):
-        if not self._commit_settings(lambda: self.state.update(target=lang)):
-            return
-        self._configure_worker()
-        self._update_all_metric_cards()
+        return self.settings_coordinator.set_target(lang)
 
     def _on_interval_changed(self, val: int):
-        if not self._commit_settings(lambda: save_config("interval_ms", val)):
-            return
-        self._configure_worker()
+        return self.settings_coordinator.set_interval(val)
 
     def _update_region_info_lbl(self):
         self.ocr_page.render(self._snapshot_for_pages().ocr)
@@ -450,15 +349,25 @@ class ControllerWindow(QWidget):
             self.metric_cards["status"].set_value("Đã dừng")
 
     def _snapshot_for_pages(self) -> ControllerSnapshot:
-        provider = load_active_provider()
-        model = load_provider_model_id(provider)
-        models = tuple(PROVIDERS[provider]['models'])
-        if model not in models:
-            models += (model,)
-        region = load_region()
-        return ControllerSnapshot(
-            AiPageState(provider, model, models, load_provider_api_key(provider), PROVIDERS[provider]['placeholder']),
-            OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
-                         tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None),
-            SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
-                              self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y))
+        return self.settings_coordinator.snapshot()
+
+    @property
+    def overlay(self):
+        return self._overlay
+
+    @overlay.setter
+    def overlay(self, overlay):
+        self._overlay = overlay
+        self.settings_coordinator.set_overlay(overlay)
+
+    def _render_snapshot(self, snapshot, changed_field):
+        if changed_field in ('provider', 'model', 'api_key', 'rollback'):
+            self.ai_page.render(snapshot.ai, changed_field=changed_field)
+        if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
+            self.ocr_page.render(snapshot.ocr)
+        if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'rollback'):
+            self.subtitle_page.render(snapshot.subtitle)
+        self.console_page.render_summary(snapshot)
+
+    def _show_save_error(self, message):
+        self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
