@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
-from core.config import State, load_config, load_region, save_region
+from core.config import State, load_config, load_region
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
@@ -29,13 +29,8 @@ def setup_dark_theme(app: QApplication):
 
 
 def apply_selected_region(controller, worker, new_region: dict) -> bool:
-    """Commit before changing the live capture region; report write errors in UI."""
-    if not controller._commit_settings(lambda: save_region(new_region)):
-        return False
-    worker.set_region(load_region())
-    controller._update_region_info_lbl()
-    controller._update_all_metric_cards()
-    return True
+    """Compatibility wrapper: the controller owns save and apply ordering."""
+    return controller.apply_region_selection(new_region)
 
 
 def main():
