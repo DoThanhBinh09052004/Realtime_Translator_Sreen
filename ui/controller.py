@@ -1,3 +1,4 @@
+from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.console_page import ConsolePage
 from ui.widgets.sidebar import ControllerSidebar
 from ui.widgets.cards import ModernCard, MetricCard
@@ -168,102 +169,18 @@ class ControllerWindow(QWidget):
     # ========================================================
     # PAGE 2: AI ENGINE CONFIG
     # ========================================================
-    def _create_ai_page(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 4, 4, 4)
-        layout.setSpacing(14)
-
-        active_provider = load_active_provider()
-
-        # Card 1: Provider & Model Selector
-        prov_card = ModernCard("Nhà cung cấp & Mô hình AI", "Chọn Provider và Model thực hiện tác vụ dịch thuật")
-        
-        row1 = QHBoxLayout()
-        row1.setSpacing(12)
-
-        # Provider col
-        p_col = QVBoxLayout()
-        p_col.setSpacing(4)
-        p_lbl = QLabel("AI Provider")
-        p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.provider_combo = QComboBox()
-        self.provider_combo.addItems(get_available_providers())
-        self.provider_combo.setCurrentText(active_provider)
-        self.provider_combo.currentTextChanged.connect(self._on_provider_changed)
-        p_col.addWidget(p_lbl)
-        p_col.addWidget(self.provider_combo)
-        row1.addLayout(p_col)
-
-        # Model col
-        m_col = QVBoxLayout()
-        m_col.setSpacing(4)
-        m_lbl = QLabel("Mô hình (Model ID)")
-        m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.model_combo = QComboBox()
-        self.model_combo.setEditable(True)
-        self._populate_models_for_provider(active_provider)
-        self.model_combo.currentTextChanged.connect(self._on_model_changed)
-        m_col.addWidget(m_lbl)
-        m_col.addWidget(self.model_combo)
-        row1.addLayout(m_col)
-
-        prov_card.layout.addLayout(row1)
-        layout.addWidget(prov_card)
-
-        # Card 2: API Key Management
-        self.key_card = ModernCard("Khóa API (API Key)", "Khóa được lưu cục bộ an toàn trong file .env")
-        
-        k_layout = QVBoxLayout()
-        k_layout.setSpacing(6)
-        
-        k_input_row = QHBoxLayout()
-        k_input_row.setSpacing(8)
-
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setEchoMode(QLineEdit.Password)
-        self.api_key_input.setPlaceholderText(PROVIDERS[active_provider]["placeholder"])
-        self.api_key_input.setText(load_provider_api_key(active_provider))
-        self.api_key_input.textChanged.connect(self._on_api_key_changed)
-        k_input_row.addWidget(self.api_key_input)
-
-        self.toggle_key_btn = QPushButton()
-        self.toggle_key_btn.setFixedSize(36, 32)
-        self.toggle_key_btn.setToolTip("Hiện / Ẩn API Key")
-        self.toggle_key_btn.setCursor(Qt.PointingHandCursor)
-        self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
-        self.toggle_key_btn.setIconSize(QSize(16, 16))
-        self.toggle_key_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.toggle_key_btn.clicked.connect(self._toggle_key_visibility)
-        k_input_row.addWidget(self.toggle_key_btn)
-
-        k_layout.addLayout(k_input_row)
-
-        self.api_status_lbl = QLabel()
-        self._update_api_status()
-        k_layout.addWidget(self.api_status_lbl)
-
-        self.key_card.layout.addLayout(k_layout)
-        layout.addWidget(self.key_card)
-
-        # Card 3: Guide Note
-        note_card = ModernCard("Hướng dẫn lấy API Key")
-        note_text = QLabel(
-            "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
-            "• OpenAI: Truy cập platform.openai.com/api-keys\n"
-            "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng nhiều model"
-        )
-        note_text.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 12px; line-height: 1.5;")
-        note_card.layout.addWidget(note_text)
-        layout.addWidget(note_card)
-
-        layout.addStretch()
-        scroll.setWidget(content)
-        return scroll
+    def _create_ai_page(self):
+        self.ai_page = AiSettingsPage(self._snapshot_for_pages().ai, tuple(get_available_providers()), self)
+        self.provider_combo = self.ai_page.provider_combo
+        self.model_combo = self.ai_page.model_combo
+        self.api_key_input = self.ai_page.api_key_input
+        self.toggle_key_btn = self.ai_page.toggle_key_btn
+        self.api_status_lbl = self.ai_page.api_status_lbl
+        self.key_card = self.ai_page.key_card
+        self.ai_page.provider_changed.connect(self._on_provider_changed)
+        self.ai_page.model_changed.connect(self._on_model_changed)
+        self.ai_page.api_key_changed.connect(self._on_api_key_changed)
+        return self.ai_page
 
     # ========================================================
     # PAGE 3: DỊCH THUẬT & VÙNG QUÉT OCR
@@ -699,17 +616,8 @@ class ControllerWindow(QWidget):
                 font_size=self.state.font_size
             )
 
-    def _populate_models_for_provider(self, provider: str):
-        cfg = PROVIDERS.get(provider, PROVIDERS[DEFAULT_PROVIDER])
-        saved_model = load_provider_model_id(provider)
-        models = list(cfg["models"])
-        if saved_model not in models:
-            models.append(saved_model)
-        self.model_combo.blockSignals(True)
-        self.model_combo.clear()
-        self.model_combo.addItems(models)
-        self.model_combo.setCurrentText(saved_model)
-        self.model_combo.blockSignals(False)
+    def _populate_models_for_provider(self, provider):
+        self.ai_page.render(self._snapshot_for_pages().ai, changed_field="provider")
 
     def _on_provider_changed(self, provider: str):
         if provider not in PROVIDERS:
@@ -743,21 +651,10 @@ class ControllerWindow(QWidget):
             self._update_all_metric_cards()
 
     def _toggle_key_visibility(self):
-        if self.api_key_input.echoMode() == QLineEdit.Password:
-            self.api_key_input.setEchoMode(QLineEdit.Normal)
-            self.toggle_key_btn.setIcon(get_lucide_icon("eye-off", color=CYBER_PALETTE['neon_indigo'], size=16))
-        else:
-            self.api_key_input.setEchoMode(QLineEdit.Password)
-            self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
+        self.ai_page.toggle_key_visibility()
 
     def _update_api_status(self):
-        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
-        if load_provider_api_key(provider).strip():
-            self.api_status_lbl.setText(f"Trạng thái: {provider} sẵn sàng (.env)")
-            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 500;")
-        else:
-            self.api_status_lbl.setText(f"Trạng thái: Chưa có API Key cho {provider}")
-            self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 11.5px; font-weight: 500;")
+        self.ai_page.render(self._snapshot_for_pages().ai, changed_field="api_key")
 
     def _on_source_lang_changed(self, lang: str):
         if not self._commit_settings(lambda: self.state.update(source=lang)):
@@ -807,14 +704,7 @@ class ControllerWindow(QWidget):
             self._switch_to_page(1)
             
             # Cảnh báo viền thẻ API Key
-            self.key_card.setStyleSheet(f"""
-                QFrame#cardFrame {{
-                    background-color: {CYBER_PALETTE['bg_card']};
-                    border: 1px solid {CYBER_PALETTE['neon_rose']};
-                    border-radius: 8px;
-                }}
-            """)
-            QTimer.singleShot(2500, lambda: self.key_card.setStyleSheet(CARD_FRAME_STYLE))
+            self.ai_page.highlight_missing_key()
             return
 
         if self.worker:
