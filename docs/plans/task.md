@@ -5,3 +5,4 @@
 | Task 3: Nâng cấp Tab 4 trong ui/controller.py & Live Preview | COMPLETED | Added Font Size Slider, Position Presets combo, Drag toggle button, and Live Preview update |
 | Task 4: Kết nối đồng bộ giữa main.py, ControllerWindow và Overlay | COMPLETED | Connected position_changed signal, restored saved overlay geometry, synced worker mask |
 | Task 5: Kiểm thử toàn diện hệ thống (End-to-End Verification) | COMPLETED | Passed all 5 new unit/integration tests and verify_all.py full suite with zero regressions |
+| S01: Isolated test harness | COMPLETED | RED: missing isolated_config; GREEN: 11 tests passed; config/.env hashes unchanged; spec and quality reviewed. |
