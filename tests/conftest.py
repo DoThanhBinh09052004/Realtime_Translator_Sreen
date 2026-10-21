@@ -125,6 +125,16 @@ def fake_clock():
     return FakeClock()
 
 
+@pytest.fixture
+def ui_window(qtbot):
+    from ui.controller import ControllerWindow
+    worker = Mock()
+    worker.interval.return_value = 500
+    window = ControllerWindow(worker, config.State(), Mock(), Mock(), overlay=None)
+    qtbot.addWidget(window)
+    return window
+
+
 def pytest_unconfigure(config):
     _bootstrap.undo()
     _session_dir.cleanup()
