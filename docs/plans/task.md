@@ -6,3 +6,4 @@
 | Task 4: Kết nối đồng bộ giữa main.py, ControllerWindow và Overlay | COMPLETED | Connected position_changed signal, restored saved overlay geometry, synced worker mask |
 | Task 5: Kiểm thử toàn diện hệ thống (End-to-End Verification) | COMPLETED | Passed all 5 new unit/integration tests and verify_all.py full suite with zero regressions |
 | S01: Isolated test harness | COMPLETED | RED: missing isolated_config; GREEN: 11 tests passed; config/.env hashes unchanged; spec and quality reviewed. |
+| S02: Validate and persist settings safely | COMPLETED | RED: 47 regressions failed on original code; GREEN: 70 tests passed with cache disabled; config/.env hashes unchanged; spec and code quality self-review completed. Qt tested offscreen; no live desktop/API checks. |

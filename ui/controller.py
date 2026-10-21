@@ -1,4 +1,5 @@
 import os
+from typing import Callable
 from PyQt5.QtWidgets import (
     QWidget, QPushButton, QVBoxLayout, QHBoxLayout,
     QLabel, QSpinBox, QComboBox, QFrame, QSlider, QColorDialog,
@@ -13,7 +14,7 @@ from core.config import (
     load_active_provider, save_active_provider,
     load_provider_api_key, save_provider_api_key,
     load_provider_model_id, save_provider_model_id,
-    load_region
+    load_region, ConfigError
 )
 from engines.translator import reload_client
 from ui.styles import (
@@ -813,6 +814,47 @@ class ControllerWindow(QWidget):
     # ========================================================
     # LOGIC XỬ LÝ SỰ KIỆN & CẬP NHẬT
     # ========================================================
+    def _commit_settings(self, action: Callable[[], None]) -> bool:
+        try:
+            action()
+        except ConfigError:
+            self._restore_settings_widgets()
+            self.status.setText("Không thể lưu thiết lập. Kiểm tra quyền ghi và dung lượng ổ đĩa.")
+            self.status.setStyleSheet(
+                f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;"
+            )
+            return False
+        return True
+
+    def _restore_settings_widgets(self):
+        # Block signals during rollback to avoid another write from a Qt slot.
+        provider = load_active_provider()
+        controls = (
+            (self.src_combo, self.src_combo.setCurrentText, self.state.source),
+            (self.tgt_combo, self.tgt_combo.setCurrentText, self.state.target),
+            (self.font_size_slider, self.font_size_slider.setValue, self.state.font_size),
+            (self.opacity_slider, self.opacity_slider.setValue, self.state.bg_opacity),
+            (self.provider_combo, self.provider_combo.setCurrentText, provider),
+            (self.api_key_input, self.api_key_input.setText, load_provider_api_key(provider)),
+            (self.interval_spin, self.interval_spin.setValue, load_config()["interval_ms"]),
+        )
+        for control, setter, value in controls:
+            blocked = control.blockSignals(True)
+            try:
+                setter(value)
+            finally:
+                control.blockSignals(blocked)
+        self.api_key_input.setPlaceholderText(PROVIDERS[provider]["placeholder"])
+        self._populate_models_for_provider(provider)
+        self.set_preset_display(self.state.overlay_preset)
+        self.font_size_val_lbl.setText(f"{self.state.font_size}px")
+        self.opacity_val_lbl.setText(f"{self.state.bg_opacity}%")
+        self._update_color_btn_style(self.bg_color_btn, self.state.bg_color)
+        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
+        self._update_live_preview_box()
+        self._update_api_status()
+        self._update_all_metric_cards()
+
     def _update_live_preview_box(self):
         bg_col = QColor(self.state.bg_color)
         if not bg_col.isValid():
@@ -863,7 +905,8 @@ class ControllerWindow(QWidget):
         col = QColorDialog.getColor(QColor(self.state.bg_color), self, "Chọn màu nền phụ đề")
         if col.isValid():
             hex_str = col.name()
-            self.state.update(bg_color=hex_str)
+            if not self._commit_settings(lambda: self.state.update(bg_color=hex_str)):
+                return
             self._update_color_btn_style(self.bg_color_btn, hex_str)
             self._update_live_preview_box()
             self._sync_overlay_style()
@@ -872,27 +915,31 @@ class ControllerWindow(QWidget):
         col = QColorDialog.getColor(QColor(self.state.text_color), self, "Chọn màu chữ phụ đề")
         if col.isValid():
             hex_str = col.name()
-            self.state.update(text_color=hex_str)
+            if not self._commit_settings(lambda: self.state.update(text_color=hex_str)):
+                return
             self._update_color_btn_style(self.text_color_btn, hex_str)
             self._update_live_preview_box()
             self._sync_overlay_style()
 
     def _on_opacity_changed(self, val: int):
+        if not self._commit_settings(lambda: self.state.update(bg_opacity=val)):
+            return
         self.opacity_val_lbl.setText(f"{val}%")
-        self.state.update(bg_opacity=val)
         self._update_live_preview_box()
         self._sync_overlay_style()
 
     def _on_font_size_changed(self, val: int):
+        if not self._commit_settings(lambda: self.state.update(font_size=val)):
+            return
         self.font_size_val_lbl.setText(f"{val}px")
-        self.state.update(font_size=val)
         self._update_live_preview_box()
         self._sync_overlay_style()
 
     def _on_preset_changed(self, index: int):
         preset = self.preset_combo.currentData()
         if preset:
-            self.state.update(overlay_preset=preset)
+            if not self._commit_settings(lambda: self.state.update(overlay_preset=preset)):
+                return
             if self.overlay and preset != "custom":
                 self.overlay.apply_preset(preset)
 
@@ -946,7 +993,17 @@ class ControllerWindow(QWidget):
             self.preset_combo.blockSignals(False)
 
     def _on_overlay_position_changed(self, x: int, y: int):
-        self.state.update(overlay_x=x, overlay_y=y, overlay_preset="custom")
+        if not self._commit_settings(
+            lambda: self.state.update(overlay_x=x, overlay_y=y, overlay_preset="custom")
+        ):
+            if self.overlay:
+                if (self.state.overlay_preset == "custom"
+                        and self.state.overlay_x is not None and self.state.overlay_y is not None):
+                    self.overlay.move(self.state.overlay_x, self.state.overlay_y)
+                    self.overlay.current_preset = "custom"
+                else:
+                    self.overlay.apply_preset(self.state.overlay_preset)
+            return
         self.set_preset_display("custom")
 
     def _sync_overlay_style(self):
@@ -973,7 +1030,8 @@ class ControllerWindow(QWidget):
     def _on_provider_changed(self, provider: str):
         if provider not in PROVIDERS:
             return
-        save_active_provider(provider)
+        if not self._commit_settings(lambda: save_active_provider(provider)):
+            return
         self.api_key_input.blockSignals(True)
         self.api_key_input.setText(load_provider_api_key(provider))
         self.api_key_input.setPlaceholderText(PROVIDERS[provider]["placeholder"])
@@ -986,7 +1044,8 @@ class ControllerWindow(QWidget):
     def _on_api_key_changed(self, text: str = ""):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         key = self.api_key_input.text().strip()
-        save_provider_api_key(provider, key)
+        if not self._commit_settings(lambda: save_provider_api_key(provider, key)):
+            return
         reload_client()
         self._update_api_status()
         self._update_all_metric_cards()
@@ -994,7 +1053,8 @@ class ControllerWindow(QWidget):
     def _on_model_changed(self, model: str):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         if model.strip():
-            save_provider_model_id(provider, model.strip())
+            if not self._commit_settings(lambda: save_provider_model_id(provider, model.strip())):
+                return
             reload_client()
             self._update_all_metric_cards()
 
@@ -1016,17 +1076,20 @@ class ControllerWindow(QWidget):
             self.api_status_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 11.5px; font-weight: 500;")
 
     def _on_source_lang_changed(self, lang: str):
-        self.state.update(source=lang)
+        if not self._commit_settings(lambda: self.state.update(source=lang)):
+            return
         self._update_all_metric_cards()
 
     def _on_target_lang_changed(self, lang: str):
-        self.state.update(target=lang)
+        if not self._commit_settings(lambda: self.state.update(target=lang)):
+            return
         self._update_all_metric_cards()
 
     def _on_interval_changed(self, val: int):
+        if not self._commit_settings(lambda: save_config("interval_ms", val)):
+            return
         if self.worker is not None:
             self.worker.setInterval(val)
-        save_config("interval_ms", val)
 
     def _update_region_info_lbl(self):
         reg = load_region()

@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
-from core.config import State, load_region, save_region
+from core.config import State, load_config, load_region, save_region
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
@@ -26,6 +26,16 @@ def setup_dark_theme(app: QApplication):
     palette.setColor(QPalette.Highlight, QColor(CYBER_PALETTE["neon_indigo"]))
     palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
     app.setPalette(palette)
+
+
+def apply_selected_region(controller, worker, new_region: dict) -> bool:
+    """Commit before changing the live capture region; report write errors in UI."""
+    if not controller._commit_settings(lambda: save_region(new_region)):
+        return False
+    worker.set_region(load_region())
+    controller._update_region_info_lbl()
+    controller._update_all_metric_cards()
+    return True
 
 
 def main():
@@ -54,7 +64,7 @@ def main():
     overlay.show()
 
     # ===== 3. Khởi tạo Background Worker =====
-    worker = TranslationWorker(state=state, region=region, interval_ms=500)
+    worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"])
     worker.set_overlay_rect(overlay.get_geometry_rect())
 
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
@@ -98,8 +108,7 @@ def main():
 
         def on_region_selected(new_region):
             nonlocal selector
-            save_region(new_region)
-            worker.set_region(new_region)
+            apply_selected_region(controller, worker, new_region)
             restore_ui()
 
         selector.region_selected.connect(on_region_selected)

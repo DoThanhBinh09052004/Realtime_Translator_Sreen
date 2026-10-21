@@ -102,7 +102,7 @@ def test_qt_runs_offscreen(qtbot):
 
 
 def test_next_test_starts_with_empty_config(isolated_config):
-    assert config.load_config() == {}
+    assert config.load_config() == config.normalize_config({})
     assert config.load_provider_api_key("OpenAI") == ""
     assert config.load_provider_api_key("Google Gemini") == ""
     assert not Path(config.CONFIG_PATH).exists()

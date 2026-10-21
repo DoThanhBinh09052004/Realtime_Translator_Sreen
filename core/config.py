@@ -1,5 +1,16 @@
 import json
 import os
+import math
+import re
+import tempfile
+import threading
+
+_config_lock = threading.RLock()
+
+
+class ConfigError(Exception):
+    """A settings operation failed; messages must never contain secrets."""
+
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
 
@@ -20,26 +31,63 @@ DEFAULT_REGION = {
 }
 
 
+def _read_config(strict: bool = False) -> dict:
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (FileNotFoundError, ValueError):
+        raw = {}
+    except OSError:
+        if strict:
+            raise ConfigError("Không thể đọc cấu hình để lưu thiết lập.") from None
+        raw = {}
+    return normalize_config(raw)
+
+
 def load_config() -> dict:
-    """Đọc toàn bộ cấu hình từ file config.json"""
-    if os.path.exists(CONFIG_PATH):
+    """Read validated defaults without creating or repairing files on disk."""
+    with _config_lock:
+        return _read_config()
+
+
+def _atomic_write(path: str, content: str) -> None:
+    temporary = None
+    try:
+        # Close the temporary file before replace (required on Windows).
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=os.path.dirname(os.path.abspath(path)),
+            prefix=".settings-", suffix=".tmp", delete=False,
+        ) as f:
+            temporary = f.name
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+    except (OSError, ValueError, TypeError):
+        raise ConfigError("Không thể lưu thiết lập. Vui lòng kiểm tra quyền ghi và dung lượng ổ đĩa.") from None
+    finally:
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+
+
+def save_config_values(changes: dict) -> None:
+    """Serialize a read/modify/write transaction, including multi-field updates."""
+    with _config_lock:
+        data = _read_config(strict=True)
+        data.update(changes)
         try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️ Lỗi đọc file config: {e}")
-    return {}
+            content = json.dumps(normalize_config(data), ensure_ascii=False, indent=2, allow_nan=False)
+        except (ValueError, TypeError):
+            raise ConfigError("Dữ liệu thiết lập không hợp lệ.") from None
+        _atomic_write(CONFIG_PATH, content)
 
 
 def save_config(key: str, value):
     """Lưu từng trường cấu hình vào config.json"""
-    try:
-        data = load_config()
-        data[key] = value
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"⚠️ Lỗi lưu config: {e}")
+    save_config_values({key: value})
 
 
 DEFAULT_BG_COLOR = "#1e1e2e"
@@ -47,6 +95,52 @@ DEFAULT_BG_OPACITY = 80
 DEFAULT_TEXT_COLOR = "#ffffff"
 DEFAULT_FONT_SIZE = 22
 DEFAULT_OVERLAY_PRESET = "bottom_center"
+
+
+def _bounded_int(value, default: int, low: int, high: int) -> int:
+    if type(value) not in (int, float) or (isinstance(value, float) and not math.isfinite(value)):
+        return default
+    return int(max(low, min(high, value)))
+
+
+def normalize_config(raw: object) -> dict:
+    """Validate known settings while retaining unrelated persisted fields."""
+    cfg = dict(raw) if isinstance(raw, dict) else {}
+    for field, default, low, high in (
+        ("font_size", DEFAULT_FONT_SIZE, 14, 36),
+        ("bg_opacity", DEFAULT_BG_OPACITY, 0, 100),
+        ("interval_ms", 500, 100, 3000),
+    ):
+        cfg[field] = _bounded_int(cfg.get(field), default, low, high)
+    for field, choices, default in (
+        ("source_lang", SUPPORTED_LANGUAGES, "English"),
+        ("target_lang", SUPPORTED_TARGETS, "Vietnamese"),
+        ("current_provider", PROVIDERS, DEFAULT_PROVIDER),
+        ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
+    ):
+        value = cfg.get(field)
+        cfg[field] = value if isinstance(value, str) and value in choices else default
+    for field, default in (("bg_color", DEFAULT_BG_COLOR), ("text_color", DEFAULT_TEXT_COLOR)):
+        value = cfg.get(field)
+        cfg[field] = value if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value) else default
+    for field in ("overlay_x", "overlay_y"):
+        value = cfg.get(field)
+        cfg[field] = value if type(value) is int else None
+    region = cfg.get("region")
+    if (isinstance(region, dict)
+            and all(type(region.get(k)) is int for k in DEFAULT_REGION)
+            and region["width"] > 0 and region["height"] > 0):
+        cfg["region"] = {k: region[k] for k in DEFAULT_REGION}
+    else:
+        cfg["region"] = DEFAULT_REGION.copy()
+    models = cfg.get("provider_models")
+    cfg["provider_models"] = {
+        provider: model.strip() for provider, model in models.items()
+        if provider in PROVIDERS and isinstance(model, str) and model.strip()
+    } if isinstance(models, dict) else {}
+    if not isinstance(cfg.get("model_id"), str) or not cfg["model_id"].strip():
+        cfg.pop("model_id", None)
+    return cfg
 
 
 class State:
@@ -63,15 +157,19 @@ class State:
         self.overlay_x = cfg.get("overlay_x", None)
         self.overlay_y = cfg.get("overlay_y", None)
 
-    def update(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-            if k == "source":
-                save_config("source_lang", v)
-            elif k == "target":
-                save_config("target_lang", v)
-            elif k in ("bg_color", "bg_opacity", "text_color", "font_size", "overlay_preset", "overlay_x", "overlay_y"):
-                save_config(k, v)
+    def update(self, **kwargs) -> None:
+        names = {"source": "source_lang", "target": "target_lang"}
+        names.update({k: k for k in (
+            "bg_color", "bg_opacity", "text_color", "font_size",
+            "overlay_preset", "overlay_x", "overlay_y",
+        )})
+        if any(k not in names for k in kwargs):
+            raise ConfigError("Trường thiết lập không hợp lệ.")
+        values = normalize_config({names[k]: v for k, v in kwargs.items()})
+        changes = {names[k]: values[names[k]] for k in kwargs}
+        save_config_values(changes)
+        for k in kwargs:
+            setattr(self, k, changes[names[k]])
 
 
 def load_region() -> dict:
@@ -134,8 +232,8 @@ def save_active_provider(provider: str):
 
 
 def _read_env() -> dict:
-    env_vars = {}
-    if os.path.exists(ENV_PATH):
+    with _config_lock:
+        env_vars = {}
         try:
             with open(ENV_PATH, "r", encoding="utf-8") as f:
                 for line in f:
@@ -143,18 +241,24 @@ def _read_env() -> dict:
                     if line and not line.startswith("#") and "=" in line:
                         k, v = line.split("=", 1)
                         env_vars[k.strip()] = v.strip()
-        except Exception as e:
-            print(f"⚠️ Lỗi đọc .env: {e}")
-    return env_vars
+        except (OSError, UnicodeError):
+            pass
+        return env_vars
 
 
 def _write_env_var(key: str, value: str):
-    try:
+    if not isinstance(value, str) or any(char in value for char in ("\n", "\r", "\0")):
+        raise ConfigError("Giá trị thiết lập không hợp lệ.")
+    with _config_lock:
         lines = []
         key_found = False
-        if os.path.exists(ENV_PATH):
+        try:
             with open(ENV_PATH, "r", encoding="utf-8") as f:
                 lines = f.readlines()
+        except FileNotFoundError:
+            pass
+        except (OSError, UnicodeError):
+            raise ConfigError("Không thể đọc tệp API key để lưu thiết lập.") from None
 
         new_lines = []
         for line in lines:
@@ -170,12 +274,8 @@ def _write_env_var(key: str, value: str):
                 new_lines[-1] += "\n"
             new_lines.append(f"{key}={value}\n")
 
-        with open(ENV_PATH, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
-
+        _atomic_write(ENV_PATH, "".join(new_lines))
         os.environ[key] = value
-    except Exception as e:
-        print(f"⚠️ Lỗi ghi .env: {e}")
 
 
 def load_provider_api_key(provider: str = None) -> str:
@@ -215,12 +315,10 @@ def save_provider_model_id(provider: str, model_id: str):
     """Lưu model ID của provider vào config.json"""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
-    models_map = load_config().get("provider_models", {})
-    models_map[provider] = model_id
-    save_config("provider_models", models_map)
-    save_config("model_id", model_id)
-    if provider == "OpenAI":
-        _write_env_var("MODEL_ID", model_id)
+    with _config_lock:
+        models_map = _read_config(strict=True)["provider_models"]
+        models_map[provider] = model_id
+        save_config_values({"provider_models": models_map, "model_id": model_id})
 
 
 # ===== Backward Compatibility Aliases =====
@@ -242,7 +340,4 @@ def load_model_id() -> str:
 def save_model_id(model_id: str):
     """[Alias] Lưu model ID cho active provider"""
     save_provider_model_id(load_active_provider(), model_id)
-
-
-
 
