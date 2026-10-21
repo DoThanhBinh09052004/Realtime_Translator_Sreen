@@ -1,3 +1,4 @@
+from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.pages.ocr_settings_page import OcrSettingsPage
 from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.console_page import ConsolePage
@@ -204,197 +205,26 @@ class ControllerWindow(QWidget):
     # ========================================================
     # PAGE 4: TÙY BIẾN PHỤ ĐỀ (SUBTITLE & LIVE PREVIEW)
     # ========================================================
-    def _create_subtitle_page(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    def _create_subtitle_page(self):
+        self.subtitle_page = SubtitleSettingsPage(self._snapshot_for_pages().subtitle, self)
+        self.bg_color_btn = self.subtitle_page.bg_color_btn
+        self.text_color_btn = self.subtitle_page.text_color_btn
+        self.font_size_slider = self.subtitle_page.font_size_slider
+        self.font_size_val_lbl = self.subtitle_page.font_size_val_lbl
+        self.opacity_slider = self.subtitle_page.opacity_slider
+        self.opacity_val_lbl = self.subtitle_page.opacity_val_lbl
+        self.preset_combo = self.subtitle_page.preset_combo
+        self.drag_toggle_btn = self.subtitle_page.drag_toggle_btn
+        self.live_preview_box = self.subtitle_page.live_preview_box
+        self.subtitle_page.style_changed.connect(self._on_subtitle_style_changed)
+        self.subtitle_page.preset_changed.connect(lambda: self._on_preset_changed(0))
+        self.subtitle_page.drag_toggle_requested.connect(self._toggle_drag_mode)
+        return self.subtitle_page
 
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 4, 4, 4)
-        layout.setSpacing(14)
-
-        # Card 1: Colors & Typography
-        style_card = ModernCard("Màu sắc & Kích thước Chữ", "Tùy biến diện mạo hộp phụ đề nổi trên game")
-        
-        color_row = QHBoxLayout()
-        color_row.setSpacing(12)
-
-        # BG Color Picker
-        bg_col = QVBoxLayout()
-        bg_col.setSpacing(4)
-        bg_lbl = QLabel("Màu nền (Background)")
-        bg_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.bg_color_btn = QPushButton()
-        self.bg_color_btn.setFixedHeight(34)
-        self.bg_color_btn.setCursor(Qt.PointingHandCursor)
-        self._update_color_btn_style(self.bg_color_btn, self.state.bg_color)
-        self.bg_color_btn.clicked.connect(self._pick_bg_color)
-        bg_col.addWidget(bg_lbl)
-        bg_col.addWidget(self.bg_color_btn)
-        color_row.addLayout(bg_col)
-
-        # Text Color Picker
-        txt_col = QVBoxLayout()
-        txt_col.setSpacing(4)
-        txt_lbl = QLabel("Màu chữ (Text)")
-        txt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.text_color_btn = QPushButton()
-        self.text_color_btn.setFixedHeight(34)
-        self.text_color_btn.setCursor(Qt.PointingHandCursor)
-        self._update_color_btn_style(self.text_color_btn, self.state.text_color)
-        self.text_color_btn.clicked.connect(self._pick_text_color)
-        txt_col.addWidget(txt_lbl)
-        txt_col.addWidget(self.text_color_btn)
-        color_row.addLayout(txt_col)
-
-        style_card.layout.addLayout(color_row)
-        style_card.layout.addSpacing(6)
-
-        # Font Size Slider
-        font_header = QHBoxLayout()
-        font_lbl = QLabel("Cỡ chữ phụ đề (Font Size)")
-        font_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.font_size_val_lbl = QLabel(f"{self.state.font_size}px")
-        self.font_size_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
-        font_header.addWidget(font_lbl)
-        font_header.addStretch()
-        font_header.addWidget(self.font_size_val_lbl)
-        style_card.layout.addLayout(font_header)
-
-        self.font_size_slider = QSlider(Qt.Horizontal)
-        self.font_size_slider.setRange(14, 36)
-        self.font_size_slider.setValue(self.state.font_size)
-        self.font_size_slider.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
-                height: 5px;
-                background: {CYBER_PALETTE['bg_input']};
-                border-radius: 2px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {CYBER_PALETTE['neon_indigo']};
-                border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                background: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
-                width: 14px;
-                margin-top: -5px;
-                margin-bottom: -5px;
-                border-radius: 7px;
-            }}
-        """)
-        self.font_size_slider.valueChanged.connect(self._on_font_size_changed)
-        style_card.layout.addWidget(self.font_size_slider)
-        style_card.layout.addSpacing(6)
-
-        # Opacity Slider
-        opacity_header = QHBoxLayout()
-        op_lbl = QLabel("Độ trong suốt nền (Background Opacity)")
-        op_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.opacity_val_lbl = QLabel(f"{self.state.bg_opacity}%")
-        self.opacity_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
-        opacity_header.addWidget(op_lbl)
-        opacity_header.addStretch()
-        opacity_header.addWidget(self.opacity_val_lbl)
-        style_card.layout.addLayout(opacity_header)
-
-        self.opacity_slider = QSlider(Qt.Horizontal)
-        self.opacity_slider.setRange(0, 100)
-        self.opacity_slider.setValue(self.state.bg_opacity)
-        self.opacity_slider.setStyleSheet(f"""
-            QSlider::groove:horizontal {{
-                height: 5px;
-                background: {CYBER_PALETTE['bg_input']};
-                border-radius: 2px;
-            }}
-            QSlider::sub-page:horizontal {{
-                background: {CYBER_PALETTE['neon_indigo']};
-                border-radius: 2px;
-            }}
-            QSlider::handle:horizontal {{
-                background: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
-                width: 14px;
-                margin-top: -5px;
-                margin-bottom: -5px;
-                border-radius: 7px;
-            }}
-        """)
-        self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
-        style_card.layout.addWidget(self.opacity_slider)
-
-        layout.addWidget(style_card)
-
-        # Card 2: Position & Drag Mode
-        pos_card = ModernCard("Vị trí & Định vị Màn hình", "Chọn vị trí xuất hiện cố định hoặc tự do kéo thả phụ đề")
-        
-        pos_row = QHBoxLayout()
-        pos_row.setSpacing(12)
-
-        # Preset Dropdown
-        preset_box = QVBoxLayout()
-        preset_box.setSpacing(4)
-        preset_lbl = QLabel("Vị trí hiển thị (Preset)")
-        preset_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.preset_combo = QComboBox()
-        self.preset_combo.setFixedHeight(34)
-        self.preset_combo.addItem("Dưới giữa (Mặc định)", "bottom_center")
-        self.preset_combo.addItem("Trên giữa (Top Center)", "top_center")
-        self.preset_combo.addItem("Dưới trái (Bottom Left)", "bottom_left")
-        self.preset_combo.addItem("Vị trí tùy chọn (Custom)", "custom")
-
-        idx = self.preset_combo.findData(self.state.overlay_preset)
-        if idx >= 0:
-            self.preset_combo.setCurrentIndex(idx)
-        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
-
-        preset_box.addWidget(preset_lbl)
-        preset_box.addWidget(self.preset_combo)
-        pos_row.addLayout(preset_box)
-
-        pos_card.layout.addLayout(pos_row)
-        pos_card.layout.addSpacing(8)
-
-        # Drag Mode Action Button
-        self.drag_toggle_btn = QPushButton()
-        self.drag_toggle_btn.setCursor(Qt.PointingHandCursor)
-        self._update_drag_btn_style(False)
-        self.drag_toggle_btn.clicked.connect(self._toggle_drag_mode)
-        pos_card.layout.addWidget(self.drag_toggle_btn)
-
-        layout.addWidget(pos_card)
-
-        # Card 3: LIVE PREVIEW BOX
-        preview_card = ModernCard("Xem trước Thời gian thực", "Mô phỏng chính xác khung phụ đề nổi hiển thị trên màn hình game")
-        
-        sim_container = QFrame()
-        sim_container.setStyleSheet(f"""
-            QFrame {{
-                background-color: #08090b;
-                border: 1px dashed {CYBER_PALETTE['border_card']};
-                border-radius: 8px;
-                min-height: 120px;
-            }}
-        """)
-        sim_layout = QVBoxLayout(sim_container)
-        sim_layout.setAlignment(Qt.AlignCenter)
-        sim_layout.setContentsMargins(16, 20, 16, 20)
-
-        # Hộp phụ đề mẫu
-        self.live_preview_box = QLabel("Đây là đoạn phụ đề xem trước thời gian thực...")
-        self.live_preview_box.setAlignment(Qt.AlignCenter)
-        self.live_preview_box.setWordWrap(True)
-        self._update_live_preview_box()
-
-        sim_layout.addWidget(self.live_preview_box)
-        preview_card.layout.addWidget(sim_container)
-
-        layout.addWidget(preview_card)
-
-        layout.addStretch()
-        scroll.setWidget(content)
-        return scroll
+    def _on_subtitle_style_changed(self, changes):
+        if self._commit_settings(lambda: self.state.update(**changes)):
+            self._sync_overlay_style()
+            self.subtitle_page.render(self._snapshot_for_pages().subtitle)
 
     # ========================================================
     # LOGIC XỬ LÝ SỰ KIỆN & CẬP NHẬT
@@ -453,24 +283,10 @@ class ControllerWindow(QWidget):
         btn.setStyleSheet(style)
 
     def _pick_bg_color(self):
-        col = QColorDialog.getColor(QColor(self.state.bg_color), self, "Chọn màu nền phụ đề")
-        if col.isValid():
-            hex_str = col.name()
-            if not self._commit_settings(lambda: self.state.update(bg_color=hex_str)):
-                return
-            self._update_color_btn_style(self.bg_color_btn, hex_str)
-            self._update_live_preview_box()
-            self._sync_overlay_style()
+        self.subtitle_page.pick_bg_color()
 
     def _pick_text_color(self):
-        col = QColorDialog.getColor(QColor(self.state.text_color), self, "Chọn màu chữ phụ đề")
-        if col.isValid():
-            hex_str = col.name()
-            if not self._commit_settings(lambda: self.state.update(text_color=hex_str)):
-                return
-            self._update_color_btn_style(self.text_color_btn, hex_str)
-            self._update_live_preview_box()
-            self._sync_overlay_style()
+        self.subtitle_page.pick_text_color()
 
     def _on_opacity_changed(self, val: int):
         if not self._commit_settings(lambda: self.state.update(bg_opacity=val)):
