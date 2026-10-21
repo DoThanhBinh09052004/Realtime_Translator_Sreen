@@ -135,6 +135,15 @@ def ui_window(qtbot):
     return window
 
 
+@pytest.fixture
+def ui_snapshot():
+    from ui.controller_state import AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot
+    return ControllerSnapshot(
+        AiPageState('OpenAI', 'fake-model', ('fake-model',), 'fake-test-key', 'sk-proj-...'),
+        OcrPageState('English', 'Vietnamese', 500, (-100, 0, 800, 600)),
+        SubtitlePageState('#1e1e2e', '#ffffff', 80, 22, 'bottom_center', None, None))
+
+
 def pytest_unconfigure(config):
     _bootstrap.undo()
     _session_dir.cleanup()

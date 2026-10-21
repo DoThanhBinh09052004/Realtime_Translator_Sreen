@@ -1,3 +1,6 @@
+from ui.widgets.cards import ModernCard, MetricCard
+from ui.controller_state import AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot
+from ui.presentation import subtitle_preview_style, color_button_presentation, drag_button_style
 import os
 from typing import Callable
 from PyQt5.QtWidgets import (
@@ -25,88 +28,8 @@ from ui.styles import (
 from ui.icons import get_lucide_icon
 
 
-class ModernCard(QFrame):
-    """Thẻ container nội dung phong cách Linear Pro Card"""
-    def __init__(self, title: str = "", subtitle: str = ""):
-        super().__init__()
-        self.setObjectName("cardFrame")
-        self.setStyleSheet(CARD_FRAME_STYLE)
-        
-        self.box_layout = QVBoxLayout(self)
-        self.box_layout.setContentsMargins(16, 14, 16, 16)
-        self.box_layout.setSpacing(10)
-        
-        if title:
-            header_layout = QVBoxLayout()
-            header_layout.setSpacing(2)
-            
-            t_lbl = QLabel(title)
-            t_lbl.setStyleSheet(f"""
-                font-size: 13px;
-                font-weight: 600;
-                color: {CYBER_PALETTE['text_primary']};
-            """)
-            header_layout.addWidget(t_lbl)
-            
-            if subtitle:
-                sub_lbl = QLabel(subtitle)
-                sub_lbl.setStyleSheet(f"""
-                    font-size: 11.5px;
-                    color: {CYBER_PALETTE['text_muted']};
-                """)
-                header_layout.addWidget(sub_lbl)
-                
-            self.box_layout.addLayout(header_layout)
-
-    @property
-    def layout(self):
-        return self.box_layout
 
 
-class MetricCard(QFrame):
-    """Thẻ tóm tắt thông số với vector Lucide Icon"""
-    def __init__(self, title: str, value: str = "--", icon_name: str = "activity", icon_color: str = "#8c90a4"):
-        super().__init__()
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {CYBER_PALETTE['bg_input']};
-                border: 1px solid {CYBER_PALETTE['border']};
-                border-radius: 7px;
-                padding: 4px;
-            }}
-            QFrame:hover {{
-                border: 1px solid {CYBER_PALETTE['border_light']};
-            }}
-        """)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(4)
-        
-        header_row = QHBoxLayout()
-        header_row.setSpacing(6)
-
-        icon_lbl = QLabel()
-        icon = get_lucide_icon(icon_name, color=icon_color, size=15)
-        icon_lbl.setPixmap(icon.pixmap(15, 15))
-        header_row.addWidget(icon_lbl)
-
-        t_lbl = QLabel(title)
-        t_lbl.setStyleSheet(f"font-size: 10.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']}; letter-spacing: 0.3px;")
-        header_row.addWidget(t_lbl)
-        header_row.addStretch()
-        layout.addLayout(header_row)
-        
-        self.val_lbl = QLabel(value)
-        self.val_lbl.setStyleSheet(f"""
-            font-size: 12px;
-            font-weight: 600;
-            color: {CYBER_PALETTE['text_primary']};
-        """)
-        self.val_lbl.setWordWrap(True)
-        layout.addWidget(self.val_lbl)
-        
-    def set_value(self, val: str):
-        self.val_lbl.setText(val)
 
 
 class ControllerWindow(QWidget):
@@ -859,50 +782,12 @@ class ControllerWindow(QWidget):
         self._update_all_metric_cards()
 
     def _update_live_preview_box(self):
-        bg_col = QColor(self.state.bg_color)
-        if not bg_col.isValid():
-            bg_col = QColor("#0e0f12")
-        text_col = QColor(self.state.text_color)
-        if not text_col.isValid():
-            text_col = QColor("#ffffff")
+        self.live_preview_box.setStyleSheet(subtitle_preview_style(self._snapshot_for_pages().subtitle))
 
-        alpha = max(0.0, min(1.0, self.state.bg_opacity / 100.0))
-        r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
-
-        self.live_preview_box.setStyleSheet(f"""
-            QLabel {{
-                color: {text_col.name()};
-                background-color: rgba({r}, {g}, {b}, {alpha:.2f});
-                font-size: {self.state.font_size}px;
-                font-weight: 600;
-                padding: 10px 20px;
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.18);
-                font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
-            }}
-        """)
-
-    def _update_color_btn_style(self, btn: QPushButton, hex_color: str):
-        col = QColor(hex_color)
-        if not col.isValid():
-            col = QColor("#14151a")
-        text_col = "#000000" if (col.red() * 0.299 + col.green() * 0.587 + col.blue() * 0.114) > 150 else "#ffffff"
-        btn.setText(f"  {col.name().upper()}")
-        btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {col.name()};
-                color: {text_col};
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 6px;
-                font-weight: 600;
-                font-size: 12px;
-                text-align: left;
-                padding-left: 12px;
-            }}
-            QPushButton:hover {{
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
-            }}
-        """)
+    def _update_color_btn_style(self, btn, hex_color):
+        text, style = color_button_presentation(hex_color)
+        btn.setText(text)
+        btn.setStyleSheet(style)
 
     def _pick_bg_color(self):
         col = QColorDialog.getColor(QColor(self.state.bg_color), self, "Chọn màu nền phụ đề")
@@ -953,40 +838,9 @@ class ControllerWindow(QWidget):
         self.overlay.set_drag_mode(new_state)
         self._update_drag_btn_style(new_state)
 
-    def _update_drag_btn_style(self, is_active: bool):
-        if is_active:
-            self.drag_toggle_btn.setText("✓ Đã xong (Khóa vị trí phụ đề)")
-            self.drag_toggle_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {CYBER_PALETTE['neon_green']};
-                    color: #0b101b;
-                    border: 1px solid #34d399;
-                    border-radius: 6px;
-                    font-weight: 700;
-                    font-size: 12.5px;
-                    height: 34px;
-                }}
-                QPushButton:hover {{
-                    background-color: #34d399;
-                }}
-            """)
-        else:
-            self.drag_toggle_btn.setText("✥ Di chuyển phụ đề trên màn hình")
-            self.drag_toggle_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {CYBER_PALETTE['bg_input']};
-                    color: {CYBER_PALETTE['text_primary']};
-                    border: 1px solid {CYBER_PALETTE['border']};
-                    border-radius: 6px;
-                    font-weight: 600;
-                    font-size: 12px;
-                    height: 34px;
-                }}
-                QPushButton:hover {{
-                    border: 1px solid {CYBER_PALETTE['neon_indigo']};
-                    background-color: {CYBER_PALETTE['bg_card_hover']};
-                }}
-            """)
+    def _update_drag_btn_style(self, is_active):
+        self.drag_toggle_btn.setText("✓ Đã xong (Khóa vị trí phụ đề)" if is_active else "✥ Di chuyển phụ đề trên màn hình")
+        self.drag_toggle_btn.setStyleSheet(drag_button_style(is_active))
 
     def set_preset_display(self, preset: str):
         idx = self.preset_combo.findData(preset)
@@ -1161,3 +1015,17 @@ class ControllerWindow(QWidget):
         self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
         if "status" in self.metric_cards:
             self.metric_cards["status"].set_value("Đã dừng")
+
+    def _snapshot_for_pages(self) -> ControllerSnapshot:
+        provider = load_active_provider()
+        model = load_provider_model_id(provider)
+        models = tuple(PROVIDERS[provider]['models'])
+        if model not in models:
+            models += (model,)
+        region = load_region()
+        return ControllerSnapshot(
+            AiPageState(provider, model, models, load_provider_api_key(provider), PROVIDERS[provider]['placeholder']),
+            OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
+                         tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None),
+            SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
+                              self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y))
