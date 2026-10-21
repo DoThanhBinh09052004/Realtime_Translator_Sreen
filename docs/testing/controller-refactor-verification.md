@@ -70,3 +70,27 @@ manual Windows acceptance pass or live API verification.
 | C08 profiles | Profile service applies via coordinator |
 
 No completion boxes in other plans were changed.
+
+## Final independent review
+
+A fresh-context GPT-6 Astra reviewer inspected `956e719..f8c2214`, the plan/spec,
+tests, old/new handlers and comparison image. No Critical or Important findings;
+ready to merge. The reviewer did not rerun tests. One deferred Minor: 18 trailing
+whitespace lines copied from baseline, with no runtime effect.
+
+Execution decisions and their limits:
+
+1. Worked in the current checkout at the user's request; commits share the existing
+   feature branch rather than an isolated branch.
+2. Used native Python bookkeeping because bundled Bash could not resolve basename
+   and its task extractor did not recognize R01–R10 headings; only bookkeeping differs.
+3. Desktop dragging/selector acceptance remains unverified; a desktop-specific
+   interaction regression could escape fake/signal coverage.
+4. Live OCR/translation was not revalidated; a live integration issue could remain.
+5. Preserved baseline label clipping; existing readability issues remain.
+6. Preserved geometry/mask and lifecycle/status behavior, including duplicate startup
+   preset application, for later scoped fixes; their existing limitations remain.
+7. Preserved plaintext .env and key autosave as required by C01 scope boundaries;
+   existing storage/autosave limitations remain.
+8. Preserved the empty model editor retaining its last saved model; editor and
+   persistence can temporarily differ, as before.
