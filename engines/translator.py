@@ -1,87 +1,144 @@
-from openai import OpenAI
-from core.config import (
-    PROVIDERS, DEFAULT_PROVIDER, load_active_provider,
-    load_provider_api_key, load_provider_model_id
-)
+"""A translation service owned and used by one worker thread."""
+from collections import OrderedDict
+import math
 
-_translation_cache = {}
-_client = None
+from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
+from core.contracts import EngineError, ProviderSettings, RuntimeSettings, TranslationResult
 
-def get_client():
-    global _client
-    if _client is None:
-        provider = load_active_provider()
-        cfg = PROVIDERS.get(provider, PROVIDERS[DEFAULT_PROVIDER])
-        api_key = load_provider_api_key(provider)
-        if api_key:
-            kwargs = {"api_key": api_key}
-            if cfg.get("base_url"):
-                kwargs["base_url"] = cfg["base_url"]
-            _client = OpenAI(**kwargs)
-    return _client
+PROMPT_VERSION = 1
+_MESSAGES = {
+    "auth": "API key bị thiếu, không hợp lệ hoặc không có quyền truy cập.",
+    "quota": "Đã hết hạn mức sử dụng của nhà cung cấp.",
+    "rate_limit": "Nhà cung cấp đang giới hạn tốc độ yêu cầu.",
+    "timeout": "Yêu cầu dịch quá thời gian chờ.",
+    "network": "Không thể kết nối tới dịch vụ dịch.",
+    "invalid_model": "Model không tồn tại hoặc không khả dụng.",
+    "invalid_input": "Nội dung dịch không hợp lệ hoặc vượt quá 2000 ký tự.",
+    "internal": "Không thể xử lý kết quả từ dịch vụ dịch.",
+}
 
 
-def reload_client():
-    """Reset client để dùng API key/model mới từ config"""
-    global _client
-    _client = None
+def _error(code: str, retryable: bool = False, retry_after_s=None) -> TranslationResult:
+    return TranslationResult(error=EngineError(code, _MESSAGES[code], retryable, retry_after_s))
 
 
-def translate(text: str, source_lang="English", target_lang="Vietnamese") -> str:
-    """
-    Dịch văn bản sử dụng mô hình LLM với bộ nhớ đệm Cache FIFO và timeout an toàn.
-    """
-    if not text or not text.strip():
-        return ""
-
-    provider = load_active_provider()
-    client = get_client()
-    if not client:
-        return f"Loi: Chua cau hinh API Key cho {provider}."
-
-    processed_text = text.strip()[:2000]
-    model_id = load_provider_model_id(provider)
-
-    cache_key = (processed_text, source_lang, target_lang)
-    if cache_key in _translation_cache:
-        return _translation_cache[cache_key]
-
-    try:
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a professional translator. Provide only the translated text without commentary."
-                },
-                {
-                    "role": "user",
-                    "content": f"Translate the following text from {source_lang} to {target_lang}:\n\n{processed_text}"
-                }
-            ],
-            temperature=0,
-            top_p=1.0,
-            timeout=8.0,  # Ngăn chặn nghẽn worker thread khi mạng chập chờn
-        )
-        result = response.choices[0].message.content.strip()
-
-        # shortcut: In-memory FIFO cache 300 items, nâng cấp lên SQLite/diskcache nếu cần lưu lịch sử dịch lâu dài.
-        if len(_translation_cache) >= 300:
-            _translation_cache.pop(next(iter(_translation_cache)))
-        _translation_cache[cache_key] = result
-        return result
-
-    except Exception as e:
-        error_message = str(e)
-        if "429" in error_message or "RESOURCE_EXHAUSTED" in error_message:
-            return "Loi: Vuot qua han muc su dung (Quota exceeded)."
-        if "401" in error_message or "403" in error_message or "API_KEY_INVALID" in error_message:
-            return f"Loi: API Key cua {provider} khong hop le hoac bi tu choi."
-        return f"Loi he thong: {error_message}"
+def _provider_error(exc: Exception) -> TranslationResult:
+    # Inspect SDK types and machine codes, never the free-form exception message.
+    if isinstance(exc, APITimeoutError):
+        return _error("timeout", True)
+    if isinstance(exc, APIConnectionError):
+        return _error("network", True)
+    if not isinstance(exc, APIStatusError):
+        return _error("internal")
+    body = exc.body if isinstance(exc.body, dict) else {}
+    nested = body.get("error")
+    if isinstance(nested, dict):
+        body = nested
+    codes = {str(value).lower() for value in (
+        exc.code, exc.type, body.get("code"), body.get("type"), body.get("status"),
+    ) if value is not None}
+    details = body.get("details")
+    if isinstance(details, list):
+        codes.update(str(detail["reason"]).lower() for detail in details
+                     if isinstance(detail, dict) and "reason" in detail)
+    if exc.status_code == 402 or codes & {
+        "insufficient_quota", "quota_exceeded", "billing_hard_limit_reached",
+        "daily_limit_exceeded", "payment_required",
+    }:
+        return _error("quota")
+    if exc.status_code in (401, 403) or codes & {
+        "invalid_api_key", "api_key_invalid", "unauthenticated", "permission_denied",
+    }:
+        return _error("auth")
+    if exc.status_code == 404 or codes & {"model_not_found", "invalid_model"}:
+        return _error("invalid_model")
+    if exc.status_code == 429:
+        retry_after = None
+        try:
+            value = float(exc.response.headers.get("retry-after", ""))
+            if math.isfinite(value) and value >= 0:
+                retry_after = value
+        except (TypeError, ValueError):
+            pass
+        return _error("rate_limit", True, retry_after)
+    if exc.status_code == 408:
+        return _error("timeout", True)
+    if exc.status_code >= 500:
+        return _error("network", True)
+    return _error("invalid_input")
 
 
-def translate_ja_to_vi(text: str) -> str:
-    """Dịch chuyên biệt Nhật -> Việt"""
-    return translate(text, source_lang="Japanese", target_lang="Vietnamese")
+class TranslationService:
+    """Owns a client and a FIFO cache; callers serialize use on the owning thread."""
 
+    def __init__(self):
+        self._client = None
+        self._provider: ProviderSettings | None = None
+        self._cache = OrderedDict()
+
+    def close(self) -> None:
+        client, self._client = self._client, None
+        self._provider = None
+        self._cache.clear()
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                # Cleanup must not expose provider exceptions or skip thread teardown.
+                pass
+
+    def _prepare_client(self, provider: ProviderSettings) -> None:
+        previous = self._provider
+        if previous is not None and (
+            previous.name != provider.name or previous.api_key != provider.api_key
+            or previous.base_url != provider.base_url
+        ):
+            self.close()
+        if self._client is None:
+            kwargs = {"api_key": provider.api_key, "max_retries": 0, "timeout": 8.0}
+            if provider.base_url:
+                kwargs["base_url"] = provider.base_url
+            self._client = OpenAI(**kwargs)
+        self._provider = provider
+
+    def translate(self, text: str, settings: RuntimeSettings) -> TranslationResult:
+        if not isinstance(text, str) or len(text) > 2000:
+            return _error("invalid_input")
+        text = text.strip()
+        if not text:
+            return TranslationResult()
+        provider = settings.provider
+        if not provider.api_key:
+            self.close()
+            return _error("auth")
+        if not provider.model_id.strip():
+            return _error("invalid_model")
+        try:
+            self._prepare_client(provider)
+            key = (provider.name, provider.model_id, settings.source_lang,
+                   settings.target_lang, text, PROMPT_VERSION)
+            if key in self._cache:
+                return self._cache[key]
+            response = self._client.chat.completions.create(
+                model=provider.model_id,
+                messages=[
+                    {"role": "system", "content": "You are a professional translator. Provide only the translated text without commentary."},
+                    {"role": "user", "content": f"Translate the following text from {settings.source_lang} to {settings.target_lang}:\n\n{text}"},
+                ],
+                temperature=0, top_p=1.0, timeout=8.0,
+            )
+            content = response.choices[0].message.content
+            if not isinstance(content, str) or not content.strip():
+                return _error("internal")
+            usage = getattr(response, "usage", None)
+            result = TranslationResult(
+                text=content.strip(), input_tokens=getattr(usage, "prompt_tokens", None),
+                output_tokens=getattr(usage, "completion_tokens", None),
+            )
+            if len(self._cache) >= 300:
+                self._cache.popitem(last=False)
+            self._cache[key] = result
+            return result
+        except Exception as exc:
+            return _provider_error(exc)

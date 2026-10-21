@@ -14,9 +14,8 @@ from core.config import (
     load_active_provider, save_active_provider,
     load_provider_api_key, save_provider_api_key,
     load_provider_model_id, save_provider_model_id,
-    load_region, ConfigError
+    load_region, ConfigError, load_runtime_settings
 )
-from engines.translator import reload_client
 from ui.styles import (
     CYBER_PALETTE, get_app_stylesheet, SIDEBAR_STYLE,
     NAV_BUTTON_NORMAL, NAV_BUTTON_ACTIVE,
@@ -814,6 +813,10 @@ class ControllerWindow(QWidget):
     # ========================================================
     # LOGIC XỬ LÝ SỰ KIỆN & CẬP NHẬT
     # ========================================================
+    def _configure_worker(self):
+        if self.worker is not None:
+            self.worker.configure(load_runtime_settings(self.state, load_config()["interval_ms"]))
+
     def _commit_settings(self, action: Callable[[], None]) -> bool:
         try:
             action()
@@ -1039,14 +1042,14 @@ class ControllerWindow(QWidget):
         self._populate_models_for_provider(provider)
         self._update_api_status()
         self._update_all_metric_cards()
-        reload_client()
+        self._configure_worker()
 
     def _on_api_key_changed(self, text: str = ""):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
         key = self.api_key_input.text().strip()
         if not self._commit_settings(lambda: save_provider_api_key(provider, key)):
             return
-        reload_client()
+        self._configure_worker()
         self._update_api_status()
         self._update_all_metric_cards()
 
@@ -1055,7 +1058,7 @@ class ControllerWindow(QWidget):
         if model.strip():
             if not self._commit_settings(lambda: save_provider_model_id(provider, model.strip())):
                 return
-            reload_client()
+            self._configure_worker()
             self._update_all_metric_cards()
 
     def _toggle_key_visibility(self):
@@ -1078,18 +1081,19 @@ class ControllerWindow(QWidget):
     def _on_source_lang_changed(self, lang: str):
         if not self._commit_settings(lambda: self.state.update(source=lang)):
             return
+        self._configure_worker()
         self._update_all_metric_cards()
 
     def _on_target_lang_changed(self, lang: str):
         if not self._commit_settings(lambda: self.state.update(target=lang)):
             return
+        self._configure_worker()
         self._update_all_metric_cards()
 
     def _on_interval_changed(self, val: int):
         if not self._commit_settings(lambda: save_config("interval_ms", val)):
             return
-        if self.worker is not None:
-            self.worker.setInterval(val)
+        self._configure_worker()
 
     def _update_region_info_lbl(self):
         reg = load_region()

@@ -71,11 +71,14 @@ def test_engine_calls_use_fakes(isolated_config, fake_translator, fake_ocr):
     import numpy as np
 
     config.save_provider_api_key("Google Gemini", "fake-gemini-key")
-    assert translator.translate("Hello") == "fake translation"
-    assert worker.translate("Other text") == "fake translation"
+    service = translator.TranslationService()
+    snapshot = config.load_runtime_settings(config.State(), 500)
+    assert service.translate("Hello", snapshot).text == "fake translation"
+    assert service.translate("Other text", snapshot).text == "fake translation"
+    service.close()
     assert fake_translator.call_count == 2
-    assert ocr.ocr_image(np.zeros((4, 4), dtype=np.uint8)) == "fake source"
-    assert worker.ocr_image(np.zeros((4, 4), dtype=np.uint8)) == "fake source"
+    assert ocr.ocr_image(np.zeros((4, 4), dtype=np.uint8)).text == "fake source"
+    assert worker.ocr_image(np.zeros((4, 4), dtype=np.uint8)).text == "fake source"
     assert fake_ocr.call_count == 2
 
 

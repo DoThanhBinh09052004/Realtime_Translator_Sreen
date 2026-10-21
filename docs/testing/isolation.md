@@ -22,8 +22,10 @@ engine state. No real provider key is required or read.
 Fixtures: isolated_config (autouse), fake_translator, fake_ocr, fake_clock, qtbot.
 Set fake_translator.return_value or fake_ocr.return_value to control text; inspect
 call_args_list for calls. fake_clock.now() starts at zero; advance(seconds) moves
-it without sleeping. These fakes currently match the application's string engine
-API; update them with the structured engine contracts in S03.
+it without sleeping. The fake completion transport and fake Paddle engine return
+text; the real engine adapters wrap it in TranslationResult/OcrResult. Each
+TranslationService owns its client and cache, so tests create and close services
+explicitly instead of resetting global translation state.
 
 S01 verification covers temporary persistence, separate fake provider keys/models,
 collection-time guards, blocked network/capture, fake engine calls, no Paddle

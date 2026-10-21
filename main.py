@@ -70,7 +70,7 @@ def main():
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
     worker.text_translated.connect(overlay.update_text)
     worker.text_unchanged.connect(overlay.refresh)
-    worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error: {err}"))
+    worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
     def sync_overlay_mask():
         worker.set_overlay_rect(overlay.get_geometry_rect())

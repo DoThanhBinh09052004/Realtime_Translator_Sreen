@@ -196,7 +196,7 @@ def test_successful_ui_save_applies_committed_values(controller):
     assert controller.font_size_val_lbl.text() == "30px"
     controller.interval_spin.setValue(800)
     assert config.load_config()["interval_ms"] == 800
-    controller.worker.setInterval.assert_called_with(800)
+    controller.worker.configure.assert_called_with(config.load_runtime_settings(controller.state, 800))
 
 
 def test_selected_region_is_applied_only_after_persistence(controller):

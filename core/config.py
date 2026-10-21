@@ -5,6 +5,8 @@ import re
 import tempfile
 import threading
 
+from core.contracts import ProviderSettings, RuntimeSettings
+
 _config_lock = threading.RLock()
 
 
@@ -321,6 +323,25 @@ def save_provider_model_id(provider: str, model_id: str):
         save_config_values({"provider_models": models_map, "model_id": model_id})
 
 
+def load_provider_settings(provider: str | None = None) -> ProviderSettings:
+    with _config_lock:
+        if provider not in PROVIDERS:
+            provider = load_active_provider()
+        return ProviderSettings(
+            name=provider, model_id=load_provider_model_id(provider),
+            api_key=load_provider_api_key(provider), base_url=PROVIDERS[provider]["base_url"],
+        )
+
+
+def load_runtime_settings(state: State, interval_ms: int) -> RuntimeSettings:
+    with _config_lock:
+        return RuntimeSettings(
+            source_lang=state.source, target_lang=state.target,
+            provider=load_provider_settings(),
+            interval_ms=_bounded_int(interval_ms, 500, 100, 3000),
+        )
+
+
 # ===== Backward Compatibility Aliases =====
 def load_api_key() -> str:
     """[Alias] Đọc API key của active provider"""
@@ -340,4 +361,3 @@ def load_model_id() -> str:
 def save_model_id(model_id: str):
     """[Alias] Lưu model ID cho active provider"""
     save_provider_model_id(load_active_provider(), model_id)
-

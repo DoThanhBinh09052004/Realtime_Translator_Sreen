@@ -90,10 +90,6 @@ def isolated_config(tmp_path, monkeypatch):
     _translation.return_value = "fake translation"
     _ocr.reset_mock(return_value=True, side_effect=True)
     _ocr.return_value = "fake source"
-    translator = sys.modules.get("engines.translator")
-    if translator is not None:
-        monkeypatch.setattr(translator, "_client", None)
-        monkeypatch.setattr(translator, "_translation_cache", {})
     ocr = sys.modules.get("engines.ocr")
     if ocr is not None:
         monkeypatch.setattr(ocr, "_current_engine", None)
