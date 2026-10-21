@@ -1,3 +1,4 @@
+from ui.pages.console_page import ConsolePage
 from ui.widgets.sidebar import ControllerSidebar
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.controller_state import AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot
@@ -153,95 +154,16 @@ class ControllerWindow(QWidget):
     # ========================================================
     # PAGE 1: CONSOLE (TỔNG QUAN)
     # ========================================================
-    def _create_console_page(self) -> QWidget:
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 4, 4, 4)
-        layout.setSpacing(14)
-
-        # Hero Action Card (Nút START & STOP chuẩn Lucide Icons)
-        hero_card = ModernCard("Thao tác Điều khiển", "Khởi động hoặc dừng tiến trình quét và dịch màn hình")
-        hero_row = QHBoxLayout()
-        hero_row.setSpacing(12)
-
-        self.start_btn = QPushButton("  Bắt đầu (Start)")
-        self.start_btn.setFixedHeight(40)
-        self.start_btn.setCursor(Qt.PointingHandCursor)
-        self.start_btn.setIcon(get_lucide_icon("play", color="#ffffff", size=15))
-        self.start_btn.setIconSize(QSize(15, 15))
-        self.start_btn.setStyleSheet(HERO_START_STYLE)
-        self.start_btn.clicked.connect(self.start_ocr)
-
-        self.stop_btn = QPushButton("  Dừng (Stop)")
-        self.stop_btn.setFixedHeight(40)
-        self.stop_btn.setCursor(Qt.PointingHandCursor)
-        self.stop_btn.setIcon(get_lucide_icon("square", color="#ffffff", size=14))
-        self.stop_btn.setIconSize(QSize(14, 14))
-        self.stop_btn.setStyleSheet(HERO_STOP_STYLE)
-        self.stop_btn.clicked.connect(self.stop_ocr)
-
-        hero_row.addWidget(self.start_btn)
-        hero_row.addWidget(self.stop_btn)
-        hero_card.layout.addLayout(hero_row)
-        layout.addWidget(hero_card)
-
-        # Status Metrics Grid (4 thẻ tóm tắt với Lucide Icons)
-        metrics_card = ModernCard("Chỉ số Trực tiếp", "Tóm tắt cấu hình đang hoạt động")
-        grid_row1 = QHBoxLayout()
-        grid_row1.setSpacing(10)
-        grid_row2 = QHBoxLayout()
-        grid_row2.setSpacing(10)
-
-        card_status = MetricCard("TRẠNG THÁI", "Đã dừng", icon_name="activity", icon_color=CYBER_PALETTE['neon_rose'])
-        card_ai = MetricCard("AI MODEL", f"{load_active_provider()}", icon_name="cpu", icon_color=CYBER_PALETTE['neon_indigo'])
-        card_lang = MetricCard("NGÔN NGỮ", f"{self.state.source} -> {self.state.target}", icon_name="languages", icon_color=CYBER_PALETTE['text_muted'])
-        
-        reg = load_region()
-        reg_txt = f"{reg.get('width', 0)} x {reg.get('height', 0)} px" if reg else "Chưa chọn vùng"
-        card_reg = MetricCard("VÙNG QUÉT OCR", reg_txt, icon_name="maximize-2", icon_color=CYBER_PALETTE['text_muted'])
-
-        self.metric_cards["status"] = card_status
-        self.metric_cards["ai"] = card_ai
-        self.metric_cards["lang"] = card_lang
-        self.metric_cards["region"] = card_reg
-
-        grid_row1.addWidget(card_status)
-        grid_row1.addWidget(card_ai)
-        grid_row2.addWidget(card_lang)
-        grid_row2.addWidget(card_reg)
-
-        metrics_card.layout.addLayout(grid_row1)
-        metrics_card.layout.addLayout(grid_row2)
-        layout.addWidget(metrics_card)
-
-        # Quick Actions Card
-        quick_card = ModernCard("Thao tác Nhanh")
-        q_row = QHBoxLayout()
-        q_row.setSpacing(10)
-
-        quick_select_btn = QPushButton("  Chọn lại vùng quét")
-        quick_select_btn.setFixedHeight(32)
-        quick_select_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=14))
-        quick_select_btn.setIconSize(QSize(14, 14))
-        quick_select_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        quick_select_btn.setCursor(Qt.PointingHandCursor)
-        quick_select_btn.clicked.connect(self._on_select_region_clicked)
-        q_row.addWidget(quick_select_btn)
-
-        quick_sub_btn = QPushButton("  Chỉnh phụ đề")
-        quick_sub_btn.setFixedHeight(32)
-        quick_sub_btn.setIcon(get_lucide_icon("sliders", color=CYBER_PALETTE['text_muted'], size=14))
-        quick_sub_btn.setIconSize(QSize(14, 14))
-        quick_sub_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        quick_sub_btn.setCursor(Qt.PointingHandCursor)
-        quick_sub_btn.clicked.connect(lambda: self._switch_to_page(3))
-        q_row.addWidget(quick_sub_btn)
-
-        quick_card.layout.addLayout(q_row)
-        layout.addWidget(quick_card)
-
-        layout.addStretch()
-        return widget
+    def _create_console_page(self):
+        self.console_page = ConsolePage(self._snapshot_for_pages(), self)
+        self.start_btn = self.console_page.start_btn
+        self.stop_btn = self.console_page.stop_btn
+        self.metric_cards = self.console_page.metric_cards
+        self.console_page.start_requested.connect(self.start_ocr)
+        self.console_page.stop_requested.connect(self.stop_ocr)
+        self.console_page.select_region_requested.connect(self._on_select_region_clicked)
+        self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
+        return self.console_page
 
     # ========================================================
     # PAGE 2: AI ENGINE CONFIG
@@ -873,17 +795,7 @@ class ControllerWindow(QWidget):
         self._update_all_metric_cards()
 
     def _update_all_metric_cards(self):
-        if not hasattr(self, "metric_cards") or not self.metric_cards:
-            return
-        provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
-        model = self.model_combo.currentText() if hasattr(self, "model_combo") else load_provider_model_id(provider)
-        
-        self.metric_cards["ai"].set_value(f"{provider}\n{model}")
-        self.metric_cards["lang"].set_value(f"{self.state.source} -> {self.state.target}")
-        
-        reg = load_region()
-        reg_txt = f"{reg.get('width', 0)} x {reg.get('height', 0)} px" if reg else "Chưa chọn vùng"
-        self.metric_cards["region"].set_value(reg_txt)
+        self.console_page.render_summary(self._snapshot_for_pages())
 
     def start_ocr(self):
         provider = self.provider_combo.currentText() if hasattr(self, "provider_combo") else load_active_provider()
