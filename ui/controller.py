@@ -1,3 +1,4 @@
+from ui.pages.ocr_settings_page import OcrSettingsPage
 from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.console_page import ConsolePage
 from ui.widgets.sidebar import ControllerSidebar
@@ -185,102 +186,20 @@ class ControllerWindow(QWidget):
     # ========================================================
     # PAGE 3: DỊCH THUẬT & VÙNG QUÉT OCR
     # ========================================================
-    def _create_ocr_page(self) -> QWidget:
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 4, 4, 4)
-        layout.setSpacing(14)
-
-        # Card 1: Language selection
-        lang_card = ModernCard("Ngôn ngữ Dịch thuật", "Lựa chọn ngôn ngữ nguồn hiển thị trong game và ngôn ngữ dịch sang")
-        lang_row = QHBoxLayout()
-        lang_row.setSpacing(12)
-
-        src_col = QVBoxLayout()
-        src_col.setSpacing(4)
-        src_lbl = QLabel("Ngôn ngữ nguồn (Source)")
-        src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.src_combo = QComboBox()
-        self.src_combo.addItems(list(SUPPORTED_LANGUAGES.keys()))
-        self.src_combo.setCurrentText(self.state.source if self.state.source in SUPPORTED_LANGUAGES else "English")
-        self.src_combo.currentTextChanged.connect(self._on_source_lang_changed)
-        src_col.addWidget(src_lbl)
-        src_col.addWidget(self.src_combo)
-        lang_row.addLayout(src_col)
-
-        arrow_lbl = QLabel("->")
-        arrow_lbl.setAlignment(Qt.AlignCenter)
-        arrow_lbl.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']}; margin-top: 18px;")
-        lang_row.addWidget(arrow_lbl)
-
-        tgt_col = QVBoxLayout()
-        tgt_col.setSpacing(4)
-        tgt_lbl = QLabel("Ngôn ngữ dịch (Target)")
-        tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
-        self.tgt_combo = QComboBox()
-        self.tgt_combo.addItems(SUPPORTED_TARGETS)
-        self.tgt_combo.setCurrentText(self.state.target if self.state.target in SUPPORTED_TARGETS else "Vietnamese")
-        self.tgt_combo.currentTextChanged.connect(self._on_target_lang_changed)
-        tgt_col.addWidget(tgt_lbl)
-        tgt_col.addWidget(self.tgt_combo)
-        lang_row.addLayout(tgt_col)
-
-        lang_card.layout.addLayout(lang_row)
-        layout.addWidget(lang_card)
-
-        # Card 2: OCR Timing & Interval
-        ocr_timing_card = ModernCard("Tần suất quét OCR (Interval)", "Thời gian chờ giữa mỗi lần chụp màn hình nhận diện chữ")
-        timing_row = QHBoxLayout()
-        timing_row.setSpacing(12)
-
-        self.interval_spin = QSpinBox()
-        self.interval_spin.setRange(100, 3000)
-        self.interval_spin.setSingleStep(50)
-        self.interval_spin.setSuffix(" ms")
-        self.interval_spin.setFixedWidth(130)
-
-        saved_interval = load_config().get("interval_ms", 500)
+    def _create_ocr_page(self):
+        snapshot = self._snapshot_for_pages()
         if self.worker is not None:
-            saved_interval = load_config().get("interval_ms", self.worker.interval())
-            self.worker.setInterval(saved_interval)
-        self.interval_spin.setValue(saved_interval)
-        self.interval_spin.valueChanged.connect(self._on_interval_changed)
-
-        timing_row.addWidget(self.interval_spin)
-
-        timing_info = QLabel("Khuyến nghị: 500ms cho đối thoại game thông thường, 300ms cho game nhịp độ nhanh")
-        timing_info.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 11.5px;")
-        timing_info.setWordWrap(True)
-        timing_row.addWidget(timing_info, stretch=1)
-
-        ocr_timing_card.layout.addLayout(timing_row)
-        layout.addWidget(ocr_timing_card)
-
-        # Card 3: Region Inspector
-        reg_card = ModernCard("Vùng màn hình theo dõi", "Tọa độ và kích thước khung hình camera OCR quét phụ đề")
-        
-        self.reg_info_lbl = QLabel()
-        self._update_region_info_lbl()
-        reg_card.layout.addWidget(self.reg_info_lbl)
-
-        reg_btn = QPushButton("  Chọn lại vùng quét (Kéo chuột)")
-        reg_btn.setFixedHeight(34)
-        reg_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=15))
-        reg_btn.setIconSize(QSize(15, 15))
-        reg_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        reg_btn.setCursor(Qt.PointingHandCursor)
-        reg_btn.clicked.connect(self._on_select_region_clicked)
-        reg_card.layout.addWidget(reg_btn)
-
-        layout.addWidget(reg_card)
-
-        layout.addStretch()
-        scroll.setWidget(content)
-        return scroll
+            self.worker.setInterval(snapshot.ocr.interval_ms)
+        self.ocr_page = OcrSettingsPage(snapshot.ocr, tuple(SUPPORTED_LANGUAGES), tuple(SUPPORTED_TARGETS), self)
+        self.src_combo = self.ocr_page.src_combo
+        self.tgt_combo = self.ocr_page.tgt_combo
+        self.interval_spin = self.ocr_page.interval_spin
+        self.reg_info_lbl = self.ocr_page.reg_info_lbl
+        self.ocr_page.source_changed.connect(self._on_source_lang_changed)
+        self.ocr_page.target_changed.connect(self._on_target_lang_changed)
+        self.ocr_page.interval_changed.connect(self._on_interval_changed)
+        self.ocr_page.select_region_requested.connect(self._on_select_region_clicked)
+        return self.ocr_page
 
     # ========================================================
     # PAGE 4: TÙY BIẾN PHỤ ĐỀ (SUBTITLE & LIVE PREVIEW)
@@ -674,16 +593,7 @@ class ControllerWindow(QWidget):
         self._configure_worker()
 
     def _update_region_info_lbl(self):
-        reg = load_region()
-        if reg:
-            self.reg_info_lbl.setText(
-                f"Tọa độ: X={reg.get('left', 0)}, Y={reg.get('top', 0)} | "
-                f"Kích thước: {reg.get('width', 0)} x {reg.get('height', 0)} px"
-            )
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 12px; font-weight: 500;")
-        else:
-            self.reg_info_lbl.setText("Chưa chọn vùng quét màn hình. Bấm nút bên dưới để chọn.")
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px; font-weight: 500;")
+        self.ocr_page.render(self._snapshot_for_pages().ocr)
 
     def _on_select_region_clicked(self):
         if callable(self.on_select_region_cb):
