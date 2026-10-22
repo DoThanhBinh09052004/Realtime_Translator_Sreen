@@ -110,3 +110,18 @@ def test_sdk_retries_disabled_and_timeout_bounded(transport):
     assert transport.create.call_args.kwargs["timeout"] == 8.0
     assert (result.input_tokens, result.output_tokens) == (4, 3)
     service.close()
+
+
+def test_gemini_allows_ten_seconds_for_each_request(transport):
+    from engines.translator import TranslationService
+    snapshot = settings()
+    snapshot = replace(snapshot, provider=replace(
+        snapshot.provider,
+        name="Google Gemini",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    ))
+    service = TranslationService()
+    service.translate("Hello", snapshot)
+    assert transport.clients[0].options["timeout"] == 10.0
+    assert transport.create.call_args.kwargs["timeout"] == 10.0
+    service.close()

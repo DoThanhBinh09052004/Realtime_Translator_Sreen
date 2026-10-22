@@ -7,6 +7,8 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from core.contracts import EngineError, ProviderSettings, RuntimeSettings, TranslationResult
 
 PROMPT_VERSION = 1
+DEFAULT_TIMEOUT_S = 8.0
+GEMINI_TIMEOUT_S = 10.0
 _MESSAGES = {
     "auth": "API key bị thiếu, không hợp lệ hoặc không có quyền truy cập.",
     "quota": "Đã hết hạn mức sử dụng của nhà cung cấp.",
@@ -21,6 +23,10 @@ _MESSAGES = {
 
 def _error(code: str, retryable: bool = False, retry_after_s=None) -> TranslationResult:
     return TranslationResult(error=EngineError(code, _MESSAGES[code], retryable, retry_after_s))
+
+
+def _request_timeout(provider: ProviderSettings) -> float:
+    return GEMINI_TIMEOUT_S if provider.name == "Google Gemini" else DEFAULT_TIMEOUT_S
 
 
 def _provider_error(exc: Exception) -> TranslationResult:
@@ -96,7 +102,11 @@ class TranslationService:
         ):
             self.close()
         if self._client is None:
-            kwargs = {"api_key": provider.api_key, "max_retries": 0, "timeout": 8.0}
+            kwargs = {
+                "api_key": provider.api_key,
+                "max_retries": 0,
+                "timeout": _request_timeout(provider),
+            }
             if provider.base_url:
                 kwargs["base_url"] = provider.base_url
             self._client = OpenAI(**kwargs)
@@ -126,7 +136,7 @@ class TranslationService:
                     {"role": "system", "content": "You are a professional translator. Provide only the translated text without commentary."},
                     {"role": "user", "content": f"Translate the following text from {settings.source_lang} to {settings.target_lang}:\n\n{text}"},
                 ],
-                temperature=0, top_p=1.0, timeout=8.0,
+                temperature=0, top_p=1.0, timeout=_request_timeout(provider),
             )
             content = response.choices[0].message.content
             if not isinstance(content, str) or not content.strip():
