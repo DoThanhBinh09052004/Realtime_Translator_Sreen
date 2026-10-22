@@ -1,15 +1,35 @@
-from PyQt5.QtWidgets import QLabel
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt5.QtWidgets import QLabel, QGraphicsDropShadowEffect
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
 from PyQt5.QtGui import QColor
 
 
 class Overlay(QLabel):
     """
-    Overlay hiển thị phụ đề nổi trên màn hình.
-    Có hiệu ứng mờ dần (fade), tự căn giữa màn hình và cho phép click chuột xuyên thấu vào game.
+    Overlay hiển thị phụ đề nổi Modern Gaming HUD trên màn hình.
+    Có hiệu ứng mờ dần (fade), bóng đổ khối cao cấp (Drop Shadow),
+    giới hạn chiều rộng thông minh, hỗ trợ presets và chế độ mở khóa kéo thả tự do.
     """
 
-    def __init__(self, bg_hex="#1e1e2e", opacity_pct=80, text_hex="#ffffff"):
+    position_changed = pyqtSignal(int, int)
+    capture_geometry_changed = pyqtSignal(object)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.capture_geometry_changed.emit(None)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
+
+    def __init__(self, bg_hex="#1e1e2e", opacity_pct=80, text_hex="#ffffff", font_size=22):
         super().__init__()
 
         # ===== 1. Cấu hình Window Flag =====
@@ -21,39 +41,28 @@ class Overlay(QLabel):
         )
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Xuyên thấu chuột, không chặn click game
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)  # Xuyên thấu chuột mặc định
 
-        # ===== 2. Styling =====
-        self.apply_style(bg_hex, opacity_pct, text_hex)
+        # ===== 2. State & Styling =====
+        self.bg_hex = bg_hex
+        self.opacity_pct = opacity_pct
+        self.text_hex = text_hex
+        self.font_size = font_size
+        self.current_preset = "bottom_center"
+        self.is_drag_mode = False
+        self._last_normal_text = "Subtitle Ready"
+
+        # Note: Tránh gán QGraphicsDropShadowEffect trực tiếp lên Top-Level Translucent Window
+        # vì Windows Layered Window API sẽ báo lỗi UpdateLayeredWindowIndirect (dirty rect âm).
+
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
 
-    def apply_style(self, bg_hex: str = "#1e1e2e", opacity_pct: int = 80, text_hex: str = "#ffffff"):
-        """
-        Cập nhật màu nền, độ mờ đục và màu chữ cho phụ đề.
-        """
-        bg_col = QColor(bg_hex)
-        if not bg_col.isValid():
-            bg_col = QColor("#1e1e2e")
+        # Cài đặt kích thước tối đa 75% màn hình
+        screen_geo = self.screen().availableGeometry()
+        self.setMaximumWidth(int(screen_geo.width() * 0.75))
 
-        text_col = QColor(text_hex)
-        if not text_col.isValid():
-            text_col = QColor("#ffffff")
-
-        alpha = max(0.0, min(1.0, opacity_pct / 100.0))
-        r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
-
-        self.setStyleSheet(f"""
-            QLabel {{
-                color: {text_col.name()};
-                background-color: rgba({r}, {g}, {b}, {alpha:.2f});
-                font-size: 22px;
-                padding: 12px 20px;
-                border-radius: 10px;
-                border: 1px solid rgba(255, 255, 255, 40);
-                font-family: 'Segoe UI', 'Arial';
-            }}
-        """)
+        self.apply_style(bg_hex, opacity_pct, text_hex, font_size)
 
         # ===== 3. Auto hide =====
         self.hide_timer = QTimer(self)
@@ -63,21 +72,126 @@ class Overlay(QLabel):
 
         # ===== 4. Fade animation =====
         self.fade_anim = QPropertyAnimation(self, b"windowOpacity")
-        self.fade_anim.setDuration(300)
+        self.fade_anim.setDuration(280)
         self.fade_anim.setEasingCurve(QEasingCurve.InOutQuad)
         self.fade_anim.finished.connect(self._on_fade_finished)
 
         # ===== 5. Khởi tạo vị trí =====
         self.setText("Subtitle Ready")
         self.adjustSize()
-        self.move_to_bottom_center()
+        self.apply_preset("bottom_center")
         self.hide()
 
-    def move_to_bottom_center(self):
+    def apply_style(self, bg_hex: str = None, opacity_pct: int = None, text_hex: str = None, font_size: int = None):
+        """
+        Cập nhật màu nền, độ mờ đục, màu chữ và cỡ chữ cho phụ đề.
+        """
+        if bg_hex is not None:
+            self.bg_hex = bg_hex
+        if opacity_pct is not None:
+            self.opacity_pct = opacity_pct
+        if text_hex is not None:
+            self.text_hex = text_hex
+        if font_size is not None:
+            self.font_size = font_size
+
+        bg_col = QColor(self.bg_hex)
+        if not bg_col.isValid():
+            bg_col = QColor("#1e1e2e")
+
+        text_col = QColor(self.text_hex)
+        if not text_col.isValid():
+            text_col = QColor("#ffffff")
+
+        alpha = max(0.0, min(1.0, self.opacity_pct / 100.0))
+        r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
+
+        border_css = "2px dashed #6366f1" if self.is_drag_mode else "1px solid rgba(255, 255, 255, 0.18)"
+
+        self.setStyleSheet(f"""
+            QLabel {{
+                color: {text_col.name()};
+                background-color: rgba({r}, {g}, {b}, {alpha:.2f});
+                font-size: {self.font_size}px;
+                font-weight: 600;
+                padding: 10px 22px;
+                border-radius: 12px;
+                border: {border_css};
+                font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            }}
+        """)
+
+    def apply_preset(self, preset: str):
+        """Định vị phụ đề theo các vị trí preset phổ biến"""
         screen = self.screen().availableGeometry()
-        x = (screen.width() - self.width()) // 2
-        y = screen.height() - self.height() - 80
+        w = max(self.width(), 200)
+        h = max(self.height(), 40)
+
+        if preset == "top_center":
+            x = (screen.width() - w) // 2
+            y = screen.top() + 60
+        elif preset == "bottom_left":
+            x = screen.left() + 60
+            y = screen.height() - h - 80
+        elif preset == "bottom_center":
+            x = (screen.width() - w) // 2
+            y = screen.height() - h - 80
+        else:
+            return
+
+        self.current_preset = preset
         self.move(x, y)
+
+    def set_drag_mode(self, enabled: bool):
+        """Bật/tắt chế độ kéo thả định vị phụ đề trên màn hình"""
+        self.is_drag_mode = enabled
+        if enabled:
+            self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+            self.setCursor(Qt.SizeAllCursor)
+            self._last_normal_text = self.text()
+            self.setText("✥ Giữ chuột để kéo phụ đề đến vị trí mong muốn")
+            self.adjustSize()
+            self.apply_style()
+            self.fade_anim.stop()
+            self.setWindowOpacity(1.0)
+            self.show()
+            self.raise_()
+        else:
+            self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            self.unsetCursor()
+            self.apply_style()
+            if self._last_normal_text and self._last_normal_text.strip():
+                self.setText(self._last_normal_text)
+                self.adjustSize()
+            else:
+                self.setText("")
+                self.hide()
+
+    def mousePressEvent(self, event):
+        if self.is_drag_mode and event.button() == Qt.LeftButton:
+            self._drag_start_pos = event.globalPos() - self.frameGeometry().topLeft()
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.is_drag_mode and event.buttons() == Qt.LeftButton and hasattr(self, "_drag_start_pos"):
+            new_pos = event.globalPos() - self._drag_start_pos
+            self.move(new_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.is_drag_mode and event.button() == Qt.LeftButton:
+            self.current_preset = "custom"
+            self.position_changed.emit(self.x(), self.y())
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+    def move_to_bottom_center(self):
+        self.apply_preset("bottom_center")
 
     def get_geometry_rect(self):
         if not self.isVisible():
@@ -90,6 +204,10 @@ class Overlay(QLabel):
             self.fade_out()
             return
 
+        if self.is_drag_mode:
+            self._last_normal_text = text
+            return
+
         center_x = self.x() + self.width() // 2
         bottom_y = self.y() + self.height()
 
@@ -98,6 +216,11 @@ class Overlay(QLabel):
 
         new_x = center_x - self.width() // 2
         new_y = bottom_y - self.height()
+
+        # Giữ phụ đề trong phạm vi màn hình
+        screen = self.screen().availableGeometry()
+        new_x = max(10, min(new_x, screen.width() - self.width() - 10))
+        new_y = max(10, min(new_y, screen.height() - self.height() - 10))
         self.move(new_x, new_y)
 
         self._show_with_timer()
@@ -134,7 +257,6 @@ class Overlay(QLabel):
     def _on_fade_finished(self):
         if self.windowOpacity() <= 0.01:
             self.hide()
-
 
     def show(self):
         super().show()

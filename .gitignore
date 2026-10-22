@@ -35,4 +35,8 @@ dist/
 scratch/
 
 # Agent documentation & planning
-docs/
+docs/*
+!docs/testing/
+!docs/testing/**
+!docs/release/
+!docs/release/**

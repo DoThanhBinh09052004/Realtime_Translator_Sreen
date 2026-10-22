@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
-from core.config import State, load_region, save_region
+from core.config import State, load_config, load_region
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
@@ -28,6 +28,11 @@ def setup_dark_theme(app: QApplication):
     app.setPalette(palette)
 
 
+def apply_selected_region(controller, worker, new_region: dict) -> bool:
+    """Compatibility wrapper: the controller owns save and apply ordering."""
+    return controller.apply_region_selection(new_region)
+
+
 def main():
     app = QApplication(sys.argv)
     setup_dark_theme(app)
@@ -44,23 +49,24 @@ def main():
     overlay = Overlay(
         bg_hex=state.bg_color,
         opacity_pct=state.bg_opacity,
-        text_hex=state.text_color
+        text_hex=state.text_color,
+        font_size=state.font_size
     )
+    if state.overlay_preset == "custom" and state.overlay_x is not None and state.overlay_y is not None:
+        overlay.move(state.overlay_x, state.overlay_y)
+    else:
+        overlay.apply_preset(state.overlay_preset)
     overlay.show()
 
     # ===== 3. Khởi tạo Background Worker =====
-    worker = TranslationWorker(state=state, region=region, interval_ms=500)
+    worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"])
+    overlay.capture_geometry_changed.connect(worker.set_overlay_rect)
     worker.set_overlay_rect(overlay.get_geometry_rect())
 
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
     worker.text_translated.connect(overlay.update_text)
     worker.text_unchanged.connect(overlay.refresh)
-    worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error: {err}"))
-
-    def sync_overlay_mask():
-        worker.set_overlay_rect(overlay.get_geometry_rect())
-
-    overlay.fade_anim.finished.connect(sync_overlay_mask)
+    worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
     # ===== 4. Controller & Selector =====
     controller = None
@@ -86,14 +92,12 @@ def main():
         def restore_ui():
             controller.show()
             overlay.show()
-            sync_overlay_mask()
             if was_running:
                 worker.start_worker()
 
         def on_region_selected(new_region):
             nonlocal selector
-            save_region(new_region)
-            worker.set_region(new_region)
+            apply_selected_region(controller, worker, new_region)
             restore_ui()
 
         selector.region_selected.connect(on_region_selected)
