@@ -207,6 +207,13 @@ PROVIDERS = {
         "models": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1-nano"],
         "placeholder": "sk-proj-...",
     },
+    "DeepSeek": {
+        "env_key": "DEEPSEEK_API_KEY",
+        "base_url": "https://api.deepseek.com",
+        "default_model": "deepseek-flash",
+        "models": ["deepseek-flash", "deepseek-v4-pro"],
+        "placeholder": "sk-...",
+    },
 }
 
 DEFAULT_PROVIDER = "Google Gemini"

@@ -103,6 +103,7 @@ class AiSettingsPage(QScrollArea):
         note_text = QLabel(
             "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
             "• OpenAI: Truy cập platform.openai.com/api-keys\n"
+            "• DeepSeek: Truy cập platform.deepseek.com để tạo API Key\n"
             "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng nhiều model"
         )
         note_text.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 12px; line-height: 1.5;")

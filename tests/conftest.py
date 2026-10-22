@@ -15,7 +15,7 @@ os.environ["PYTEST_QT_API"] = "pyqt5"
 # Autouse fixtures run too late to protect module-level application imports.
 _bootstrap = pytest.MonkeyPatch()
 _session_dir = tempfile.TemporaryDirectory(prefix="translator-tests-")
-for _name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "MODEL_ID"):
+for _name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "MODEL_ID"):
     _bootstrap.delenv(_name, raising=False)
 
 from core import config
@@ -83,7 +83,7 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CONFIG_PATH", str(tmp_path / "config.json"))
     monkeypatch.setattr(config, "ENV_PATH", str(tmp_path / ".env"))
     # Register absent keys too so app writes to os.environ are undone at teardown.
-    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "MODEL_ID"):
+    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "MODEL_ID"):
         monkeypatch.setenv(name, "fake-bootstrap")
         monkeypatch.delenv(name)
     _translation.reset_mock(return_value=True, side_effect=True)

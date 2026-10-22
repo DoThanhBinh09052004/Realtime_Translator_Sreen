@@ -13,7 +13,7 @@ _REPO = Path(__file__).resolve().parents[1]
 assert not Path(config.CONFIG_PATH).is_relative_to(_REPO)
 assert not Path(config.ENV_PATH).is_relative_to(_REPO)
 assert all(name not in os.environ for name in (
-    "OPENAI_API_KEY", "GEMINI_API_KEY", "MODEL_ID"
+    "OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "MODEL_ID"
 ))
 
 
@@ -22,10 +22,11 @@ def test_config_and_env_paths_are_temporary(isolated_config, tmp_path):
 
     assert Path(config.CONFIG_PATH).is_relative_to(tmp_path)
     assert Path(config.ENV_PATH).is_relative_to(tmp_path)
-    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "MODEL_ID"):
+    for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "MODEL_ID"):
         assert name not in os.environ
     assert config.load_provider_api_key("OpenAI") == ""
     assert config.load_provider_api_key("Google Gemini") == ""
+    assert config.load_provider_api_key("DeepSeek") == ""
     config.save_provider_api_key("OpenAI", "fake-openai-key")
     assert config.load_provider_api_key("OpenAI") == "fake-openai-key"
     assert "sentinel-user-key" not in Path(config.ENV_PATH).read_text()
