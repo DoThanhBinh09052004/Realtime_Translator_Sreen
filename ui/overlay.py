@@ -11,6 +11,23 @@ class Overlay(QLabel):
     """
 
     position_changed = pyqtSignal(int, int)
+    capture_geometry_changed = pyqtSignal(object)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.capture_geometry_changed.emit(None)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.capture_geometry_changed.emit(self.get_geometry_rect())
 
     def __init__(self, bg_hex="#1e1e2e", opacity_pct=80, text_hex="#ffffff", font_size=22):
         super().__init__()

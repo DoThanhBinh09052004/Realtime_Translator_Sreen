@@ -53,7 +53,7 @@ def test_changed_settings_reprocess_static_frame(monkeypatch, fake_translator, c
         "provider": replace(original, provider=replace(original.provider, name="OpenAI", base_url=None)),
     }
     changed = changes[change]
-    install_capture(monkeypatch, worker, lambda count: worker.configure(changed) if count == 2 else None)
+    install_capture(monkeypatch, worker, lambda count: worker.configure(changed) if count == 3 else None)
     emitted = []
     worker.text_translated.connect(emitted.append)
     worker._is_running = True
@@ -143,6 +143,8 @@ def test_gemini_retryable_errors_pause_requests(
     image = np.zeros((8, 8), dtype=np.uint8)
 
     worker._process_frame(image, settings, worker._revision, FailingService())
+    assert attempts == []
+    worker._process_frame(image, settings, worker._revision, FailingService())
     now[0] = 100.0 + cooldown_s - 0.01
     worker._process_frame(image, settings, worker._revision, FailingService())
     assert attempts == ["Hello"]
@@ -171,7 +173,7 @@ def test_client_created_used_and_closed_on_worker_thread(monkeypatch, qtbot):
 
     monkeypatch.setattr(translator, "OpenAI", factory)
     worker = make_worker()
-    install_capture(monkeypatch, worker, frames=1)
+    install_capture(monkeypatch, worker, frames=2)
     assert calls == []
     worker.start_worker()
     try:
@@ -237,6 +239,25 @@ def test_worker_uses_snapshot_instead_of_mutable_ui_state(monkeypatch, fake_tran
     assert fake_translator.call_count == 1
     content = fake_translator.call_args.kwargs["messages"][1]["content"]
     assert "from English to Vietnamese" in content
+
+
+def test_worker_shutdown_clears_untranslated_pending_candidate(monkeypatch, fake_translator):
+    worker = make_worker()
+    pending_before_stop = []
+
+    def on_frame(count):
+        if count == 2:
+            pending_before_stop.append(worker._stabilizer.has_pending)
+
+    install_capture(monkeypatch, worker, on_frame, frames=1)
+    emitted = []
+    worker.text_translated.connect(emitted.append)
+    worker._is_running = True
+    worker.run()
+    assert pending_before_stop == [True]
+    assert not worker._stabilizer.has_pending
+    assert emitted == []
+    assert fake_translator.call_count == 0
 
 
 @pytest.mark.parametrize("changing,source,expected", [(False, "", 2), (True, "fake source", 1)])

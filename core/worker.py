@@ -14,6 +14,7 @@ from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
 from core.contracts import EngineError, RuntimeSettings
 from core.retry import RetryState
+from core.subtitle_stabilizer import SubtitleStabilizer
 
 
 def compact_memory():
@@ -60,6 +61,8 @@ class TranslationWorker(QThread):
         self._prev_text = ""
         self._retry_not_before = 0.0
         self._retry_state = RetryState()
+        self._retry_frame_only = False
+        self._stabilizer = SubtitleStabilizer()
         self._overlay_rect = None  # (x, y, w, h)
 
     # ===== Interface tương thích với Controller =====
@@ -131,13 +134,19 @@ class TranslationWorker(QThread):
         if not overlay_rect:
             return img
 
-        ox, oy, ow, oh = overlay_rect
+        try:
+            ox, oy, ow, oh = overlay_rect
+            if not all(isinstance(value, (int, float)) and np.isfinite(value)
+                       for value in (ox, oy, ow, oh)) or ow <= 0 or oh <= 0:
+                return img
+        except (TypeError, ValueError):
+            return img
         rx, ry = region["left"], region["top"]
 
-        x1 = max(0, ox - rx)
-        y1 = max(0, oy - ry)
-        x2 = min(img.shape[1], x1 + ow)
-        y2 = min(img.shape[0], y1 + oh)
+        x1 = max(0, int(np.floor(ox - rx - 6)))
+        y1 = max(0, int(np.floor(oy - ry - 6)))
+        x2 = min(img.shape[1], int(np.ceil(ox + ow - rx + 6)))
+        y2 = min(img.shape[0], int(np.ceil(oy + oh - ry + 6)))
 
         if x1 < x2 and y1 < y2:
             img[y1:y2, x1:x2] = 0
@@ -188,6 +197,8 @@ class TranslationWorker(QThread):
             self._prev_frame_thumb = None
             self._retry_not_before = 0.0
             self._retry_state.reset()
+            self._retry_frame_only = False
+            self._stabilizer.reset()
         return snapshot
 
     def retry_current(self) -> None:
@@ -208,6 +219,7 @@ class TranslationWorker(QThread):
             )
         due = self._retry_state.next_due(time.monotonic(), retry_error)
         self._retry_not_before = due or 0.0
+        self._retry_frame_only = due is None
         if due is not None:
             # Force OCR again after the deadline even when the capture is static.
             self._prev_frame_thumb = None
@@ -218,7 +230,8 @@ class TranslationWorker(QThread):
             return False
         if time.monotonic() < self._retry_not_before:
             return True
-        if not self._is_frame_changed(img_gray):
+        frame_changed = self._is_frame_changed(img_gray)
+        if not frame_changed and (not self._stabilizer.has_pending or self._retry_frame_only):
             if self._prev_text:
                 self._emit_current(revision, self.text_unchanged)
             return True
@@ -229,14 +242,19 @@ class TranslationWorker(QThread):
             self._schedule_retry(result.error, settings)
             self._emit_current(revision, self.error_occurred, result.error)
             return False
-        text = result.text.strip()
-        if not text:
-            self._retry_state.reset()
-            self._retry_not_before = 0.0
+        decision = self._stabilizer.observe(result.text, time.monotonic())
+        if decision.action == 'wait':
+            # A fresh candidate still needs its second observation even if the
+            # previous source exhausted retries or failed permanently.
+            self._retry_frame_only = False
+            if not self._stabilizer.has_pending:
+                self._retry_state.reset()
+                self._retry_not_before = 0.0
             return False
-        if text == self._prev_text:
+        if decision.action == 'unchanged':
             self._emit_current(revision, self.text_unchanged)
             return False
+        text = decision.text
         translated = service.translate(text, settings)
         if not self._is_current(revision):
             return False
@@ -244,9 +262,16 @@ class TranslationWorker(QThread):
             self._schedule_retry(translated.error, settings)
             self._emit_current(revision, self.error_occurred, translated.error)
         elif translated.text:
-            self._retry_not_before = 0.0
-            self._retry_state.reset()
-            self._prev_text = text
+            # Commit atomically with respect to settings/region publication.
+            with QMutexLocker(self._mutex):
+                if (self._revision != revision or not self._is_running
+                        or self.isInterruptionRequested()):
+                    return False
+                self._retry_not_before = 0.0
+                self._retry_frame_only = False
+                self._retry_state.reset()
+                self._stabilizer.commit(text)
+                self._prev_text = text
             self._emit_current(revision, self.text_translated, translated.text)
         return False
 
@@ -293,6 +318,7 @@ class TranslationWorker(QThread):
                                EngineError("capture", "Không thể mở bộ chụp màn hình.", True))
         finally:
             service.close()
+            self._stabilizer.reset()
             with QMutexLocker(self._mutex):
                 self._is_running = False
             compact_memory()

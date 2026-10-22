@@ -37,6 +37,8 @@ def test_static_frame_retries_failed_translation(monkeypatch):
     worker.text_translated.connect(emitted.append)
 
     worker._process_frame(image, settings, worker._revision, Service())
+    assert attempts == []
+    worker._process_frame(image, settings, worker._revision, Service())
     assert attempts == ["Hello"]
     now[0] = 0.99
     worker._process_frame(image, settings, worker._revision, Service())
@@ -64,7 +66,10 @@ def test_old_revision_result_is_discarded(monkeypatch):
     worker.text_translated.connect(emitted.append)
     worker._process_frame(np.zeros((40, 100), dtype=np.uint8), settings,
                           worker._revision, ReconfiguringService())
+    worker._process_frame(np.zeros((40, 100), dtype=np.uint8), settings,
+                          worker._revision, ReconfiguringService())
     assert emitted == []
+    assert worker._invalidated
 
 
 def test_retry_current_invalidates_worker_snapshot_without_mutating_cache():
@@ -90,7 +95,8 @@ def test_ocr_failure_retries_without_frame_change(monkeypatch):
     settings = replace(settings, provider=replace(settings.provider, name="OpenAI", base_url=None))
     now = [0.0]
     monkeypatch.setattr(module.time, "monotonic", lambda: now[0])
-    results = [OcrResult(error=EngineError("ocr", "OCR failed", True)), OcrResult(text="Hello")]
+    results = [OcrResult(error=EngineError("ocr", "OCR failed", True)),
+               OcrResult(text="Hello"), OcrResult(text="Hello")]
     ocr_calls = []
 
     def recognize(*args, **kwargs):
@@ -110,4 +116,8 @@ def test_ocr_failure_retries_without_frame_change(monkeypatch):
     now[0] = 1.0
     worker._process_frame(image, settings, worker._revision, Service())
     assert len(ocr_calls) == 2
+    assert translations == []
+    now[0] = 1.5
+    worker._process_frame(image, settings, worker._revision, Service())
+    assert len(ocr_calls) == 3
     assert translations == ["Hello"]

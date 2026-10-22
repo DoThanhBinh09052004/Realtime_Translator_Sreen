@@ -60,18 +60,13 @@ def main():
 
     # ===== 3. Khởi tạo Background Worker =====
     worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"])
+    overlay.capture_geometry_changed.connect(worker.set_overlay_rect)
     worker.set_overlay_rect(overlay.get_geometry_rect())
 
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
     worker.text_translated.connect(overlay.update_text)
     worker.text_unchanged.connect(overlay.refresh)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
-
-    def sync_overlay_mask():
-        worker.set_overlay_rect(overlay.get_geometry_rect())
-
-    overlay.fade_anim.finished.connect(sync_overlay_mask)
-    overlay.position_changed.connect(lambda x, y: sync_overlay_mask())
 
     # ===== 4. Controller & Selector =====
     controller = None
@@ -97,7 +92,6 @@ def main():
         def restore_ui():
             controller.show()
             overlay.show()
-            sync_overlay_mask()
             if was_running:
                 worker.start_worker()
 
