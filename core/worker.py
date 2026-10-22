@@ -13,6 +13,7 @@ from engines.ocr import ocr_image
 from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
 from core.contracts import EngineError, RuntimeSettings
+from core.retry import RetryState
 
 
 def compact_memory():
@@ -57,6 +58,8 @@ class TranslationWorker(QThread):
 
         self._prev_frame_thumb = None
         self._prev_text = ""
+        self._retry_not_before = 0.0
+        self._retry_state = RetryState()
         self._overlay_rect = None  # (x, y, w, h)
 
     # ===== Interface tương thích với Controller =====
@@ -183,12 +186,38 @@ class TranslationWorker(QThread):
             # These fields belong to this worker, never to the settings UI.
             self._prev_text = ""
             self._prev_frame_thumb = None
+            self._retry_not_before = 0.0
+            self._retry_state.reset()
         return snapshot
+
+    def retry_current(self) -> None:
+        """Ask the worker to reprocess the current frame as a new revision."""
+        with QMutexLocker(self._mutex):
+            self._revision += 1
+            self._invalidated = True
+
+    def _schedule_retry(self, error: EngineError, settings: RuntimeSettings) -> None:
+        retry_error = error
+        # Keep the provider's existing cooldown floor while enforcing the shared
+        # three-retry budget and honoring any larger Retry-After value.
+        if settings.provider.name == "Google Gemini":
+            minimum = 5.0 if error.code == "rate_limit" else 2.0
+            retry_error = replace(
+                error,
+                retry_after_s=max(error.retry_after_s or 0.0, minimum),
+            )
+        due = self._retry_state.next_due(time.monotonic(), retry_error)
+        self._retry_not_before = due or 0.0
+        if due is not None:
+            # Force OCR again after the deadline even when the capture is static.
+            self._prev_frame_thumb = None
 
     def _process_frame(self, img_gray, settings: RuntimeSettings, revision: int, service: TranslationService) -> bool:
         """Return whether the frame was idle, preserving memory compaction cadence."""
         if not self._is_current(revision):
             return False
+        if time.monotonic() < self._retry_not_before:
+            return True
         if not self._is_frame_changed(img_gray):
             if self._prev_text:
                 self._emit_current(revision, self.text_unchanged)
@@ -197,10 +226,13 @@ class TranslationWorker(QThread):
         if not self._is_current(revision):
             return False
         if result.error is not None:
+            self._schedule_retry(result.error, settings)
             self._emit_current(revision, self.error_occurred, result.error)
             return False
         text = result.text.strip()
         if not text:
+            self._retry_state.reset()
+            self._retry_not_before = 0.0
             return False
         if text == self._prev_text:
             self._emit_current(revision, self.text_unchanged)
@@ -209,8 +241,11 @@ class TranslationWorker(QThread):
         if not self._is_current(revision):
             return False
         if translated.error is not None:
+            self._schedule_retry(translated.error, settings)
             self._emit_current(revision, self.error_occurred, translated.error)
         elif translated.text:
+            self._retry_not_before = 0.0
+            self._retry_state.reset()
             self._prev_text = text
             self._emit_current(revision, self.text_translated, translated.text)
         return False
