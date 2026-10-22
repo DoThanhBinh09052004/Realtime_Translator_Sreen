@@ -16,6 +16,7 @@ _MESSAGES = {
     "timeout": "Yêu cầu dịch quá thời gian chờ.",
     "network": "Không thể kết nối tới dịch vụ dịch.",
     "invalid_model": "Model không tồn tại hoặc không khả dụng.",
+    "invalid_endpoint": "Custom API chưa có Base URL hợp lệ.",
     "invalid_input": "Nội dung dịch không hợp lệ hoặc vượt quá 2000 ký tự.",
     "internal": "Không thể xử lý kết quả từ dịch vụ dịch.",
 }
@@ -122,6 +123,9 @@ class TranslationService:
         if not provider.api_key:
             self.close()
             return _error("auth")
+        if provider.name == "Custom API" and not provider.base_url:
+            self.close()
+            return _error("invalid_endpoint")
         if not provider.model_id.strip():
             return _error("invalid_model")
         try:

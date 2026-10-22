@@ -5,7 +5,7 @@ from core.config import (
     State, ConfigError, PROVIDERS, load_config, save_config, load_region, save_region,
     load_active_provider, save_active_provider, load_provider_model_id,
     save_provider_model_id, load_provider_api_key, save_provider_api_key,
-    load_runtime_settings,
+    load_runtime_settings, load_custom_api_base_url, save_custom_api_base_url,
 )
 from ui.controller_state import AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot
 
@@ -30,7 +30,9 @@ class SettingsCoordinator(QObject):
             models += (model,)
         region = load_region()
         return ControllerSnapshot(
-            AiPageState(provider, model, models, load_provider_api_key(provider), PROVIDERS[provider]['placeholder']),
+            AiPageState(provider, model, models, load_provider_api_key(provider),
+                        PROVIDERS[provider]['placeholder'],
+                        load_custom_api_base_url() if provider == 'Custom API' else ''),
             OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
                          tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None),
             SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
@@ -40,9 +42,9 @@ class SettingsCoordinator(QObject):
                 after_commit: Callable[[], None] | None = None) -> bool:
         try:
             action()
-        except ConfigError:
+        except ConfigError as exc:
             self.settings_changed.emit(self.snapshot(), 'rollback')
-            self.save_failed.emit('Không thể lưu thiết lập. Kiểm tra quyền ghi và dung lượng ổ đĩa.')
+            self.save_failed.emit(str(exc))
             return False
         if after_commit is not None:
             after_commit()
@@ -76,6 +78,12 @@ class SettingsCoordinator(QObject):
     def set_api_key(self, key: str) -> bool:
         return self._commit(lambda: save_provider_api_key(load_active_provider(), key.strip()),
                             field='api_key', after_commit=self._configure_worker)
+
+    def set_custom_base_url(self, base_url: str) -> bool:
+        if load_active_provider() != 'Custom API':
+            return False
+        return self._commit(lambda: save_custom_api_base_url(base_url),
+                            field='base_url', after_commit=self._configure_worker)
 
     def set_source(self, language: str) -> bool:
         return self._commit(lambda: self.state.update(source=language), field='source', after_commit=self._configure_worker)

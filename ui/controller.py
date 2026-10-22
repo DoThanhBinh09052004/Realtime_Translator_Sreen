@@ -108,6 +108,7 @@ class ControllerWindow(QWidget):
         self.ai_page.provider_changed.connect(self.settings_coordinator.set_provider)
         self.ai_page.model_changed.connect(self.settings_coordinator.set_model)
         self.ai_page.api_key_changed.connect(self.settings_coordinator.set_api_key)
+        self.ai_page.base_url_changed.connect(self.settings_coordinator.set_custom_base_url)
         self.page_ai = self.ai_page
         snapshot = self.settings_coordinator.snapshot()
         self.settings_coordinator.initialize_worker_interval()

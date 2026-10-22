@@ -4,6 +4,7 @@ import math
 import re
 import tempfile
 import threading
+from urllib.parse import urlsplit
 
 from core.contracts import ProviderSettings, RuntimeSettings
 
@@ -142,6 +143,12 @@ def normalize_config(raw: object) -> dict:
     } if isinstance(models, dict) else {}
     if not isinstance(cfg.get("model_id"), str) or not cfg["model_id"].strip():
         cfg.pop("model_id", None)
+    try:
+        cfg["custom_api_base_url"] = _normalize_custom_api_base_url(
+            cfg.get("custom_api_base_url", ""), allow_empty=True,
+        )
+    except ConfigError:
+        cfg["custom_api_base_url"] = ""
     return cfg
 
 
@@ -213,6 +220,13 @@ PROVIDERS = {
         "default_model": "deepseek-flash",
         "models": ["deepseek-flash", "deepseek-v4-pro"],
         "placeholder": "sk-...",
+    },
+    "Custom API": {
+        "env_key": "CUSTOM_API_KEY",
+        "base_url": None,
+        "default_model": "model-name",
+        "models": ["model-name"],
+        "placeholder": "Nhập API key...",
     },
 }
 
@@ -330,13 +344,35 @@ def save_provider_model_id(provider: str, model_id: str):
         save_config_values({"provider_models": models_map, "model_id": model_id})
 
 
+def _normalize_custom_api_base_url(value: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
+    value = value.strip().rstrip("/")
+    if not value and allow_empty:
+        return ""
+    parsed = urlsplit(value)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
+    return value
+
+
+def load_custom_api_base_url() -> str:
+    return load_config().get("custom_api_base_url", "")
+
+
+def save_custom_api_base_url(base_url: str) -> None:
+    save_config("custom_api_base_url", _normalize_custom_api_base_url(base_url))
+
+
 def load_provider_settings(provider: str | None = None) -> ProviderSettings:
     with _config_lock:
         if provider not in PROVIDERS:
             provider = load_active_provider()
+        base_url = (load_custom_api_base_url() if provider == "Custom API"
+                    else PROVIDERS[provider]["base_url"])
         return ProviderSettings(
             name=provider, model_id=load_provider_model_id(provider),
-            api_key=load_provider_api_key(provider), base_url=PROVIDERS[provider]["base_url"],
+            api_key=load_provider_api_key(provider), base_url=base_url,
         )
 
 

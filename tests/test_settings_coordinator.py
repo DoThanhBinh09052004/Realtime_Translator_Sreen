@@ -86,3 +86,12 @@ def test_interval_init_drag_style_validation_and_programming_errors(coordinator)
         coordinator._commit(lambda: (_ for _ in ()).throw(RuntimeError()), field='model')
     coordinator.set_overlay(None)
     assert not coordinator.toggle_overlay_drag()
+
+
+def test_invalid_custom_api_url_reports_validation_error(coordinator):
+    config.save_active_provider('Custom API')
+    errors = []
+    coordinator.save_failed.connect(errors.append)
+
+    assert not coordinator.set_custom_base_url('ftp://llm.example.test/v1')
+    assert errors == ['Base URL phải bắt đầu bằng http:// hoặc https://.']

@@ -10,6 +10,7 @@ class AiSettingsPage(QScrollArea):
     provider_changed = pyqtSignal(str)
     model_changed = pyqtSignal(str)
     api_key_changed = pyqtSignal(str)
+    base_url_changed = pyqtSignal(str)
 
     def __init__(self, state: AiPageState, providers: tuple[str, ...], parent=None):
         super().__init__(parent)
@@ -61,6 +62,24 @@ class AiSettingsPage(QScrollArea):
         row1.addLayout(m_col)
 
         prov_card.layout.addLayout(row1)
+
+        self.base_url_container = QWidget()
+        base_url_layout = QVBoxLayout(self.base_url_container)
+        base_url_layout.setContentsMargins(0, 8, 0, 0)
+        base_url_layout.setSpacing(4)
+        base_url_label = QLabel("Base URL (OpenAI-compatible)")
+        base_url_label.setStyleSheet(
+            f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};"
+        )
+        self.base_url_input = QLineEdit()
+        self.base_url_input.setPlaceholderText("https://api.example.com/v1")
+        self.base_url_input.setText(state.base_url)
+        self.base_url_input.editingFinished.connect(
+            lambda: self.base_url_changed.emit(self.base_url_input.text())
+        )
+        base_url_layout.addWidget(base_url_label)
+        base_url_layout.addWidget(self.base_url_input)
+        prov_card.layout.addWidget(self.base_url_container)
         layout.addWidget(prov_card)
 
         # Card 2: API Key Management
@@ -124,7 +143,9 @@ class AiSettingsPage(QScrollArea):
 
     def render(self, state: AiPageState, *, changed_field='initial'):
         if changed_field in ('initial', 'provider', 'rollback'):
-            blockers = [QSignalBlocker(widget) for widget in (self.provider_combo, self.model_combo, self.api_key_input)]
+            blockers = [QSignalBlocker(widget) for widget in (
+                self.provider_combo, self.model_combo, self.api_key_input, self.base_url_input,
+            )]
             self.provider_combo.setCurrentText(state.provider)
             self.model_combo.clear()
             models = state.models if state.model_id in state.models else state.models + (state.model_id,)
@@ -132,11 +153,16 @@ class AiSettingsPage(QScrollArea):
             self.model_combo.setCurrentText(state.model_id)
             self.api_key_input.setText(state.api_key)
             self.api_key_input.setPlaceholderText(state.placeholder)
+            self.base_url_input.setText(state.base_url)
             del blockers
+        self.base_url_container.setVisible(state.provider == 'Custom API')
         self._render_status(state)
 
     def _render_status(self, state):
-        if state.api_key.strip():
+        if state.provider == 'Custom API' and not state.base_url.strip():
+            self.api_status_lbl.setText('Trạng thái: Chưa có Base URL hợp lệ cho Custom API')
+            color = CYBER_PALETTE['neon_amber']
+        elif state.api_key.strip():
             self.api_status_lbl.setText(f'Trạng thái: {state.provider} sẵn sàng (.env)')
             color = CYBER_PALETTE['neon_green']
         else:

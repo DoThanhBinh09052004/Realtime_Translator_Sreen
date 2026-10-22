@@ -9,6 +9,7 @@ class AiPageState:
     models: tuple[str, ...]
     api_key: str = field(repr=False)
     placeholder: str
+    base_url: str = ""
 
 
 @dataclass(frozen=True)
