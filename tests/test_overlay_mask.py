@@ -57,6 +57,7 @@ def test_invalid_rectangles_leave_capture_unchanged(rect):
 
 def test_overlay_animation_is_masked_before_change_detection_and_ocr(monkeypatch, fake_ocr):
     from core import worker as module
+    config.save_active_provider('Google Gemini')
 
     region = {'left': -100, 'top': -50, 'width': 100, 'height': 40}
     worker = TranslationWorker(config.State(), region)

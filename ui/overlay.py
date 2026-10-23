@@ -36,6 +36,7 @@ class Overlay(QLabel):
         self._mode = 'subtitle'
         self._mode_revision = 0
         self._block_frame_id = -1
+        self._last_subtitle_candidate_id = -1
         self.block_overlay = BlockOverlay(self)
         self.block_overlay.block_error.connect(self.block_error.emit)
 
@@ -293,6 +294,7 @@ class Overlay(QLabel):
         self.fade_anim.stop()
         self.block_overlay.clear()
         self._mode, self._mode_revision, self._block_frame_id = mode, revision, -1
+        self._last_subtitle_candidate_id = -1
         self.is_drag_mode = False
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.unsetCursor()
@@ -306,3 +308,13 @@ class Overlay(QLabel):
             return
         self._block_frame_id = frame.frame_id
         self.block_overlay.set_frame(frame)
+
+    def update_subtitle(self, frame):
+        if (self._mode != 'subtitle' or frame.revision != self._mode_revision
+                or frame.candidate_id < self._last_subtitle_candidate_id):
+            return
+        self._last_subtitle_candidate_id = frame.candidate_id
+        if frame.text:
+            self.update_text(frame.text)
+        else:
+            self.clear()

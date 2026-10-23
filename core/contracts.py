@@ -89,3 +89,11 @@ class TranslationStatus:
     phase: Literal['active', 'retry_wait', 'paused', 'stopped']
     retries_issued: int = 0
     retry_at_s: float | None = None
+
+
+@dataclass(frozen=True)
+class SubtitleFrame:
+    revision: int
+    candidate_id: int
+    source_text: str
+    text: str
