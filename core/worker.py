@@ -12,13 +12,15 @@ from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
 from engines.ocr import ocr_image
 from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
-from core.contracts import EngineError, RuntimeSettings
+from core.contracts import EngineError, RuntimeSettings, TranslationStatus
 from core.retry import RetryState
 from core.subtitle_stabilizer import SubtitleStabilizer
 from core.blocks.session import BlockSession
 from core.blocks.grouping import group_spans
 from core.blocks.translation_worker import BlockTranslationWorker
 from core.blocks.models import Rect
+from core.google_recovery import GoogleRecoveryGate
+from core.google_subtitle_session import GoogleSubtitleSession
 
 
 def compact_memory():
@@ -53,6 +55,8 @@ class TranslationWorker(QThread):
     blocks_updated = pyqtSignal(object)
     shutdown_finished = pyqtSignal()
     revision_changed = pyqtSignal(int)
+    subtitle_updated = pyqtSignal(object)
+    translation_status_updated = pyqtSignal(object)
 
     def __init__(self, state, region, interval_ms=500):
         super().__init__()
@@ -73,6 +77,14 @@ class TranslationWorker(QThread):
         self._overlay_rect = None  # (x, y, w, h)
         self._capture_geometry = None
         self._block_session = BlockSession()
+        self._google_recovery = GoogleRecoveryGate()
+        self._google_subtitle = GoogleSubtitleSession()
+        self._translation_session_id = 0
+        self._last_translation_status = None
+        self._google_subtitle_last_ocr = float('-inf')
+        self._google_subtitle_ocr_retry = RetryState()
+        self._google_subtitle_ocr_due = 0.
+        self._google_subtitle_ocr_exhausted = False
         self._block_translator = self._new_block_translator()
         self._last_block_ocr = float('-inf')
         self._block_frame_id = 0
@@ -80,13 +92,23 @@ class TranslationWorker(QThread):
         self._block_ocr_due = 0.
         self._block_ocr_exhausted = False
         self._restart_pending = False
+        self._restart_preserve_session = False
         self._shutdown_pending = False
         self.finished.connect(self._threads_finished)
 
     def _new_block_translator(self):
-        thread = BlockTranslationWorker(service_factory=lambda: TranslationService(), parent=self)
+        thread = BlockTranslationWorker(clock=lambda: time.monotonic(), service_factory=lambda: TranslationService(), google_recovery=self._google_recovery, parent=self)
         thread.finished.connect(self._threads_finished)
         return thread
+
+    @property
+    def translation_session_id(self):
+        with QMutexLocker(self._mutex):
+            return self._translation_session_id
+
+    @staticmethod
+    def _uses_async(settings):
+        return settings.overlay_mode == 'blocks' or settings.provider.name == 'Google Translate'
 
     @property
     def revision(self):
@@ -106,8 +128,9 @@ class TranslationWorker(QThread):
         if self.isRunning() or self._block_translator.isRunning():
             return
         if self._restart_pending:
+            preserve = self._restart_preserve_session
             self._restart_pending = False
-            self.start_worker()
+            self.start_worker(preserve_translation_session=preserve)
         elif self._shutdown_pending:
             self._shutdown_pending = False
             self.shutdown_finished.emit()
@@ -117,14 +140,16 @@ class TranslationWorker(QThread):
         """Publish an immutable snapshot; only run() consumes invalidation."""
         with QMutexLocker(self._mutex):
             mode_changed = self._settings.overlay_mode != settings.overlay_mode
+            lane_changed = self._uses_async(self._settings) != self._uses_async(settings)
             self._settings = settings
             self._revision += 1
             self._invalidated = True
             revision = self._revision
         self.revision_changed.emit(revision)
-        if mode_changed and (self.isRunning() or self._block_translator.isRunning()):
-            self.stop_worker()
+        if (mode_changed or lane_changed) and (self.isRunning() or self._block_translator.isRunning()):
+            self.stop_worker(preserve_translation_session=True)
             self._restart_pending = True
+            self._restart_preserve_session = True
             self._threads_finished()
             return self.revision
         return revision
@@ -156,45 +181,56 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             return self._is_running
 
-    def start_worker(self):
+    def start_worker(self, *, preserve_translation_session=False):
         """Khởi động worker thread nếu chưa chạy"""
-        if self._shutdown_pending and (self.isRunning() or self._block_translator.isRunning()):
+        if (self._shutdown_pending and self.isRunning()) or self._block_translator.isRunning() and not self.is_running():
             self._restart_pending = True
+            self._restart_preserve_session = preserve_translation_session
             return
         if not self.isRunning() and not self._block_translator.isRunning():
             with QMutexLocker(self._mutex):
                 self._is_running = True
-            self.start()
+            self._start_threads(QThread.InheritPriority, preserve_translation_session)
 
-    def stop_worker(self):
+    def stop_worker(self, *, preserve_translation_session=False):
         """Dừng an toàn worker thread và dọn dẹp RAM"""
         with QMutexLocker(self._mutex):
             self._is_running = False
             self._revision += 1
             self._invalidated = True
         self.requestInterruption()
+        if not preserve_translation_session:
+            self._google_recovery.invalidate_requests()
         self._restart_pending = False
         self._shutdown_pending = True
         self._block_translator.request_stop()
         self.revision_changed.emit(self.revision)
-        if self._settings.overlay_mode != 'blocks' and not self._block_translator.isRunning():
+        if not self._uses_async(self._settings) and not self._block_translator.isRunning():
             self.wait(3000)
             compact_memory()
         self._threads_finished()
 
     # Hỗ trợ trực tiếp các phương thức start() và stop()
     def start(self, priority=QThread.InheritPriority):
+        self._start_threads(priority, False)
+
+    def _start_threads(self, priority, preserve_translation_session):
         if self.isRunning():
             return
         if self._block_translator.isRunning():
             self._restart_pending = True
+            self._restart_preserve_session = preserve_translation_session
             return
+        if not preserve_translation_session:
+            self._google_recovery.begin_session(now_s=time.monotonic())
+            with QMutexLocker(self._mutex):
+                self._translation_session_id += 1
         self._shutdown_pending = False
         with QMutexLocker(self._mutex):
             self._is_running = True
             self._revision += 1
             self._invalidated = True
-        if self._settings.overlay_mode == 'blocks':
+        if self._uses_async(self._settings):
             old = self._block_translator
             self._block_translator = self._new_block_translator()
             old.deleteLater()
@@ -277,6 +313,11 @@ class TranslationWorker(QThread):
             self._retry_frame_only = False
             self._stabilizer.reset()
             self._block_session.reset()
+            self._google_subtitle.reset()
+            self._google_subtitle_last_ocr = float('-inf')
+            self._google_subtitle_ocr_retry.reset()
+            self._google_subtitle_ocr_due = 0.
+            self._google_subtitle_ocr_exhausted = False
             self._last_block_ocr = float('-inf')
             self._block_frame_id = 0
             self._block_ocr_retry.reset()
@@ -291,6 +332,69 @@ class TranslationWorker(QThread):
             self._revision += 1
             self._invalidated = True
         self.revision_changed.emit(self.revision)
+
+    def retry_translation(self):
+        with QMutexLocker(self._mutex):
+            if not self._is_running or self._settings.provider.name != 'Google Translate':
+                return False
+        if self._google_recovery.snapshot(now_s=time.monotonic()).phase != 'paused':
+            return False
+        with QMutexLocker(self._mutex):
+            self._revision += 1
+            revision = self._revision
+            self._invalidated = True
+        self._block_translator.replace_pending((), frozenset(), revision)
+        self._google_recovery.manual_retry(now_s=time.monotonic())
+        self.revision_changed.emit(revision)
+        return True
+
+    def _publish_translation_status(self, settings, revision):
+        if settings.provider.name == 'Google Translate':
+            recovery = self._google_recovery.snapshot(now_s=time.monotonic())
+            phase = 'active' if recovery.phase == 'ready' else recovery.phase
+            status = TranslationStatus(settings.provider.name, revision, self.translation_session_id,
+                                       phase, recovery.retries_issued, recovery.not_before_s if phase == 'retry_wait' else None)
+        else:
+            status = TranslationStatus(settings.provider.name, revision, self.translation_session_id, 'active')
+        if status != self._last_translation_status:
+            self._last_translation_status = status
+            self._emit_current(revision, self.translation_status_updated, status)
+
+    def _process_google_subtitle_frame(self, img_gray, settings, revision):
+        if not self._is_current(revision):
+            return False
+        now = time.monotonic()
+        changed = self._is_frame_changed(img_gray)
+        if changed:
+            self._google_subtitle_ocr_exhausted = False
+            self._google_subtitle_ocr_retry.reset()
+        scan = (changed or self._google_subtitle.has_pending or self._google_subtitle_ocr_due > 0
+                or now-self._google_subtitle_last_ocr >= max(1000,settings.interval_ms)/1000)
+        if scan and now >= self._google_subtitle_ocr_due and not self._google_subtitle_ocr_exhausted:
+            result = ocr_image(img_gray, lang=SUPPORTED_LANGUAGES.get(settings.source_lang,'en'))
+            if not self._is_current(revision):
+                return False
+            self._google_subtitle_last_ocr = now
+            if result.error is not None:
+                self._google_subtitle.observe('',settings=settings,revision=revision,now_s=now)
+                due = self._google_subtitle_ocr_retry.next_due(now,result.error)
+                self._google_subtitle_ocr_due = due or 0.
+                self._google_subtitle_ocr_exhausted = due is None
+                self._emit_current(revision,self.error_occurred,result.error)
+            else:
+                self._google_subtitle_ocr_retry.reset()
+                self._google_subtitle_ocr_due = 0.
+                self._google_subtitle.observe(result.text,settings=settings,revision=revision,now_s=now)
+        for result in self._block_translator.drain_results():
+            if self._google_subtitle.apply_result(result) and result.result.error is not None:
+                self._emit_current(revision,self.error_occurred,result.result.error)
+        if self._is_current(revision):
+            self._block_translator.replace_pending(self._google_subtitle.translation_jobs(),self._google_subtitle.active_keys,revision)
+            frame = self._google_subtitle.current_frame()
+            if frame is not None:
+                self._emit_current(revision,self.subtitle_updated,frame)
+            self._publish_translation_status(settings,revision)
+        return not scan
 
     def _process_block_frame(self, img_gray, settings, revision, geometry):
         if not self._is_current(revision):
@@ -330,6 +434,7 @@ class TranslationWorker(QThread):
         frame = self._block_session.current_frame()
         if frame is not None:
             self._emit_current(revision, self.blocks_updated, frame)
+        self._publish_translation_status(settings, revision)
         return not scan
 
     def _schedule_retry(self, error: EngineError, settings: RuntimeSettings) -> None:
@@ -436,10 +541,13 @@ class TranslationWorker(QThread):
                             geometry = replace(geometry, image_size_px=(img_gray.shape[1], img_gray.shape[0]))
                             idle = self._process_block_frame(img_gray, settings, revision, geometry)
                         else:
-                            if service is None:
-                                service = TranslationService()
                             img_gray = self._mask_overlay_numpy(img_gray, region, overlay_rect)
-                            idle = self._process_frame(img_gray, settings, revision, service)
+                            if settings.provider.name == 'Google Translate':
+                                idle = self._process_google_subtitle_frame(img_gray, settings, revision)
+                            else:
+                                if service is None:
+                                    service = TranslationService()
+                                idle = self._process_frame(img_gray, settings, revision, service)
                     except Exception:
                         self._emit_current(revision, self.error_occurred,
                                            EngineError("capture", "Không thể xử lý ảnh chụp màn hình.", True))

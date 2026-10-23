@@ -69,6 +69,7 @@ def test_config_persistence_uses_only_temporary_files(isolated_config):
 
 def test_engine_calls_use_fakes(isolated_config, fake_translator, fake_ocr):
     from core import config, worker
+    config.save_active_provider('Google Gemini')
     from engines import translator, ocr
     import numpy as np
 

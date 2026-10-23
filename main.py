@@ -96,7 +96,7 @@ def main():
         # Tạm dừng worker trong lúc người dùng đang chọn vùng
         was_running = worker.is_running()
         if was_running:
-            worker.stop_worker()
+            worker.stop_worker(preserve_translation_session=True)
 
         controller.hide()
         overlay.hide()
@@ -111,7 +111,7 @@ def main():
             controller.show()
             overlay.show()
             if was_running:
-                worker.start_worker()
+                worker.start_worker(preserve_translation_session=True)
 
         def on_region_selected(new_region):
             nonlocal selector

@@ -8,6 +8,7 @@ from core.worker import TranslationWorker
 
 
 def make_worker():
+    config.save_active_provider('Google Gemini')
     config.save_provider_api_key("Google Gemini", "fake-key")
     worker = TranslationWorker(config.State(), config.DEFAULT_REGION)
     worker._is_running = True

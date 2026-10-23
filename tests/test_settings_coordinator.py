@@ -20,6 +20,7 @@ CASES = [
 @pytest.fixture
 def coordinator():
     from ui.settings_coordinator import SettingsCoordinator
+    config.save_active_provider('Google Gemini')
     worker = Mock()
     worker.interval.return_value = 500
     overlay = Mock()

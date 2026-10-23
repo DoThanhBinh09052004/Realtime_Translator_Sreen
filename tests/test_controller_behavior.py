@@ -11,6 +11,7 @@ def test_missing_key_routes_to_ai_without_starting(ui_window):
 
 
 def test_start_stop_and_callbacks_once(ui_window):
+    ui_window.provider_combo.setCurrentText('Google Gemini')
     config.save_provider_api_key(config.load_active_provider(), 'fake-test-key')
     ui_window.start_btn.click()
     ui_window.worker.start_worker.assert_called_once_with()

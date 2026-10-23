@@ -11,6 +11,7 @@ from core.worker import TranslationWorker
 
 
 def make_worker():
+    config.save_active_provider('Google Gemini')
     config.save_provider_api_key("Google Gemini", "fake-key")
     return TranslationWorker(config.State(), config.DEFAULT_REGION)
 
@@ -280,6 +281,7 @@ def test_memory_compaction_still_depends_on_idle_frames(monkeypatch, fake_ocr, c
 ])
 def test_ui_configures_worker_only_after_successful_save(qtbot, monkeypatch, widget, value):
     from ui.controller import ControllerWindow
+    config.save_active_provider('Google Gemini')
     worker = Mock()
     worker.interval.return_value = 500
     window = ControllerWindow(worker, config.State(), lambda: None, lambda: None)
