@@ -6,7 +6,7 @@ import tempfile
 import threading
 from urllib.parse import urlsplit
 
-from core.contracts import ProviderSettings, RuntimeSettings
+from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 
 _config_lock = threading.RLock()
 
@@ -196,6 +196,10 @@ def save_region(region: dict):
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 
 PROVIDERS = {
+    "Google Translate": {
+        "env_key": None, "base_url": None, "default_model": "",
+        "models": [], "placeholder": "",
+    },
     "Google Gemini": {
         "env_key": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -232,7 +236,7 @@ PROVIDERS = {
     },
 }
 
-DEFAULT_PROVIDER = "Google Gemini"
+DEFAULT_PROVIDER = "Google Translate"
 DEFAULT_MODEL_ID = PROVIDERS[DEFAULT_PROVIDER]["default_model"]
 AVAILABLE_MODELS = PROVIDERS[DEFAULT_PROVIDER]["models"]
 
@@ -240,6 +244,11 @@ AVAILABLE_MODELS = PROVIDERS[DEFAULT_PROVIDER]["models"]
 def get_available_providers() -> list:
     """Trả về danh sách tên các LLM Provider được hỗ trợ"""
     return list(PROVIDERS.keys())
+
+
+def get_provider_capabilities(provider: str | None = None) -> ProviderCapabilities:
+    provider = provider if provider in PROVIDERS else load_active_provider()
+    return ProviderCapabilities(False, False, False) if provider == 'Google Translate' else ProviderCapabilities(True, True, provider == 'Custom API')
 
 
 def load_active_provider() -> str:
@@ -308,6 +317,8 @@ def load_provider_api_key(provider: str = None) -> str:
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
+    if env_key is None:
+        return ""
     val = _read_env().get(env_key, "")
     if not val:
         val = os.environ.get(env_key, "")
@@ -321,6 +332,8 @@ def save_provider_api_key(provider: str, key: str):
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
+    if env_key is None:
+        return
     _write_env_var(env_key, key)
 
 
@@ -329,6 +342,8 @@ def load_provider_model_id(provider: str = None) -> str:
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     cfg = PROVIDERS[provider]
+    if not get_provider_capabilities(provider).supports_models:
+        return ""
     models_map = load_config().get("provider_models", {})
     val = models_map.get(provider)
     if not val and provider == "OpenAI":
@@ -340,6 +355,8 @@ def save_provider_model_id(provider: str, model_id: str):
     """Lưu model ID của provider vào config.json"""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
+    if not get_provider_capabilities(provider).supports_models:
+        return
     with _config_lock:
         models_map = _read_config(strict=True)["provider_models"]
         models_map[provider] = model_id

@@ -4,6 +4,13 @@ from typing import Literal
 
 
 @dataclass(frozen=True)
+class ProviderCapabilities:
+    requires_api_key: bool = True
+    supports_models: bool = True
+    supports_base_url: bool = False
+
+
+@dataclass(frozen=True)
 class ProviderSettings:
     name: str
     model_id: str
@@ -34,6 +41,7 @@ class TranslationResult:
     error: EngineError | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    from_cache: bool = False
 
     def __post_init__(self):
         if self.error is not None:

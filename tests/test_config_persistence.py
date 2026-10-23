@@ -90,6 +90,10 @@ def controller(qtbot):
     ("interval_spin", "setValue", 800, 500),
 ])
 def test_failed_save_restores_widget_and_state(controller, monkeypatch, widget, setter, value, expected):
+    if widget in ('model_combo', 'api_key_input'):
+        controller.provider_combo.setCurrentText('OpenAI')
+        if widget == 'model_combo':
+            expected = config.PROVIDERS['OpenAI']['default_model']
     before = vars(controller.state).copy()
     controller.worker.reset_mock()
     monkeypatch.setattr(config.os, "replace", refuse_replace)
