@@ -1,5 +1,6 @@
 """Keyless Google web adapter. Retry and caching belong to the caller."""
 import logging
+import json
 import math
 import time
 from datetime import timezone
@@ -68,6 +69,41 @@ def parse_google_response(payload):
     text = ''.join(parts).strip()
     if not text:
         raise ValueError('Empty Google response')
+    return text
+
+
+def parse_batch_response(content):
+    """Read the MkEWBc result from Google's line-framed, nested JSON RPC."""
+    if not isinstance(content, str):
+        raise ValueError('Invalid Google batch response')
+    for line in content.splitlines():
+        line = line.strip()
+        if not line.startswith('['):
+            continue  # XSSI prefix, byte counts and blank framing lines.
+        try:
+            rows = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, list) or len(row) < 2 or row[1] != 'MkEWBc':
+                continue
+            try:
+                payload = json.loads(row[2])
+                segments = payload[1][0][0][5]
+            except (ValueError, TypeError, KeyError, IndexError) as exc:
+                raise ValueError('Invalid Google batch result') from exc
+            return parse_google_response([segments])
+    raise ValueError('Missing Google batch result')
+
+
+def parse_clients5_response(payload):
+    if not isinstance(payload, list) or not payload or any(not isinstance(part, str) for part in payload):
+        raise ValueError('Invalid Google clients5 response')
+    text = ''.join(payload).strip()
+    if not text:
+        raise ValueError('Empty Google clients5 response')
     return text
 
 

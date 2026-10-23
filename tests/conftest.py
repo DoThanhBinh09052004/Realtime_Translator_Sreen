@@ -124,6 +124,19 @@ def fake_translator():
 
 
 @pytest.fixture
+def google_batch_response():
+    """Synthetic Google RPC envelope; no production parser used to build it."""
+    import json
+    def build(*segments):
+        inner = [None, [[[None, None, None, None, None,
+                           [[segment, None, None, None, 1] for segment in segments]]]], 'en']
+        frame = json.dumps([['wrb.fr', 'MkEWBc', json.dumps(inner, ensure_ascii=False),
+                             None, None, None, 'generic']], ensure_ascii=False)
+        return ")]}'\n\n" + str(len(frame.encode('utf-8'))) + '\n' + frame + '\n'
+    return build
+
+
+@pytest.fixture
 def fake_ocr():
     """Configurable fake OCR callable; records image arguments."""
     return _ocr

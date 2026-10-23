@@ -1,6 +1,6 @@
 # Google Web: batchexecute → clients5 → GTX
 
-Ngày: 2026-10-23. Trạng thái: người dùng đã chọn hướng; chờ duyệt thiết kế ngắn này.
+Ngày: 2026-10-23. Trạng thái: người dùng đã duyệt thiết kế và cho phép lập kế hoạch rồi triển khai Native.
 
 ## Mục tiêu và bằng chứng
 
