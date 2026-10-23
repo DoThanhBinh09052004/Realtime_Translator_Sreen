@@ -3,8 +3,20 @@
 ## Tự động
 
 - Baseline trước thay đổi: 230 passed, exit 0.
-- Sau tích hợp T1–T7: 271 passed in 5.97s, exit 0; fake OCR/API, Qt offscreen.
+- Sau tích hợp và sửa theo review: **286 passed in 7.70s, exit 0**; fake OCR/API, Qt offscreen.
 - Bao phủ polygon lỗi, grouping, track trùng chữ, typewriter deadline, revision/source cũ, hàng chờ thay thế, retry hữu hạn, đóng client đúng thread, stop không chờ API, layout Việt/CJK, persistence rollback, DPI âm và scale 100/125/150/200%.
+- Các test bổ sung xác nhận vị trí mới nhất trong lúc request bị giữ, không mask pixel ở blocks, đổi mode chờ request cũ xong, cache dùng chung cho hai ID cùng chữ, cooldown Gemini/Retry-After và khóa revision khi auth lỗi.
+
+## Review cuối
+
+Một reviewer độc lập đọc toàn bộ thay đổi và các ràng buộc. Đã sửa hai phát hiện bằng test RED → GREEN:
+
+- Đóng cửa sổ bằng X/Alt+F4 gọi cùng đường thoát an toàn, chờ capture và request đang chạy dừng trước `shutdown_finished`.
+- Thoát drag/mode invalidation trả lại xuyên chuột và con trỏ mặc định cho phụ đề.
+
+Minor để lại: gốc canvas Qt làm tròn xuống pixel nguyên có thể lệch dưới một logical pixel ở DPI phân số. Công thức dữ liệu vẫn dùng số thực; chưa hiệu chỉnh phần dư khi paint. Cần đánh giá trên thiết bị DPI phân số thật trước khi tinh chỉnh.
+
+Quyết định triển khai: dùng checkout feature hiện có theo hướng dẫn desktop, giữ các file người dùng; thêm signal `revision_changed` để GUI xóa nội dung cũ ngay khi start/stop/retry. Không cần cơ chế API hoặc dependency mới.
 
 ## Windows thật
 

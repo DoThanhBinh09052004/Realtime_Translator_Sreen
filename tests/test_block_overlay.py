@@ -40,3 +40,17 @@ def test_blocks_are_click_through_and_older_frames_are_dropped(qtbot, monkeypatc
     assert overlay.get_geometry_rect() is None
     assert overlay.block_overlay.windowFlags() & Qt.WindowTransparentForInput
     assert overlay.block_overlay.testAttribute(Qt.WA_TransparentForMouseEvents)
+
+
+def test_leaving_drag_mode_restores_click_through_after_mode_switch(qtbot):
+    from ui.overlay import Overlay
+    overlay = Overlay()
+    qtbot.addWidget(overlay)
+    overlay.set_drag_mode(True)
+    assert not overlay.testAttribute(Qt.WA_TransparentForMouseEvents)
+    overlay.set_mode('blocks', 1)
+    overlay.set_mode('subtitle', 2)
+    overlay.update_text('New subtitle')
+    assert not overlay.is_drag_mode
+    assert overlay.testAttribute(Qt.WA_TransparentForMouseEvents)
+    assert overlay.cursor().shape() != Qt.SizeAllCursor

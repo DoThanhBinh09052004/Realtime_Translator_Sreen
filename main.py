@@ -135,6 +135,8 @@ def main():
 
     def on_quit():
         nonlocal quitting
+        if quitting:
+            return
         quitting = True
         controller.hide()
         overlay.clear()

@@ -294,6 +294,9 @@ class Overlay(QLabel):
         self.block_overlay.clear()
         self._mode, self._mode_revision, self._block_frame_id = mode, revision, -1
         self.is_drag_mode = False
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.unsetCursor()
+        self.apply_style()
         self.hide()
         self.capture_geometry_changed.emit(None)
 

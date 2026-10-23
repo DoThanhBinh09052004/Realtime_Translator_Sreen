@@ -2,6 +2,7 @@ from threading import Event, get_ident
 from dataclasses import replace
 from core.blocks.models import BlockJob
 from core.contracts import TranslationResult, EngineError
+import pytest
 
 
 def test_latest_snapshot_replaces_waiting_jobs_while_one_request_runs(qtbot, runtime_settings):
@@ -85,6 +86,84 @@ def test_retry_is_bounded_and_exhausted_snapshot_cannot_resubmit(qtbot, runtime_
         submit()
         assert w.pending_count == 0
         assert attempts == [0., 2., 4., 8.]
+    finally:
+        w.request_stop()
+        assert w.wait(2000)
+
+
+@pytest.mark.parametrize('code,retry_after,due', [('timeout', None, 2.), ('rate_limit', None, 5.), ('rate_limit', 12., 12.)])
+def test_gemini_retry_deadline_and_provider_cooldown(qtbot, runtime_settings, code, retry_after, due):
+    from core.blocks.translation_worker import BlockTranslationWorker
+    now, calls = [0.], []
+    class Service:
+        def translate(self, text, settings):
+            calls.append((text, now[0]))
+            if len(calls) == 1:
+                return TranslationResult(error=EngineError(code, 'failed', True, retry_after))
+            return TranslationResult('ok')
+        def close(self): pass
+    w = BlockTranslationWorker(clock=lambda: now[0], service_factory=Service)
+    jobs = (BlockJob(1, 1, 'A', runtime_settings),)
+    if code == 'rate_limit':
+        jobs += (BlockJob(1, 2, 'B', runtime_settings),)
+    keys = frozenset((j.block_id, j.source_text) for j in jobs)
+    w.replace_pending(jobs, keys, 1)
+    w.start()
+    try:
+        qtbot.waitUntil(lambda: bool(w.drain_results()))
+        now[0] = due-.01
+        w.replace_pending(jobs, keys, 1)
+        assert calls == [('A', 0.)]
+        now[0] = due
+        w.replace_pending(jobs, keys, 1)
+        qtbot.waitUntil(lambda: len(calls) >= 2)
+        assert calls[1][1] == due
+    finally:
+        w.request_stop()
+        assert w.wait(2000)
+
+
+def test_auth_blocks_revision_until_explicit_retry(qtbot, runtime_settings):
+    from core.blocks.translation_worker import BlockTranslationWorker
+    calls = []
+    class Service:
+        def translate(self, text, settings):
+            calls.append(text)
+            return TranslationResult(error=EngineError('auth', 'invalid key', False))
+        def close(self): pass
+    w = BlockTranslationWorker(service_factory=Service)
+    def submit(rev):
+        w.replace_pending((BlockJob(rev, 1, 'A', runtime_settings), BlockJob(rev, 2, 'B', runtime_settings)), frozenset({(1, 'A'), (2, 'B')}), rev)
+    submit(1)
+    w.start()
+    try:
+        qtbot.waitUntil(lambda: bool(w.drain_results()))
+        submit(1)
+        assert w.pending_count == 0 and calls == ['A']
+        submit(2)
+        qtbot.waitUntil(lambda: len(calls) == 2)
+        assert calls == ['A', 'A']
+    finally:
+        w.request_stop()
+        assert w.wait(2000)
+
+
+def test_duplicate_text_ids_reuse_translation_service_cache(qtbot, runtime_settings, fake_translator):
+    from core.blocks.translation_worker import BlockTranslationWorker
+    from engines.translator import TranslationService
+    w = BlockTranslationWorker(service_factory=TranslationService)
+    jobs = (BlockJob(1, 1, 'Same', runtime_settings), BlockJob(1, 2, 'Same', runtime_settings))
+    w.replace_pending(jobs, frozenset({(1, 'Same'), (2, 'Same')}), 1)
+    w.start()
+    results = []
+    try:
+        def finished():
+            results.extend(w.drain_results())
+            return len(results) == 2
+        qtbot.waitUntil(finished)
+        assert {r.block_id for r in results} == {1, 2}
+        assert all(r.result.text == 'fake translation' for r in results)
+        assert fake_translator.call_count == 1
     finally:
         w.request_stop()
         assert w.wait(2000)

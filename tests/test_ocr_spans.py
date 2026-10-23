@@ -37,3 +37,13 @@ def test_legacy_contract_and_rect_validation(runtime_settings):
     with pytest.raises(ValueError):
         Rect(0, 0, 0, 1)
     assert not Rect(0, 0, 10, 10).intersects(Rect(10, 0, 10, 10))
+
+
+@pytest.mark.parametrize('confidence', [float('nan'), float('inf'), -.1, 1.1, None])
+def test_invalid_confidence_keeps_text_without_span(confidence):
+    engine = SimplePaddleOCR()
+    box = [[1, 2], [31, 2], [31, 12], [1, 12]]
+    engine.ocr.ocr = lambda *a, **k: [[[box, ('Hello', confidence)]]]
+    result = engine.extract_text(np.zeros((50, 50), dtype='uint8'))
+    assert result.text == 'Hello'
+    assert not result.spans

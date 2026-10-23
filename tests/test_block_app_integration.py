@@ -7,3 +7,11 @@ def test_subtitle_mask_converts_logical_rect_to_physical_at_150_percent():
     geometry = CaptureGeometry(Rect(-1770, 150, 600, 300), screen, (600, 300))
     assert subtitle_mask_rect((-1180, 100, 100, 20), geometry) == (-1770, 150, 150, 30)
     assert subtitle_mask_rect((100, 100, 100, 20), geometry) is None
+
+
+def test_controller_window_close_uses_coordinated_quit(ui_window):
+    calls = []
+    ui_window.on_quit_cb = lambda: calls.append('quit')
+    ui_window.show()
+    ui_window.close()
+    assert calls == ['quit']

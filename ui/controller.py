@@ -17,6 +17,11 @@ from ui.styles import CYBER_PALETTE, get_app_stylesheet
 class ControllerWindow(QWidget):
     """Compose the four views around one settings coordinator."""
 
+    def closeEvent(self, event):
+        # Keep widgets alive until the application has drained its worker threads.
+        event.ignore()
+        self.on_quit_cb()
+
     def __init__(self, worker, state, on_select_region, on_quit, overlay=None):
         super().__init__()
 
