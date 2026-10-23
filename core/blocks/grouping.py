@@ -27,6 +27,7 @@ def group_spans(spans, image_size_px):
         pieces.append((text, rect))
     pieces.sort(key=lambda p: (p[1].y, p[1].x, p[0]))
     # Merge nearest horizontal fragments first, then adjacent text lines.
+    line_heights = {id(rect): rect.height for _, rect in pieces}
     for horizontal in (True, False):
         while True:
             candidates = []
@@ -34,7 +35,9 @@ def group_spans(spans, image_size_px):
                 for j, (tb, b) in enumerate(pieces):
                     if i == j:
                         continue
-                    ratio = max(a.height, b.height) / min(a.height, b.height)
+                    ah = a.height if horizontal else line_heights.get(id(a), a.height)
+                    bh = b.height if horizontal else line_heights.get(id(b), b.height)
+                    ratio = max(ah, bh) / min(ah, bh)
                     if horizontal:
                         overlap = max(0, min(a.bottom, b.bottom)-max(a.y, b.y)) / min(a.height, b.height)
                         gap = b.x-a.right
@@ -42,8 +45,8 @@ def group_spans(spans, image_size_px):
                     else:
                         overlap = max(0, min(a.right, b.right)-max(a.x, b.x)) / min(a.width, b.width)
                         gap = b.y-a.bottom
-                        valid = (0 <= gap <= .75*max(a.height, b.height) and ratio <= 1.20
-                                 and (overlap >= .50 or abs(a.x-b.x) <= max(a.height, b.height))
+                        valid = (0 <= gap <= .75*max(ah, bh) and ratio <= 1.20
+                                 and (overlap >= .50 or abs(a.x-b.x) <= max(ah, bh))
                                  and not re.match(r'^(?:[•●▪\-–—]|\d+[.)])', tb)
                                  and not ta.endswith(('.', '!', '?', '。', '！', '？')))
                     if valid:
@@ -53,9 +56,9 @@ def group_spans(spans, image_size_px):
             *_, i, j = min(candidates)
             ta, a = pieces[i]
             tb, b = pieces[j]
-            # Keep line metrics while collecting paragraphs (paragraph height is
-            # not a font size); vertical chaining is done separately below.
-            pieces[i] = (ta+' '+tb, union(a, b))
+            merged = union(a, b)
+            line_heights[id(merged)] = line_heights.get(id(b), b.height) if not horizontal else merged.height
+            pieces[i] = (ta+' '+tb, merged)
             pieces.pop(j)
         if horizontal:
             continue
