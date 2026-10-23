@@ -41,22 +41,22 @@
 **Files:** engines/google_translate.py, tests/test_google_web_priority.py.
 **Interfaces:** Add parse_batch_response(content: str) -> str and parse_clients5_response(payload: object) -> str; both raise ValueError for invalid/empty responses. Keep parse_google_response(payload) for GTX.
 
-- [ ] **Step 1:** Write test_batch_framing_rpc_and_all_segments: XSSI/numeric framing, unrelated RPC preceding MkEWBc, multiple segments `'Xin chào. '` + `'世界\nDòng 2'` yield exact joined string; malformed matching RPC/segment and HTML fail. test_clients5_parser_preserves_segments rejects empty/mixed/non-list; GTX parser regression remains.
-- [ ] **Step 2:** Run those tests with isolated TEMP; expect missing parser imports (RED).
-- [ ] **Step 3:** Implement parsers with JSON decoding, exact RPC identity and strict shape/type checks. Reject malformed translation segments, ignore unrelated metadata frames; join all translated segments without invented spaces.
-- [ ] **Step 4:** Run parsers + current adapter tests; expect all PASS.
-- [ ] **Step 5:** Commit exact source/test files: feat: parse Google batch and clients5 responses.
+- [x] **Step 1:** Write test_batch_framing_rpc_and_all_segments: XSSI/numeric framing, unrelated RPC preceding MkEWBc, multiple segments `'Xin chào. '` + `'世界\nDòng 2'` yield exact joined string; malformed matching RPC/segment and HTML fail. test_clients5_parser_preserves_segments rejects empty/mixed/non-list; GTX parser regression remains.
+- [x] **Step 2:** Run those tests with isolated TEMP; expect missing parser imports (RED).
+- [x] **Step 3:** Implement parsers with JSON decoding, exact RPC identity and strict shape/type checks. Reject malformed translation segments, ignore unrelated metadata frames; join all translated segments without invented spaces.
+- [x] **Step 4:** Run parsers + current adapter tests; expect all PASS.
+- [x] **Step 5:** Commit exact source/test files: feat: parse Google batch and clients5 responses.
 
 ### Task 2: Ordered single-request adapter and compatibility tests
 
 **Files:** engines/google_translate.py, tests/test_google_web_priority.py, tests/test_google_adapter.py, tests/test_google_translate.py, tests/test_google_app_integration.py.
 **Interfaces:** Keep GoogleTranslateClient(*, client_factory=None, wall_clock=time.time), translate(text,source_lang,target_lang), close(). Internal integer route index starts0, advances only on retryable error capped2; close resets0. GOOGLE_ADAPTER_VERSION=2 consumed by existing facade cache.
 
-- [ ] **Step 1:** Write test_adapter_priority_and_sticky_success (batch503→clients5 success→clients5 success); test_retries_progress_to_gtx_without_looping (all503: batch,clients5,gtx,gtx); verify RPC request/source/target Unicode and input/token invariants. Invalid input,400,403,302,HTML/malformed keep route. close then reuse batch; owner-thread lifecycle includes POST. Capture httpx logs for all hosts while ensuring actual q/body still reaches transport.
-- [ ] **Step 2:** Run new adapter tests; expect current GET/GTX default and missing routes RED.
-- [ ] **Step 3:** Implement route/request dispatch using Task1 parsers. Map response/errors as before; move route only after structured retryable failure. Share one lazy httpx client, no loops/retries inside translate; redact both GET query hosts.
-- [ ] **Step 4:** Update successful fake transports to batch format/POST mocks; retain error/cache/thread assertions. Run all adapter/provider/service/smoke tests and app integration; expect PASS.
-- [ ] **Step 5:** Commit exact files: feat: prioritize Google batch with clients5 and GTX fallback.
+- [x] **Step 1:** Write test_adapter_priority_and_sticky_success (batch503→clients5 success→clients5 success); test_retries_progress_to_gtx_without_looping (all503: batch,clients5,gtx,gtx); verify RPC request/source/target Unicode and input/token invariants. Invalid input,400,403,302,HTML/malformed keep route. close then reuse batch; owner-thread lifecycle includes POST. Capture httpx logs for all hosts while ensuring actual q/body still reaches transport.
+- [x] **Step 2:** Run new adapter tests; expect current GET/GTX default and missing routes RED.
+- [x] **Step 3:** Implement route/request dispatch using Task1 parsers. Map response/errors as before; move route only after structured retryable failure. Share one lazy httpx client, no loops/retries inside translate; redact both GET query hosts.
+- [x] **Step 4:** Update successful fake transports to batch format/POST mocks; retain error/cache/thread assertions. Run all adapter/provider/service/smoke tests and app integration; expect PASS.
+- [x] **Step 5:** Commit exact files: feat: prioritize Google batch with clients5 and GTX fallback.
 
 ### Task 3: Shared recovery proof, full verification and independent review
 

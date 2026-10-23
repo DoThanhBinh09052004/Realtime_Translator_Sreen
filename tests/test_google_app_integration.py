@@ -2,6 +2,8 @@ from dataclasses import replace
 from types import SimpleNamespace
 import time
 import httpx
+import json
+from urllib.parse import parse_qs
 import numpy as np
 import pytest
 from core import config
@@ -10,7 +12,7 @@ from core.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
-def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monkeypatch,capture_geometry,span_factory,mode):
+def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monkeypatch,capture_geometry,span_factory,mode,google_batch_response):
     import core.worker as module
     import ui.block_overlay as block_module
     from engines.google_translate import GoogleTranslateClient
@@ -20,8 +22,19 @@ def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monk
     now, source, fail=[0.],['A'],[True]
     requests, captures=[],[]
     def respond(request):
-        requests.append(request.url.params['q'])
-        return httpx.Response(503) if fail[0] else httpx.Response(200,json=[[['Bản dịch '+request.url.params['q']]]])
+        if request.method == 'POST':
+            rpc = json.loads(parse_qs(request.content.decode())['f.req'][0])
+            original = json.loads(rpc[0][0][1])[0][0]
+        else:
+            original = request.url.params['q']
+        requests.append(original)
+        if fail[0]: return httpx.Response(503)
+        translated = 'Bản dịch ' + original
+        if request.method == 'POST':
+            return httpx.Response(200, text=google_batch_response(translated))
+        if request.url.host == 'clients5.google.com':
+            return httpx.Response(200, json=[translated])
+        return httpx.Response(200, json=[[[translated]]])
     def service():
         return TranslationService(google_factory=lambda:GoogleTranslateClient(client_factory=lambda:httpx.Client(transport=httpx.MockTransport(respond))))
     class Capture:

@@ -1,5 +1,7 @@
 from email.utils import formatdate
 from threading import Thread, get_ident
+from urllib.parse import parse_qs
+import json
 import httpx
 import pytest
 
@@ -13,12 +15,12 @@ def test_joins_all_segments_without_losing_whitespace():
 
 
 @pytest.mark.parametrize('lang,code', [('English','en'),('Japanese','ja'),('Chinese','zh-CN'),('Korean','ko'),('Vietnamese','vi')])
-def test_maps_all_app_languages(lang, code):
+def test_maps_all_app_languages(lang, code, google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     calls = []
     def respond(request):
         calls.append(request)
-        return httpx.Response(200, json=[[['Dịch 日本語', 'source']]])
+        return httpx.Response(200, text=google_batch_response('Dịch 日本語'))
     client = httpx.Client(transport=httpx.MockTransport(respond))
     adapter = GoogleTranslateClient(client_factory=lambda: client)
     try:
@@ -26,7 +28,13 @@ def test_maps_all_app_languages(lang, code):
         assert result.text == 'Dịch 日本語'
         assert result.input_tokens is result.output_tokens is None
         params = dict(calls[0].url.params)
-        assert params == dict(client='gtx', sl=code, tl='vi', dt='t', q='Hello 日本語')
+        assert calls[0].method == 'POST'
+        assert params == dict(rpcids='MkEWBc', rt='c')
+        rpc = json.loads(parse_qs(calls[0].content.decode())['f.req'][0])
+        assert rpc[0][0][0] == 'MkEWBc'
+        assert json.loads(rpc[0][0][1]) == [['Hello 日本語', code, 'vi', True], [None]]
+        assert calls[0].headers['origin'] == 'https://translate.google.com'
+        assert calls[0].headers['referer'] == 'https://translate.google.com/'
     finally:
         adapter.close()
 
@@ -82,16 +90,16 @@ def test_retry_after_seconds_http_date_and_invalid_values():
         assert parse_retry_after(value, now_epoch_s=now) is None
 
 
-def test_client_factory_use_and_close_on_same_owner_thread():
+def test_client_factory_use_and_close_on_same_owner_thread(google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     threads = []
     class Client:
         def __init__(self): threads.append(get_ident())
-        def get(self, *a, **kw):
+        def post(self, *a, **kw):
             assert kw['timeout'] == 8.0
             assert not kw['follow_redirects']
             threads.append(get_ident())
-            return httpx.Response(200, json=[[['ok']]])
+            return httpx.Response(200, text=google_batch_response('ok'))
         def close(self): threads.append(get_ident())
     adapter = GoogleTranslateClient(client_factory=Client)
     def work():
@@ -103,16 +111,16 @@ def test_client_factory_use_and_close_on_same_owner_thread():
     assert len(threads) == 3 and len(set(threads)) == 1 and threads[0] != get_ident()
 
 
-def test_http_info_logs_do_not_include_source_query(caplog):
+def test_http_info_logs_do_not_include_source_query(caplog, google_batch_response):
     import logging
     from engines.google_translate import GoogleTranslateClient
     caplog.set_level(logging.INFO,logger='httpx')
-    client=httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=[[['ok']]])))
+    client=httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,text=google_batch_response('ok'))))
     adapter=GoogleTranslateClient(client_factory=lambda:client)
     try:
         assert adapter.translate('private source','English','Vietnamese').text=='ok'
         assert 'q=' not in caplog.text and 'private' not in caplog.text
-        assert 'https://translate.googleapis.com/translate_a/single' in caplog.text
+        assert 'https://translate.google.com/_/TranslateWebserverUi/data/batchexecute' in caplog.text
         client.get('https://example.com/health?check=1')
         assert 'https://example.com/health?check=1' in caplog.text
     finally:

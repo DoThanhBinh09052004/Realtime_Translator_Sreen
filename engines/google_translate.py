@@ -8,8 +8,10 @@ from email.utils import parsedate_to_datetime
 import httpx
 from core.contracts import EngineError, TranslationResult
 
-GOOGLE_ADAPTER_VERSION = 1
+GOOGLE_ADAPTER_VERSION = 2
 _URL = 'https://translate.googleapis.com/translate_a/single'
+_BATCH_URL = 'https://translate.google.com/_/TranslateWebserverUi/data/batchexecute'
+_CLIENTS5_URL = 'https://clients5.google.com/translate_a/t'
 _LANGUAGES = {'English':'en', 'Japanese':'ja', 'Chinese':'zh-CN', 'Korean':'ko', 'Vietnamese':'vi'}
 _MESSAGES = {
     'invalid_input': 'Nội dung hoặc ngôn ngữ dịch không hợp lệ (tối đa 2000 ký tự).',
@@ -28,7 +30,7 @@ class _GoogleRequestLogFilter(logging.Filter):
         if isinstance(record.args, tuple):
             record.args = tuple(
                 value.copy_with(query=None)
-                if isinstance(value, httpx.URL) and value.host == 'translate.googleapis.com'
+                if isinstance(value, httpx.URL) and value.host in ('translate.googleapis.com', 'clients5.google.com')
                 else value
                 for value in record.args
             )
@@ -76,7 +78,7 @@ def parse_batch_response(content):
     """Read the MkEWBc result from Google's line-framed, nested JSON RPC."""
     if not isinstance(content, str):
         raise ValueError('Invalid Google batch response')
-    for line in content.splitlines():
+    for line in content.split('\n'):
         line = line.strip()
         if not line.startswith('['):
             continue  # XSSI prefix, byte counts and blank framing lines.
@@ -112,6 +114,7 @@ class GoogleTranslateClient:
         self._factory = client_factory or (lambda: httpx.Client(transport=httpx.HTTPTransport(retries=0), follow_redirects=False))
         self._clock = wall_clock
         self._client = None
+        self._route = 0
 
     def translate(self, text, source_lang, target_lang):
         if not isinstance(text, str) or len(text) > 2000:
@@ -120,11 +123,33 @@ class GoogleTranslateClient:
             return TranslationResult()
         if source_lang not in _LANGUAGES or target_lang not in _LANGUAGES:
             return _error('invalid_input')
+        result = self._translate(text, source_lang, target_lang)
+        if result.error is not None and result.error.retryable:
+            # The core schedules and counts the next attempt. Never send a
+            # hidden fallback request here, including after a 429 response.
+            self._route = min(self._route + 1, 2)
+        return result
+
+    def _translate(self, text, source_lang, target_lang):
         try:
             if self._client is None:
                 self._client = self._factory()
-            response = self._client.get(_URL, params=dict(client='gtx', sl=_LANGUAGES[source_lang],
-                tl=_LANGUAGES[target_lang], dt='t', q=text), timeout=8.0, follow_redirects=False)
+            source, target = _LANGUAGES[source_lang], _LANGUAGES[target_lang]
+            if self._route == 0:
+                argument = json.dumps([[text, source, target, True], [None]], ensure_ascii=False)
+                request = json.dumps([[['MkEWBc', argument, None, 'generic']]], ensure_ascii=False)
+                response = self._client.post(_BATCH_URL, params={'rpcids': 'MkEWBc', 'rt': 'c'},
+                    data={'f.req': request}, headers={
+                        'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                        'origin': 'https://translate.google.com', 'referer': 'https://translate.google.com/'},
+                    timeout=8.0, follow_redirects=False)
+            elif self._route == 1:
+                response = self._client.get(_CLIENTS5_URL,
+                    params=dict(client='dict-chrome-ex', sl=source, tl=target, q=text),
+                    timeout=8.0, follow_redirects=False)
+            else:
+                response = self._client.get(_URL, params=dict(client='gtx', sl=source,
+                    tl=target, dt='t', q=text), timeout=8.0, follow_redirects=False)
             status = response.status_code
             if status == 429:
                 return _error('rate_limit', True, parse_retry_after(response.headers.get('retry-after'), now_epoch_s=self._clock()))
@@ -136,7 +161,13 @@ class GoogleTranslateClient:
                 return _error('invalid_input')
             if status != 200:
                 return _error('service_unavailable')
-            return TranslationResult(text=parse_google_response(response.json()))
+            if self._route == 0:
+                text = parse_batch_response(response.text)
+            elif self._route == 1:
+                text = parse_clients5_response(response.json())
+            else:
+                text = parse_google_response(response.json())
+            return TranslationResult(text=text)
         except httpx.TimeoutException:
             return _error('timeout', True)
         except httpx.TransportError:
@@ -148,6 +179,7 @@ class GoogleTranslateClient:
 
     def close(self):
         client, self._client = self._client, None
+        self._route = 0
         if client is not None:
             try:
                 client.close()
