@@ -146,7 +146,9 @@ class TranslationWorker(QThread):
             self._invalidated = True
             revision = self._revision
         self.revision_changed.emit(revision)
-        if (mode_changed or lane_changed) and (self.isRunning() or self._block_translator.isRunning()):
+        if ((mode_changed or lane_changed)
+                and (self.is_running() or self._restart_pending)
+                and (self.isRunning() or self._block_translator.isRunning())):
             self.stop_worker(preserve_translation_session=True)
             self._restart_pending = True
             self._restart_preserve_session = True
@@ -183,6 +185,8 @@ class TranslationWorker(QThread):
 
     def start_worker(self, *, preserve_translation_session=False):
         """Khởi động worker thread nếu chưa chạy"""
+        if self._restart_pending:
+            return  # Keep the existing start intent, including its session policy.
         if (self._shutdown_pending and self.isRunning()) or self._block_translator.isRunning() and not self.is_running():
             self._restart_pending = True
             self._restart_preserve_session = preserve_translation_session

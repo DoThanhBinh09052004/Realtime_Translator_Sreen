@@ -30,3 +30,17 @@ def test_waiting_message_counts_down_without_triggering_retry(qtbot,ui_window):
     assert '20' in page.translation_message.text()
     assert page.retry_translation_btn.isHidden()
     ui_window.worker.retry_translation.assert_not_called()
+
+
+def test_failed_setting_save_preserves_paused_google_retry(ui_window,monkeypatch):
+    from unittest.mock import Mock
+    from core import config
+    w=ui_window.worker
+    w.revision=3; w.translation_session_id=1; w.is_running.return_value=True
+    ui_window.show_translation_status(TranslationStatus('Google Translate',3,1,'paused',3))
+    monkeypatch.setattr(config.os,'replace',Mock(side_effect=OSError('disk full')))
+    ui_window.provider_combo.setCurrentText('OpenAI')
+    assert ui_window.provider_combo.currentText()=='Google Translate'
+    assert not ui_window.console_page.retry_translation_btn.isHidden()
+    assert not ui_window.settings_coordinator.set_subtitle_style({'font_size':30})
+    assert not ui_window.console_page.retry_translation_btn.isHidden()

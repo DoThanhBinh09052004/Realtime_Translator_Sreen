@@ -1,4 +1,5 @@
 """Keyless Google web adapter. Retry and caching belong to the caller."""
+import logging
 import math
 import time
 from datetime import timezone
@@ -17,6 +18,23 @@ _MESSAGES = {
     'service_unavailable': 'Hiện không thể sử dụng Google Translate.',
     'invalid_response': 'Không thể đọc kết quả từ Google Translate.',
 }
+
+
+class _GoogleRequestLogFilter(logging.Filter):
+    """HTTPX logs request URLs at INFO; never log Google's source query."""
+
+    def filter(self, record):
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                value.copy_with(query=None)
+                if isinstance(value, httpx.URL) and value.host == 'translate.googleapis.com'
+                else value
+                for value in record.args
+            )
+        return True
+
+
+logging.getLogger('httpx').addFilter(_GoogleRequestLogFilter())
 
 
 def _error(code, retryable=False, delay=None):

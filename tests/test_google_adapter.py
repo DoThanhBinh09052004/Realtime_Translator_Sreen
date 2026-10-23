@@ -101,3 +101,19 @@ def test_client_factory_use_and_close_on_same_owner_thread():
     thread = Thread(target=work)
     thread.start(); thread.join()
     assert len(threads) == 3 and len(set(threads)) == 1 and threads[0] != get_ident()
+
+
+def test_http_info_logs_do_not_include_source_query(caplog):
+    import logging
+    from engines.google_translate import GoogleTranslateClient
+    caplog.set_level(logging.INFO,logger='httpx')
+    client=httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,json=[[['ok']]])))
+    adapter=GoogleTranslateClient(client_factory=lambda:client)
+    try:
+        assert adapter.translate('private source','English','Vietnamese').text=='ok'
+        assert 'q=' not in caplog.text and 'private' not in caplog.text
+        assert 'https://translate.googleapis.com/translate_a/single' in caplog.text
+        client.get('https://example.com/health?check=1')
+        assert 'https://example.com/health?check=1' in caplog.text
+    finally:
+        adapter.close()

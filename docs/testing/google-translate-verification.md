@@ -1,10 +1,10 @@
 # Google Translate — kiểm chứng 2026-10-23
 
-## Kết quả triển khai trước review cuối
+## Kết quả triển khai
 
 - Plan: docs/superpowers/plans/2026-10-23-google-translate.md.
 - Native execution, baseline cũ 286 test PASS khi bỏ test Google nháp chưa triển khai.
-- Sau T1–T8: **342 passed in 12.40s, exit 0**, toàn bộ test, không skip/xfail Google.
+- Sau T1–T8 và sửa lỗi review cuối: **347 passed in 12.49s, exit 0**, toàn bộ test, không skip/xfail Google.
 - Pytest dùng Qt offscreen, fake OCR/capture và HTTP MockTransport; không dùng key hoặc nội dung màn hình thật.
 - httpx 0.28.1 được khai báo trực tiếp, các dependency khác giữ nguyên; requirements giữ encoding UTF-16 vốn có.
 
@@ -24,9 +24,21 @@
 | Pause giữ qua đổi vùng/source/mode, selector suspend/resume và Google→AI→Google | PASS lifecycle |
 | Stop/Start chủ động mở phiên mới; state không ghi config | PASS lifecycle/recovery |
 | UI key/model/capabilities, save rollback, status cũ, Retry nhiều click | PASS UI |
+| Lưu cấu hình thất bại vẫn giữ trạng thái pause/nút Thử lại | PASS regression provider và style rollback |
+| HTTPX INFO không ghi query chứa câu nguồn Google | PASS regression; log host khác giữ nguyên |
 | Revision-bound subtitle ngăn callback cũ khi đổi công cụ; API legacy giữ lại | PASS regression |
 | Window close chờ thread/request cleanup | Bộ regression lifecycle PASS; bổ sung review cuối nếu có phát hiện |
+| Dừng rồi đổi provider/mode khi HTTP còn chờ không tự chạy lại | PASS hai regression Event-held |
+| Bấm Start trong lúc restart nội bộ không reset phiên/pause Google | PASS regression Event-held |
 | Chơi game, OBS, RAM/CPU/độ trễ với video Genshin và dịch vụ thật | Chưa chạy, chưa có số đo |
+
+Lệnh toàn bộ test: `.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp <fresh-path>`. Đặt TEMP/TMP và basetemp vào thư mục mới trong writable root ngoài repository, PYTHONUTF8=1; không dùng system Python.
+
+## Review cuối
+
+Review độc lập toàn bộ range `3a711c8..b922e5d` đã hoàn tất bằng gpt-6.1-sol high sau khi lượt Astra bị ngắt do hạn mức. Reviewer xác nhận lỗi restart sau Dừng, cùng rủi ro ghi đè ý định giữ phiên khi bấm Start giữa restart nội bộ. Các regression đã chạy RED rồi GREEN; suite cuối 347/347. Hai lỗi rollback và log HTTPX cũng có bằng chứng RED/GREEN. Không có finding Critical hoặc minor được hoãn.
+
+Phần reviewer chưa thể kết luận: dịch thành công qua Google thật và hiệu năng/game/RAM. Giữ hai phần này là chưa kiểm chứng, vì smoke chỉ nhận 429 và test dùng fake capture/HTTP; chi phí là chưa thể bảo đảm dịch vụ thật hoặc công bố số đo hiệu năng.
 
 ## Smoke mạng thật
 
@@ -49,6 +61,8 @@ Google dùng tối đa ba retry sau lỗi đầu tiên, ngân sách chung cho d�
 ## Quyết định triển khai
 
 - Dùng checkout feature hiện có, giữ config.json/MORT/video và các file người dùng.
-- Dùng PowerShell cho ledger/test harness của skill Bash trên Windows; các cổng RED/GREEN vẫn được ghi nhận.
-- Để không hồi sinh callback AI cũ khi chuyển Google/AI, GUI dùng SubtitleFrame có revision cho cả hai; signal str và đường dịch AI đồng bộ vẫn được giữ cho compatibility.
+- Dùng checkout hiện có nên thay đổi nằm cùng nhánh feature cũ, không tách nhánh riêng.
+- Dùng PowerShell cho ledger/test harness của skill Bash trên Windows; các cổng RED/GREEN vẫn được ghi nhận. Đánh đổi: không có review package sinh bằng Bash, reviewer nhận trực tiếp range/spec/plan/ledger.
+- Để không hồi sinh callback AI cũ khi chuyển Google/AI, GUI dùng SubtitleFrame có revision cho cả hai; signal str và đường dịch AI đồng bộ vẫn được giữ cho compatibility. Đánh đổi: thêm một payload signal cho mỗi bản dịch AI.
+- Reviewer Astra hết hạn mức trước khi hoàn tất; thay bằng fresh-context gpt-6.1-sol high. Đánh đổi: dùng mô hình review khác với lựa chọn ban đầu.
 - Chưa có thay đổi capture exclusion, layout overlay hoặc kết luận tăng chất lượng/giảm RAM so với MORT.
