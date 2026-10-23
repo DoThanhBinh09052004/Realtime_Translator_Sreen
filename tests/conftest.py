@@ -68,13 +68,33 @@ class _FakePaddleOCR:
 
     def ocr(self, image, **kwargs):
         text = _ocr(image, **kwargs)
-        return [[[None, (text, 1.0)]]] if text else [[]]
+        return [[[[[10, 10], [110, 10], [110, 30], [10, 30]], (text, 1.0)]]] if text else [[]]
 
 
 # Replacing the module also prevents Paddle's import-time model checks/downloads.
 _paddleocr = ModuleType("paddleocr")
 _paddleocr.PaddleOCR = _FakePaddleOCR
 _bootstrap.setitem(sys.modules, "paddleocr", _paddleocr)
+
+
+@pytest.fixture
+def span_factory():
+    from core.contracts import OcrSpan
+    def make(text='Hello', x=10, y=10, width=100, height=20, confidence=.99):
+        return OcrSpan(text, ((x, y), (x+width, y), (x+width, y+height), (x, y+height)), confidence)
+    return make
+
+
+@pytest.fixture
+def runtime_settings():
+    from core.contracts import RuntimeSettings, ProviderSettings
+    return RuntimeSettings('English', 'Vietnamese', ProviderSettings('Google Gemini', 'fake-model', 'fake-key', None), 500)
+
+
+@pytest.fixture
+def capture_geometry():
+    from core.blocks.models import Rect, ScreenMapping, CaptureGeometry
+    return CaptureGeometry(Rect(100, 100, 800, 600), ScreenMapping('test', Rect(0, 0, 1920, 1080), Rect(0, 0, 1920, 1080)), (800, 600))
 
 
 @pytest.fixture(autouse=True)

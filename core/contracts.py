@@ -1,5 +1,6 @@
 """Immutable values exchanged between settings, engines and worker threads."""
 from dataclasses import dataclass, field
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class RuntimeSettings:
     target_lang: str
     provider: ProviderSettings
     interval_ms: int
+    overlay_mode: Literal['subtitle', 'blocks'] = 'subtitle'
 
 
 @dataclass(frozen=True)
@@ -39,13 +41,22 @@ class TranslationResult:
 
 
 @dataclass(frozen=True)
+class OcrSpan:
+    text: str
+    polygon: tuple[tuple[float, float], ...]
+    confidence: float
+
+
+@dataclass(frozen=True)
 class OcrResult:
     text: str = ""
     error: EngineError | None = None
+    spans: tuple[OcrSpan, ...] = ()
 
     def __post_init__(self):
         if self.error is not None:
             object.__setattr__(self, "text", "")
+            object.__setattr__(self, "spans", ())
 
 
 @dataclass(frozen=True)
