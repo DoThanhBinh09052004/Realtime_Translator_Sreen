@@ -79,3 +79,13 @@ class WorkerStatus:
             "retry_wait", "error", "stopping",
         }:
             raise ValueError("Unknown worker state")
+
+
+@dataclass(frozen=True)
+class TranslationStatus:
+    provider: str
+    revision: int
+    session_id: int
+    phase: Literal['active', 'retry_wait', 'paused', 'stopped']
+    retries_issued: int = 0
+    retry_at_s: float | None = None
