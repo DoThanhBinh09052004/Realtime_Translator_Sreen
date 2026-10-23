@@ -52,6 +52,17 @@ def test_batch_unicode_line_separators_are_text_not_protocol_frames(google_batch
     assert parse_batch_response(google_batch_response('前\u2028後\u2029終')) == '前\u2028後\u2029終'
 
 
+@pytest.mark.parametrize('space_join,segments,expected', [
+    (True, ('Xin chào.', 'Bạn khỏe không?'), 'Xin chào. Bạn khỏe không?'),
+    (False, ('前', '後'), '前後'),
+    (None, ('Xin chào. ', '世界\nDòng 2'), 'Xin chào. 世界\nDòng 2'),
+    (True, ('Một\nDòng hai', 'Câu ba'), 'Một\nDòng hai Câu ba'),
+])
+def test_batch_uses_protocol_separator_without_losing_literal_whitespace(google_batch_response, space_join, segments, expected):
+    from engines.google_translate import parse_batch_response
+    assert parse_batch_response(google_batch_response(*segments, space_join=space_join)) == expected
+
+
 def request_route(request):
     return {'translate.google.com': 'batch', 'clients5.google.com': 'clients5',
             'translate.googleapis.com': 'gtx'}[request.url.host]

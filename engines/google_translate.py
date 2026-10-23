@@ -60,18 +60,24 @@ def parse_retry_after(value, *, now_epoch_s):
             return None
 
 
-def parse_google_response(payload):
-    if not isinstance(payload, list) or not payload or not isinstance(payload[0], list) or not payload[0]:
-        raise ValueError('Invalid Google response')
+def _join_segments(segments, separator=''):
+    if not isinstance(segments, list) or not segments:
+        raise ValueError('Invalid Google segments')
     parts = []
-    for segment in payload[0]:
+    for segment in segments:
         if not isinstance(segment, list) or not segment or not isinstance(segment[0], str):
             raise ValueError('Invalid Google segment')
         parts.append(segment[0])
-    text = ''.join(parts).strip()
+    text = separator.join(parts).strip()
     if not text:
         raise ValueError('Empty Google response')
     return text
+
+
+def parse_google_response(payload):
+    if not isinstance(payload, list) or not payload:
+        raise ValueError('Invalid Google response')
+    return _join_segments(payload[0])
 
 
 def parse_batch_response(content):
@@ -93,10 +99,12 @@ def parse_batch_response(content):
                 continue
             try:
                 payload = json.loads(row[2])
-                segments = payload[1][0][0][5]
+                translation = payload[1][0][0]
+                segments = translation[5]
+                separator = ' ' if translation[3] else ''
             except (ValueError, TypeError, KeyError, IndexError) as exc:
                 raise ValueError('Invalid Google batch result') from exc
-            return parse_google_response([segments])
+            return _join_segments(segments, separator)
     raise ValueError('Missing Google batch result')
 
 

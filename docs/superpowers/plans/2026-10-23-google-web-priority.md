@@ -63,11 +63,11 @@
 **Files:** tests/test_google_web_priority.py, docs/testing/google-translate-verification.md; source changes only for reproduced defects.
 **Interfaces:** Consume actual TranslationService, BlockTranslationWorker, GoogleRecoveryGate and fake clock/MockTransport. Preserve run_smoke(text,source_lang,target_lang,*,adapter_factory=GoogleTranslateClient).
 
-- [ ] **Step 1:** Add integration coverage: batch429 Retry-After12 → no clients5 before12; then clients5 failure, GTX failure, GTX failure → paused; advance clock10000 -> no fifth request. Stale scene after first failure still counts/cools down and next current source uses next route; cache hit does not heal service gate. New tests already GREEN are integration coverage, not artificial RED.
-- [ ] **Step 2:** Run focused Google/queue/lifecycle tests; expect PASS or investigate actual assertion failure before source changes.
-- [ ] **Step 3:** Run full suite with isolated TEMP and git diff --check; expect all PASS without skip/xfail Google. Run CLI smoke ONCE with Hello world; record actual translation/error/duration, no repeated probe after429. Update docs with counts, mock/live separation and decisions.
-- [ ] **Step 4:** Commit exact files: test: verify ordered Google fallback and shared cooldown.
-- [ ] **Step 5:** Dispatch one fresh whole-change reviewer, spec/plan/ledger/base..HEAD, skill requesting-code-review; fix Important/Critical in one RED→GREEN pass, full suite. Keep current feature branch, no merge/push.
+- [x] **Step 1:** Add integration coverage: batch429 Retry-After12 → no clients5 before12; then clients5 failure, GTX failure, GTX failure → paused; advance clock10000 -> no fifth request. Stale scene after first failure still counts/cools down and next current source uses next route; cache hit does not heal service gate. New tests already GREEN are integration coverage, not artificial RED.
+- [x] **Step 2:** Run focused Google/queue/lifecycle tests; expect PASS or investigate actual assertion failure before source changes.
+- [x] **Step 3:** Run full suite with isolated TEMP and git diff --check; expect all PASS without skip/xfail Google. Run CLI smoke ONCE with Hello world; record actual translation/error/duration, no repeated probe after429. Update docs with counts, mock/live separation and decisions.
+- [x] **Step 4:** Commit exact files: test: verify ordered Google fallback and shared cooldown.
+- [x] **Step 5:** Dispatch one fresh whole-change reviewer, spec/plan/ledger/base..HEAD, skill requesting-code-review; fix Important/Critical in one RED→GREEN pass, full suite. Keep current feature branch, no merge/push.
 
 ## Self-review and execution
 

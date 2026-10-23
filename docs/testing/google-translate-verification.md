@@ -3,7 +3,7 @@
 ## Cập nhật: batchexecute → clients5 → GTX
 
 - Thiết kế/kế hoạch mới: docs/superpowers/specs/2026-10-23-google-web-priority-design.md và docs/superpowers/plans/2026-10-23-google-web-priority.md; người dùng duyệt Native.
-- Sau thay adapter: **381 passed in 13.67s, exit 0**, không skip/xfail Google. `git diff --check` exit 0.
+- Sau thay adapter và sửa lỗi review: **385 passed in 12.66s, exit 0**, không skip/xfail Google. `git diff --check` exit 0.
 - Adapter mới bắt đầu bằng batchexecute, lỗi retry được mới chuẩn bị clients5 rồi GTX; mỗi lượt translate tối đa một HTTP request. Đường thành công được giữ đến khi client đóng. Không quay vòng khi đã đến GTX.
 - HTTP429 vẫn chờ Retry-After hoặc mặc định30 giây, dù request kế tiếp dùng đường khác. Bốn lỗi liên tiếp trên batch/clients5/GTX/GTX vẫn làm gate pause. Lỗi input/nonretry không chuyển đường.
 - Integration fake HTTP + queue thật xác nhận lỗi429 của scene cũ vẫn tính ngân sách/deadline; scene hiện tại chỉ gửi sau12 giây; không có request thứ5 dù clock10000 hoặc scene mới. Cache hit không đổi route hoặc chữa budget.
@@ -14,7 +14,21 @@ Smoke **qua adapter mới** (cùng CLI bên dưới): **exit0**, translated_text
 
 Lượt so sánh đọc mạng trước khi triển khai, mỗi đường một request cùng câu mẫu: batch HTTP200/1.297s, clients5 HTTP200/0.329s, GTX HTTP429/0.453s. Các số này là quan sát đơn lẻ, không phải benchmark.
 
-Review độc lập toàn bộ đợt ưu tiên ba đường: đang thực hiện; kết quả sẽ được bổ sung trước khi chốt.
+Review độc lập range `2897e35..decd220` hoàn tất bằng gpt-6.1-sol high (Astra đã hết hạn mức ở lượt trước trong phiên). Reviewer chạy thêm58 test PASS và xác nhận không có lỗi Critical hoặc lỗi route/gate/lifecycle mới.
+
+Finding Important: batch có chỉ dấu nối segment tại `[1][0][0][3]`; bỏ qua nó có thể làm hai câu dính nhau. Đã đối chiếu [implementation upstream của translatepy](https://github.com/Animenosekai/translate/blob/main/translatepy/translators/google.py#L203), thêm bốn case true/false/null/giữ xuống dòng, quan sát hai case RED rồi sửa và full385 GREEN. GTX giữ cách nối cũ; batch đọc chỉ dấu để chọn separator. Không thay chính sách fallback.
+
+Minor hoãn: parser vẫn trim khoảng trắng ở đầu/cuối bản dịch như hợp đồng GTX cũ. Nội dung/khoảng trắng bên trong segment được giữ; chưa bổ sung giữ nguyên định dạng biên.
+
+Các quyết định sau review (giới hạn có chủ đích):
+
+- Giữ thứ tự, không quay vòng và không tự phục hồi theo timer vì người dùng đã duyệt; đánh đổi là không tự thăm dò lại đường chính trong cùng vòng đời client.
+- Một smoke thành công chưa bảo đảm khả dụng lâu dài hoặc tốc độ tương đối; đánh đổi là không hứa dịch ổn định mọi lúc hoặc benchmark nhanh hơn.
+- Chưa thêm schema batch compact/dictionary dùng cho URL khi không có fixture thực tế; đánh đổi là schema đó sẽ báo invalid_response/pause.
+- Không kết luận hiệu năng game/OCR/RAM vì không đo và không đổi các phần đó; đánh đổi là chưa có số liệu hiệu năng hoặc chất lượng OCR.
+- Không thêm bộ lọc riêng cho HTML giả chứa một frame RPC hợp lệ; HTML thuần đã bị từ chối. Đánh đổi là body bất thường có frame RPC khớp vẫn có thể được parser đọc.
+
+Quyết định công cụ: dùng reviewer gpt-6.1-sol high sẵn có sau khi Astra hết hạn mức; đánh đổi là mô hình review khác với lựa chọn Astra ban đầu. Không có lượt re-review sau sửa; RED→GREEN và full suite là cổng kiểm chứng.
 
 ## Kết quả triển khai
 

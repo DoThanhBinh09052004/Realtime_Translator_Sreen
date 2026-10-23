@@ -127,8 +127,8 @@ def fake_translator():
 def google_batch_response():
     """Synthetic Google RPC envelope; no production parser used to build it."""
     import json
-    def build(*segments):
-        inner = [None, [[[None, None, None, None, None,
+    def build(*segments, space_join=None):
+        inner = [None, [[[None, None, None, space_join, None,
                            [[segment, None, None, None, 1] for segment in segments]]]], 'en']
         frame = json.dumps([['wrb.fr', 'MkEWBc', json.dumps(inner, ensure_ascii=False),
                              None, None, None, 'generic']], ensure_ascii=False)
