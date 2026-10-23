@@ -15,6 +15,10 @@ from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
 from core.contracts import EngineError, RuntimeSettings
 from core.retry import RetryState
 from core.subtitle_stabilizer import SubtitleStabilizer
+from core.blocks.session import BlockSession
+from core.blocks.grouping import group_spans
+from core.blocks.translation_worker import BlockTranslationWorker
+from core.blocks.models import Rect
 
 
 def compact_memory():
@@ -46,6 +50,9 @@ class TranslationWorker(QThread):
     text_unchanged = pyqtSignal()
     error_occurred = pyqtSignal(object)
     status_updated = pyqtSignal(str)
+    blocks_updated = pyqtSignal(object)
+    shutdown_finished = pyqtSignal()
+    revision_changed = pyqtSignal(int)
 
     def __init__(self, state, region, interval_ms=500):
         super().__init__()
@@ -64,15 +71,63 @@ class TranslationWorker(QThread):
         self._retry_frame_only = False
         self._stabilizer = SubtitleStabilizer()
         self._overlay_rect = None  # (x, y, w, h)
+        self._capture_geometry = None
+        self._block_session = BlockSession()
+        self._block_translator = self._new_block_translator()
+        self._last_block_ocr = float('-inf')
+        self._block_frame_id = 0
+        self._block_ocr_retry = RetryState()
+        self._block_ocr_due = 0.
+        self._block_ocr_exhausted = False
+        self._restart_pending = False
+        self._shutdown_pending = False
+        self.finished.connect(self._threads_finished)
+
+    def _new_block_translator(self):
+        thread = BlockTranslationWorker(service_factory=lambda: TranslationService(), parent=self)
+        thread.finished.connect(self._threads_finished)
+        return thread
+
+    @property
+    def revision(self):
+        with QMutexLocker(self._mutex):
+            return self._revision
+
+    def set_capture_geometry(self, geometry):
+        with QMutexLocker(self._mutex):
+            self._capture_geometry = geometry
+            self._revision += 1
+            self._invalidated = True
+            revision = self._revision
+        self.revision_changed.emit(revision)
+        return revision
+
+    def _threads_finished(self):
+        if self.isRunning() or self._block_translator.isRunning():
+            return
+        if self._restart_pending:
+            self._restart_pending = False
+            self.start_worker()
+        elif self._shutdown_pending:
+            self._shutdown_pending = False
+            self.shutdown_finished.emit()
 
     # ===== Interface tương thích với Controller =====
     def configure(self, settings: RuntimeSettings) -> int:
         """Publish an immutable snapshot; only run() consumes invalidation."""
         with QMutexLocker(self._mutex):
+            mode_changed = self._settings.overlay_mode != settings.overlay_mode
             self._settings = settings
             self._revision += 1
             self._invalidated = True
-            return self._revision
+            revision = self._revision
+        self.revision_changed.emit(revision)
+        if mode_changed and (self.isRunning() or self._block_translator.isRunning()):
+            self.stop_worker()
+            self._restart_pending = True
+            self._threads_finished()
+            return self.revision
+        return revision
 
     def setInterval(self, ms: int):
         with QMutexLocker(self._mutex):
@@ -89,6 +144,9 @@ class TranslationWorker(QThread):
             self._region = region.copy()
             self._revision += 1
             self._invalidated = True
+            revision = self._revision
+        self.revision_changed.emit(revision)
+        return revision
 
     def set_overlay_rect(self, rect):
         with QMutexLocker(self._mutex):
@@ -100,7 +158,10 @@ class TranslationWorker(QThread):
 
     def start_worker(self):
         """Khởi động worker thread nếu chưa chạy"""
-        if not self.isRunning():
+        if self._shutdown_pending and (self.isRunning() or self._block_translator.isRunning()):
+            self._restart_pending = True
+            return
+        if not self.isRunning() and not self._block_translator.isRunning():
             with QMutexLocker(self._mutex):
                 self._is_running = True
             self.start()
@@ -112,17 +173,33 @@ class TranslationWorker(QThread):
             self._revision += 1
             self._invalidated = True
         self.requestInterruption()
-        self.wait(3000)
-        compact_memory()
+        self._restart_pending = False
+        self._shutdown_pending = True
+        self._block_translator.request_stop()
+        self.revision_changed.emit(self.revision)
+        if self._settings.overlay_mode != 'blocks' and not self._block_translator.isRunning():
+            self.wait(3000)
+            compact_memory()
+        self._threads_finished()
 
     # Hỗ trợ trực tiếp các phương thức start() và stop()
     def start(self, priority=QThread.InheritPriority):
         if self.isRunning():
             return
+        if self._block_translator.isRunning():
+            self._restart_pending = True
+            return
+        self._shutdown_pending = False
         with QMutexLocker(self._mutex):
             self._is_running = True
             self._revision += 1
             self._invalidated = True
+        if self._settings.overlay_mode == 'blocks':
+            old = self._block_translator
+            self._block_translator = self._new_block_translator()
+            old.deleteLater()
+            self._block_translator.start()
+        self.revision_changed.emit(self.revision)
         super().start(priority)
 
     def stop(self):
@@ -199,6 +276,13 @@ class TranslationWorker(QThread):
             self._retry_state.reset()
             self._retry_frame_only = False
             self._stabilizer.reset()
+            self._block_session.reset()
+            self._last_block_ocr = float('-inf')
+            self._block_frame_id = 0
+            self._block_ocr_retry.reset()
+            self._block_ocr_due = 0.
+            self._block_ocr_exhausted = False
+            self._block_translator.replace_pending((), frozenset(), snapshot[1])
         return snapshot
 
     def retry_current(self) -> None:
@@ -206,6 +290,47 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             self._revision += 1
             self._invalidated = True
+        self.revision_changed.emit(self.revision)
+
+    def _process_block_frame(self, img_gray, settings, revision, geometry):
+        if not self._is_current(revision):
+            return False
+        now = time.monotonic()
+        changed = self._is_frame_changed(img_gray)
+        if changed:
+            self._block_ocr_exhausted = False
+            self._block_ocr_retry.reset()
+        due = now-self._last_block_ocr >= max(1000, settings.interval_ms)/1000
+        scan = changed or self._block_session.has_pending or due or self._block_ocr_due > 0
+        if scan and now >= self._block_ocr_due and not self._block_ocr_exhausted:
+            result = ocr_image(img_gray, lang=SUPPORTED_LANGUAGES.get(settings.source_lang, 'en'))
+            if not self._is_current(revision):
+                return False
+            self._last_block_ocr = now
+            self._block_frame_id += 1
+            if result.error is not None:
+                self._block_session.observe((), settings=settings, revision=revision, frame_id=self._block_frame_id, geometry=geometry, now_s=now)
+                retry = self._block_ocr_retry.next_due(now, result.error)
+                self._block_ocr_due = retry or 0.
+                self._block_ocr_exhausted = retry is None
+                self._emit_current(revision, self.error_occurred, result.error)
+            else:
+                self._block_ocr_retry.reset()
+                self._block_ocr_due = 0.
+                self._block_session.observe(group_spans(result.spans, geometry.image_size_px), settings=settings,
+                                            revision=revision, frame_id=self._block_frame_id, geometry=geometry, now_s=now)
+        # Observe the current capture before considering responses from a previous
+        # tick. Geometry-only updates retain IDs and receive the same request.
+        for result in self._block_translator.drain_results():
+            if self._block_session.apply_result(result) and result.result.error is not None:
+                self._emit_current(revision, self.error_occurred, result.result.error)
+        for error in self._block_session.drain_errors():
+            self._emit_current(revision, self.error_occurred, error)
+        self._block_translator.replace_pending(self._block_session.translation_jobs(), self._block_session.active_keys, revision)
+        frame = self._block_session.current_frame()
+        if frame is not None:
+            self._emit_current(revision, self.blocks_updated, frame)
+        return not scan
 
     def _schedule_retry(self, error: EngineError, settings: RuntimeSettings) -> None:
         retry_error = error
@@ -277,7 +402,7 @@ class TranslationWorker(QThread):
 
     def run(self):
         # Construction, use and cleanup all happen on this thread. UI only publishes settings.
-        service = TranslationService()
+        service = None
         revision = None
         idle_counter = 0
         try:
@@ -298,8 +423,23 @@ class TranslationWorker(QThread):
                         img_raw = sct.grab(monitor)
                         img = np.array(img_raw)
                         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                        img_gray = self._mask_overlay_numpy(img_gray, region, overlay_rect)
-                        idle = self._process_frame(img_gray, settings, revision, service)
+                        if settings.overlay_mode == 'blocks':
+                            with QMutexLocker(self._mutex):
+                                geometry = self._capture_geometry
+                            expected = Rect(region['left'], region['top'], region['width'], region['height'])
+                            if geometry is None or geometry.region_px != expected:
+                                self._emit_current(revision, self.error_occurred,
+                                                   EngineError('capture_geometry', 'Hãy chọn vùng OCR nằm trọn trên một màn hình.', False))
+                                with QMutexLocker(self._mutex):
+                                    self._is_running = False
+                                continue
+                            geometry = replace(geometry, image_size_px=(img_gray.shape[1], img_gray.shape[0]))
+                            idle = self._process_block_frame(img_gray, settings, revision, geometry)
+                        else:
+                            if service is None:
+                                service = TranslationService()
+                            img_gray = self._mask_overlay_numpy(img_gray, region, overlay_rect)
+                            idle = self._process_frame(img_gray, settings, revision, service)
                     except Exception:
                         self._emit_current(revision, self.error_occurred,
                                            EngineError("capture", "Không thể xử lý ảnh chụp màn hình.", True))
@@ -317,7 +457,9 @@ class TranslationWorker(QThread):
             self._emit_current(revision, self.error_occurred,
                                EngineError("capture", "Không thể mở bộ chụp màn hình.", True))
         finally:
-            service.close()
+            if service is not None:
+                service.close()
+            self._block_translator.request_stop()
             self._stabilizer.reset()
             with QMutexLocker(self._mutex):
                 self._is_running = False
