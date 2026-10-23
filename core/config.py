@@ -120,6 +120,7 @@ def normalize_config(raw: object) -> dict:
         ("target_lang", SUPPORTED_TARGETS, "Vietnamese"),
         ("current_provider", PROVIDERS, DEFAULT_PROVIDER),
         ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
+        ("overlay_mode", ("subtitle", "blocks"), "subtitle"),
     ):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and value in choices else default
@@ -165,12 +166,13 @@ class State:
         self.overlay_preset = cfg.get("overlay_preset", DEFAULT_OVERLAY_PRESET)
         self.overlay_x = cfg.get("overlay_x", None)
         self.overlay_y = cfg.get("overlay_y", None)
+        self.overlay_mode = cfg.get("overlay_mode", "subtitle")
 
     def update(self, **kwargs) -> None:
         names = {"source": "source_lang", "target": "target_lang"}
         names.update({k: k for k in (
             "bg_color", "bg_opacity", "text_color", "font_size",
-            "overlay_preset", "overlay_x", "overlay_y",
+            "overlay_preset", "overlay_x", "overlay_y", "overlay_mode",
         )})
         if any(k not in names for k in kwargs):
             raise ConfigError("Trường thiết lập không hợp lệ.")
@@ -382,6 +384,7 @@ def load_runtime_settings(state: State, interval_ms: int) -> RuntimeSettings:
             source_lang=state.source, target_lang=state.target,
             provider=load_provider_settings(),
             interval_ms=_bounded_int(interval_ms, 500, 100, 3000),
+            overlay_mode=state.overlay_mode,
         )
 
 

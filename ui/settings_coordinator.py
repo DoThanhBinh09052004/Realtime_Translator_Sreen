@@ -36,7 +36,8 @@ class SettingsCoordinator(QObject):
             OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
                          tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None),
             SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
-                              self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y))
+                              self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y,
+                              self.state.overlay_mode))
 
     def _commit(self, action: Callable[[], None], *, field: str,
                 after_commit: Callable[[], None] | None = None) -> bool:
@@ -52,8 +53,16 @@ class SettingsCoordinator(QObject):
         return True
 
     def _configure_worker(self):
+        revision = 0
         if self.worker is not None:
-            self.worker.configure(load_runtime_settings(self.state, load_config()['interval_ms']))
+            revision = self.worker.configure(load_runtime_settings(self.state, load_config()['interval_ms']))
+        if self.overlay is not None:
+            self.overlay.set_mode(self.state.overlay_mode, revision)
+
+    def set_overlay_mode(self, mode):
+        if mode not in ('subtitle', 'blocks'):
+            return False
+        return self._commit(lambda: self.state.update(overlay_mode=mode), field='overlay_mode', after_commit=self._configure_worker)
 
     def initialize_worker_interval(self) -> None:
         if not self._interval_initialized:
@@ -122,7 +131,7 @@ class SettingsCoordinator(QObject):
         return success
 
     def toggle_overlay_drag(self) -> bool:
-        if self.overlay is None:
+        if self.overlay is None or self.state.overlay_mode == 'blocks':
             return False
         enabled = not self.overlay.is_drag_mode
         self.overlay.set_drag_mode(enabled)
@@ -132,5 +141,7 @@ class SettingsCoordinator(QObject):
     def apply_region_selection(self, region: dict) -> bool:
         def apply():
             if self.worker is not None:
-                self.worker.set_region(load_region())
+                revision = self.worker.set_region(load_region())
+                if self.overlay is not None:
+                    self.overlay.set_mode(self.state.overlay_mode, revision)
         return self._commit(lambda: save_region(region), field='region', after_commit=apply)

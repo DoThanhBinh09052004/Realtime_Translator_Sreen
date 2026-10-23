@@ -29,6 +29,7 @@ class SubtitlePageState:
     preset: str
     x: int | None
     y: int | None
+    overlay_mode: str = 'subtitle'
 
 
 @dataclass(frozen=True)

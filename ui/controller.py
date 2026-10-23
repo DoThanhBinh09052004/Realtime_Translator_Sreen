@@ -133,6 +133,7 @@ class ControllerWindow(QWidget):
         self.drag_toggle_btn = self.subtitle_page.drag_toggle_btn
         self.live_preview_box = self.subtitle_page.live_preview_box
         self.subtitle_page.style_changed.connect(self.settings_coordinator.set_subtitle_style)
+        self.subtitle_page.mode_changed.connect(self.settings_coordinator.set_overlay_mode)
         self.subtitle_page.preset_changed.connect(self.settings_coordinator.set_overlay_preset)
         self.subtitle_page.drag_toggle_requested.connect(self.settings_coordinator.toggle_overlay_drag)
         self.page_subtitle = self.subtitle_page
@@ -180,13 +181,18 @@ class ControllerWindow(QWidget):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
             self.ocr_page.render(snapshot.ocr)
-        if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'rollback'):
+        if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'overlay_mode', 'rollback'):
             self.subtitle_page.render(snapshot.subtitle)
         self.console_page.render_summary(snapshot)
 
 
     def _show_save_error(self, message):
         self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+
+    def show_overlay_error(self, error):
+        self._show_save_error(error.user_message)
+        self.status.setText(error.user_message)
+        self.console_page.set_run_status(error.user_message)
 
 
     def _on_overlay_position_changed(self, x: int, y: int):
@@ -234,6 +240,8 @@ class ControllerWindow(QWidget):
     def stop_ocr(self):
         if self.worker:
             self.worker.stop_worker()
+        if self.overlay is not None:
+            self.overlay.clear()
         self.status.setText("Đã dừng")
         self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đã dừng")
