@@ -1,5 +1,21 @@
 # Google Translate — kiểm chứng 2026-10-23
 
+## Cập nhật: batchexecute → clients5 → GTX
+
+- Thiết kế/kế hoạch mới: docs/superpowers/specs/2026-10-23-google-web-priority-design.md và docs/superpowers/plans/2026-10-23-google-web-priority.md; người dùng duyệt Native.
+- Sau thay adapter: **381 passed in 13.67s, exit 0**, không skip/xfail Google. `git diff --check` exit 0.
+- Adapter mới bắt đầu bằng batchexecute, lỗi retry được mới chuẩn bị clients5 rồi GTX; mỗi lượt translate tối đa một HTTP request. Đường thành công được giữ đến khi client đóng. Không quay vòng khi đã đến GTX.
+- HTTP429 vẫn chờ Retry-After hoặc mặc định30 giây, dù request kế tiếp dùng đường khác. Bốn lỗi liên tiếp trên batch/clients5/GTX/GTX vẫn làm gate pause. Lỗi input/nonretry không chuyển đường.
+- Integration fake HTTP + queue thật xác nhận lỗi429 của scene cũ vẫn tính ngân sách/deadline; scene hiện tại chỉ gửi sau12 giây; không có request thứ5 dù clock10000 hoặc scene mới. Cache hit không đổi route hoặc chữa budget.
+- Parser giữ toàn bộ segment/Unicode, gồm U+2028/U+2029; không coi ký tự phân dòng Unicode là framing HTTP. Query clients5/GTX và body batch không lọt log HTTPX INFO.
+- Vẫn dùng checkout feature hiện có và PowerShell harness trên Windows; đánh đổi là thay đổi cùng nhánh cũ và không sinh review package bằng Bash. Không sửa config.json/.env/MORT/video hoặc thêm dependency.
+
+Smoke **qua adapter mới** (cùng CLI bên dưới): **exit0**, translated_text=`Xin chào thế giới`, error_code=null, duration **1.906 giây**, English→Vietnamese, câu mẫu `Hello world`. Client mới dùng batchexecute và trả thành công ngay lượt đầu. Đây là kết quả mạng thật tại lần thử ngày2026-10-23, không bảo đảm khả dụng lâu dài hoặc hiệu năng game.
+
+Lượt so sánh đọc mạng trước khi triển khai, mỗi đường một request cùng câu mẫu: batch HTTP200/1.297s, clients5 HTTP200/0.329s, GTX HTTP429/0.453s. Các số này là quan sát đơn lẻ, không phải benchmark.
+
+Review độc lập toàn bộ đợt ưu tiên ba đường: đang thực hiện; kết quả sẽ được bổ sung trước khi chốt.
+
 ## Kết quả triển khai
 
 - Plan: docs/superpowers/plans/2026-10-23-google-translate.md.
@@ -40,7 +56,7 @@ Review độc lập toàn bộ range `3a711c8..b922e5d` đã hoàn tất bằng 
 
 Phần reviewer chưa thể kết luận: dịch thành công qua Google thật và hiệu năng/game/RAM. Giữ hai phần này là chưa kiểm chứng, vì smoke chỉ nhận 429 và test dùng fake capture/HTTP; chi phí là chưa thể bảo đảm dịch vụ thật hoặc công bố số đo hiệu năng.
 
-## Smoke mạng thật
+## Smoke ban đầu: GTX trước đợt ưu tiên ba đường
 
 Lệnh riêng, chỉ gửi câu mẫu không nhạy cảm:
 
@@ -50,7 +66,7 @@ Lệnh riêng, chỉ gửi câu mẫu không nhạy cảm:
 
 Kết quả thực tế: **exit 1**, error_code=`rate_limit` (HTTP 429), translated_text rỗng, duration 0.687 giây.
 
-Google đã giới hạn yêu cầu tại môi trường/mạng hiện tại. **Chưa xác nhận một lần dịch thành công qua mạng thật.** Không tự chuyển endpoint, không chuyển AI và không lặp smoke liên tục sau 429. Các bài mock PASS kiểm chứng cách xử lý, không thay thế smoke thành công của Google.
+Ở lượt ban đầu, GTX đã giới hạn yêu cầu và chưa có lần dịch thành công qua mạng thật. Đợt cập nhật phía trên đã có smoke batchexecute thành công sau khi người dùng duyệt đổi thứ tự đường gọi. Không lặp smoke liên tục sau429; kết quả mock vẫn được phân biệt với kết quả mạng thật.
 
 ## Cách dùng
 

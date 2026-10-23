@@ -1,4 +1,7 @@
 import json
+from dataclasses import replace
+from threading import Event
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -206,3 +209,100 @@ def test_logs_redact_all_get_queries_and_never_log_batch_source(caplog):
         assert 'private' not in caplog.text and 'q=' not in caplog.text
     finally:
         adapter.close()
+
+
+def test_real_adapter_queue_respects_429_after_stale_source_and_pauses_after_four(qtbot, runtime_settings):
+    from core.blocks.models import BlockJob
+    from core.blocks.translation_worker import BlockTranslationWorker
+    from core.google_recovery import GoogleRecoveryGate
+    from engines.google_translate import GoogleTranslateClient
+    from engines.translator import TranslationService
+    now, ticks, calls = [0.], [0], []
+    entered, release = Event(), Event()
+    gate = GoogleRecoveryGate()
+    settings = replace(runtime_settings, provider=replace(runtime_settings.provider,
+                       name='Google Translate', api_key='', model_id=''))
+    def clock():
+        ticks[0] += 1
+        return now[0]
+    def respond(request):
+        if request.method == 'POST':
+            rpc = json.loads(parse_qs(request.content.decode())['f.req'][0])
+            source = json.loads(rpc[0][0][1])[0][0]
+        else:
+            source = request.url.params['q']
+        calls.append((request_route(request), source))
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(4)
+            return httpx.Response(429, headers={'retry-after': '12'})
+        return httpx.Response(503)
+    def service():
+        return TranslationService(google_factory=lambda: GoogleTranslateClient(
+            client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond))))
+    worker = BlockTranslationWorker(clock=clock, service_factory=service, google_recovery=gate)
+    def submit(revision, source):
+        job = BlockJob(revision, revision, source, settings)
+        worker.replace_pending((job,), frozenset({(job.block_id, source)}), revision)
+    def wait_for_queue_ticks():
+        before = ticks[0]
+        qtbot.waitUntil(lambda: ticks[0] >= before + 3)
+    submit(1, 'Old scene')
+    worker.start()
+    try:
+        qtbot.waitUntil(entered.is_set)
+        submit(2, 'Current scene')
+        release.set()
+        qtbot.waitUntil(lambda: gate.snapshot(now_s=0).retries_issued == 1)
+        assert not worker.drain_results()  # Stale result discarded, service failure retained.
+        now[0] = 11.999
+        wait_for_queue_ticks()
+        assert calls == [('batch', 'Old scene')]
+        for count, at, due in ((2, 12., 14.), (3, 14., 18.)):
+            now[0] = at
+            qtbot.waitUntil(lambda: len(calls) == count)
+            qtbot.waitUntil(lambda: gate.snapshot(now_s=at).not_before_s == due)
+        now[0] = 18.
+        qtbot.waitUntil(lambda: gate.snapshot(now_s=18).phase == 'paused')
+        assert calls == [('batch', 'Old scene'), ('clients5', 'Current scene'),
+                         ('gtx', 'Current scene'), ('gtx', 'Current scene')]
+        now[0] = 10000.
+        submit(3, 'New paused scene')
+        wait_for_queue_ticks()
+        assert len(calls) == 4 and not gate.can_dispatch(now_s=10000)
+    finally:
+        release.set()
+        worker.request_stop()
+        assert worker.wait(2000)
+
+
+def test_facade_cache_hit_keeps_fallback_route_and_service_failure_budget(google_batch_response, runtime_settings):
+    from core.google_recovery import GoogleRecoveryGate
+    from engines.google_translate import GoogleTranslateClient
+    from engines.translator import TranslationService
+    calls = []
+    def respond(request):
+        calls.append(request_route(request))
+        if len(calls) == 2: return httpx.Response(503)
+        if request.method == 'POST': return httpx.Response(200, text=google_batch_response('cached'))
+        return httpx.Response(200, json=['fresh'])
+    service = TranslationService(google_factory=lambda: GoogleTranslateClient(
+        client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond))))
+    settings = replace(runtime_settings, provider=replace(runtime_settings.provider,
+                       name='Google Translate', api_key='', model_id=''))
+    gate = GoogleRecoveryGate()
+    generation = gate.snapshot(now_s=0).generation
+    try:
+        assert service.translate('Cache me', settings).text == 'cached'
+        failed = service.translate('Fail me', settings)
+        gate.record_result(failed, generation=generation, now_s=0)
+        cached = service.translate('Cache me', settings)
+        assert cached.from_cache and cached.text == 'cached'
+        gate.record_result(cached, generation=generation, now_s=1)
+        assert gate.snapshot(now_s=1).retries_issued == 1
+        fresh = service.translate('Current source', settings)
+        assert fresh.text == 'fresh' and calls == ['batch', 'batch', 'clients5']
+        gate.record_result(fresh, generation=generation, now_s=1)
+        assert gate.snapshot(now_s=1).retries_issued == 0
+    finally:
+        service.close()
