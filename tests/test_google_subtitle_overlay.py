@@ -12,3 +12,12 @@ def test_google_subtitle_overlay_rejects_queued_old_frame(qtbot):
     o.set_mode('blocks',3)
     o.update_subtitle(SubtitleFrame(3,5,'wrong','Wrong'))
     assert not o.isVisible()
+
+
+def test_invalidation_clears_label_before_queued_refresh(qtbot):
+    from ui.overlay import Overlay
+    o=Overlay(); qtbot.addWidget(o)
+    o.update_text('old provider')
+    o.set_mode('subtitle',2)
+    o.refresh()
+    assert not o.isVisible() and not o.text()

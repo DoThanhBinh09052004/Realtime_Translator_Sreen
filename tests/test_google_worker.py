@@ -59,3 +59,18 @@ def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime
     w._process_google_subtitle_frame(img,settings,w.revision)
     w._process_google_subtitle_frame(img,settings,w.revision)
     assert [j.source_text for j in w._google_subtitle.translation_jobs()]==['Current scene']
+
+
+def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatch,runtime_settings):
+    import core.worker as module
+    from core.contracts import OcrResult
+    monkeypatch.setattr(module,'ocr_image',lambda *a,**kw:OcrResult('Hello'))
+    w=TranslationWorker(config.State(),config.DEFAULT_REGION)
+    rev=w.configure(runtime_settings); w._is_running=True
+    frames=[]; w.subtitle_updated.connect(frames.append)
+    class Service:
+        def translate(self,*a): return TranslationResult('Xin chào')
+    img=np.zeros((40,100),dtype='uint8')
+    w._process_frame(img,runtime_settings,rev,Service())
+    w._process_frame(img,runtime_settings,rev,Service())
+    assert frames[-1].revision==rev and frames[-1].text=='Xin chào'

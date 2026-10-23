@@ -12,7 +12,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
 from engines.ocr import ocr_image
 from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
-from core.contracts import EngineError, RuntimeSettings, TranslationStatus
+from core.contracts import EngineError, RuntimeSettings, TranslationStatus, SubtitleFrame
 from core.retry import RetryState
 from core.subtitle_stabilizer import SubtitleStabilizer
 from core.blocks.session import BlockSession
@@ -503,6 +503,7 @@ class TranslationWorker(QThread):
                 self._stabilizer.commit(text)
                 self._prev_text = text
             self._emit_current(revision, self.text_translated, translated.text)
+            self._emit_current(revision, self.subtitle_updated, SubtitleFrame(revision, 0, text, translated.text))
         return False
 
     def run(self):

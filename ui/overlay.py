@@ -240,7 +240,7 @@ class Overlay(QLabel):
 
     def refresh(self):
         """Giữ cho overlay sáng và reset timer tự ẩn"""
-        if self._mode == 'blocks':
+        if self._mode == 'blocks' or not self.text().strip():
             return
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
@@ -296,6 +296,7 @@ class Overlay(QLabel):
         self._mode, self._mode_revision, self._block_frame_id = mode, revision, -1
         self._last_subtitle_candidate_id = -1
         self.is_drag_mode = False
+        self.setText('')
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.unsetCursor()
         self.apply_style()
@@ -317,4 +318,7 @@ class Overlay(QLabel):
         if frame.text:
             self.update_text(frame.text)
         else:
-            self.clear()
+            self.hide_timer.stop()
+            self.fade_anim.stop()
+            self.setText('')
+            self.hide()

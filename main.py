@@ -81,7 +81,8 @@ def main():
     sync_geometry()
 
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
-    worker.text_translated.connect(overlay.update_text)
+    # Versioned frames prevent queued AI subtitles from resurfacing after a
+    # switch to Google (or back); the legacy string signal stays public.
     worker.text_unchanged.connect(overlay.refresh)
     worker.blocks_updated.connect(overlay.update_blocks)
     worker.subtitle_updated.connect(overlay.update_subtitle)
