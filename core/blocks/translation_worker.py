@@ -8,12 +8,14 @@ from core.blocks.models import BlockTranslationResult
 from core.contracts import EngineError, TranslationResult
 from core.retry import RetryState
 from engines.translator import TranslationService
+from core.google_recovery import GoogleRecoveryGate
 
 
 class BlockTranslationWorker(QThread):
-    def __init__(self, *, clock=time.monotonic, service_factory=TranslationService, parent=None):
+    def __init__(self, *, clock=time.monotonic, service_factory=TranslationService, google_recovery=None, parent=None):
         super().__init__(parent)
         self._clock, self._factory = clock, service_factory
+        self.google_recovery = google_recovery or GoogleRecoveryGate()
         self._condition = Condition()
         self._pending = OrderedDict()
         self._results = OrderedDict()
@@ -35,6 +37,8 @@ class BlockTranslationWorker(QThread):
     def replace_pending(self, jobs, active_keys, revision):
         with self._condition:
             if self._stopping:
+                return
+            if self._revision is not None and revision < self._revision:
                 return
             if revision != self._revision:
                 self._revision = revision
@@ -76,24 +80,31 @@ class BlockTranslationWorker(QThread):
         try:
             service = self._factory()
             while True:
+                now = self._clock()
+                recovery = self.google_recovery.snapshot(now_s=now)
                 with self._condition:
                     job = None
-                    while not self._stopping and job is None:
-                        now = self._clock()
-                        for key, candidate in self._pending.items():
-                            if now >= max(self._cooldown, self._due.get(key, 0)):
-                                job = candidate
-                                break
-                        if job is None:
-                            self._condition.wait(.05)
                     if self._stopping:
                         return
+                    for key, candidate in self._pending.items():
+                        google = candidate.settings.provider.name == 'Google Translate'
+                        eligible = recovery.phase == 'ready' if google else now >= max(self._cooldown, self._due.get(key, 0))
+                        if eligible:
+                            job = candidate
+                            break
+                    if job is None:
+                        self._condition.wait(.05)
+                        continue
                     self._pending.pop(key)
                     self._inflight = key
                 try:
                     result = service.translate(job.source_text, job.settings)
                 except Exception:
                     result = TranslationResult(error=EngineError('network', 'Không thể gửi yêu cầu dịch.', True))
+                if google:
+                    # Availability belongs to the service generation, even if
+                    # this source disappeared while the request was running.
+                    self.google_recovery.record_result(result, generation=recovery.generation, now_s=self._clock())
                 with self._condition:
                     self._inflight = None
                     if self._stopping or key not in self._active:
@@ -104,6 +115,13 @@ class BlockTranslationWorker(QThread):
                     error = result.error
                     if error is None:
                         self._done.add(key)
+                    elif google:
+                        if error.code == 'invalid_input':
+                            self._done.add(key)
+                        else:
+                            if len(self._pending) >= 32:
+                                self._pending.popitem(last=True)
+                            self._pending[key] = job
                     elif error.code in ('auth', 'authentication', 'quota'):
                         self._blocked = True
                         self._pending.clear()
