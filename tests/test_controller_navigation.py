@@ -1,7 +1,7 @@
 def test_navigation_keeps_four_existing_pages(ui_window):
     assert ui_window.pages.count() == 4
     assert [item[1] for item in ui_window.nav_item_defs] == [
-        'Tổng quan', 'Cấu hình AI', 'Dịch thuật & OCR', 'Giao diện Phụ đề']
+        'Tổng quan', 'Công cụ dịch', 'Dịch thuật & OCR', 'Giao diện Phụ đề']
     for index in (3, 1, 2, 0, 3, 0):
         ui_window.nav_buttons[index].click()
         assert ui_window.pages.currentIndex() == index

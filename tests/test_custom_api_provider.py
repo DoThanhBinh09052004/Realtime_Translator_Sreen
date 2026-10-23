@@ -87,6 +87,7 @@ def test_custom_api_base_url_is_editable_only_for_custom_provider(qtbot):
     custom = AiPageState(
         "Custom API", "vendor/model", ("vendor/model",), "fake-key", "sk-...",
         "https://llm.example.test/v1",
+        supports_base_url=True,
     )
     page = AiSettingsPage(custom, ("OpenAI", "Custom API"))
     qtbot.addWidget(page)
@@ -100,5 +101,5 @@ def test_custom_api_base_url_is_editable_only_for_custom_provider(qtbot):
     page.base_url_input.editingFinished.emit()
     assert emitted == ["https://other.example/v1"]
 
-    page.render(replace(custom, provider="OpenAI", base_url=""), changed_field="provider")
+    page.render(replace(custom, provider="OpenAI", base_url="", supports_base_url=False), changed_field="provider")
     assert not page.base_url_container.isVisibleTo(page)

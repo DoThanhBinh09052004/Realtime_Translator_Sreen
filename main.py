@@ -84,6 +84,7 @@ def main():
     worker.text_translated.connect(overlay.update_text)
     worker.text_unchanged.connect(overlay.refresh)
     worker.blocks_updated.connect(overlay.update_blocks)
+    worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
     # ===== 4. Controller & Selector =====
@@ -155,6 +156,8 @@ def main():
         controller.show_overlay_error(error)
 
     overlay.block_error.connect(on_overlay_error)
+    worker.translation_status_updated.connect(controller.show_translation_status)
+    worker.revision_changed.connect(lambda revision: controller.clear_translation_status())
     worker.error_occurred.connect(lambda error: on_overlay_error(error) if error.code == 'capture_geometry' else None)
     controller.settings_coordinator.settings_changed.connect(lambda snapshot, field: sync_geometry() if field == 'region' else None)
     controller.show()

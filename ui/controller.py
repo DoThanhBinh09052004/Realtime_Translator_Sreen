@@ -1,5 +1,6 @@
 """Controller composition, navigation and application commands."""
 import os
+import time
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog
 from PyQt5.QtCore import QObject
 from PyQt5.QtGui import QIcon
@@ -31,6 +32,7 @@ class ControllerWindow(QWidget):
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
+        self._retry_pending = False
 
         # Window and navigation shell
         self.setWindowTitle("Translate HUD - Realtime Screen Translator")
@@ -54,7 +56,7 @@ class ControllerWindow(QWidget):
         # ===== 1. LEFT SIDEBAR =====
         self.nav_item_defs = [
             ("layout-dashboard", "Tổng quan", "Bảng điều khiển nhanh và trạng thái"),
-            ("bot", "Cấu hình AI", "Quản lý Provider, Model và API Key"),
+            ("languages", "Công cụ dịch", "Chọn Google Translate hoặc công cụ AI"),
             ("languages", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
             ("palette", "Giao diện Phụ đề", "Màu sắc, độ trong suốt và xem trước trực tiếp")
         ]
@@ -99,6 +101,7 @@ class ControllerWindow(QWidget):
         self.stop_btn = self.console_page.stop_btn
         self.metric_cards = self.console_page.metric_cards
         self.console_page.start_requested.connect(self.start_ocr)
+        self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
@@ -171,7 +174,7 @@ class ControllerWindow(QWidget):
 
         titles = [
             ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
-            ("Cấu hình AI Engine", "Quản lý nhà cung cấp API, mô hình LLM và khóa bảo mật"),
+            ("Công cụ dịch", "Chọn Google Translate hoặc cấu hình công cụ AI"),
             ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
             ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
         ]
@@ -182,6 +185,8 @@ class ControllerWindow(QWidget):
 
 
     def _render_snapshot(self, snapshot, changed_field):
+        if changed_field not in ('subtitle_style', 'preset', 'overlay_position'):
+            self.clear_translation_status()
         if changed_field in ('provider', 'model', 'api_key', 'rollback'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
@@ -198,6 +203,28 @@ class ControllerWindow(QWidget):
         self._show_save_error(error.user_message)
         self.status.setText(error.user_message)
         self.console_page.set_run_status(error.user_message)
+
+    def clear_translation_status(self):
+        self.console_page.clear_translation_status()
+
+    def show_translation_status(self, status):
+        if (self.worker is None or not self.worker.is_running()
+                or status.provider != self.settings_coordinator.snapshot().ai.provider
+                or status.revision != self.worker.revision
+                or status.session_id != self.worker.translation_session_id):
+            return
+        self._retry_pending = False
+        self.console_page.render_translation_status(status, now_s=time.monotonic())
+
+    def retry_translation(self):
+        if self._retry_pending or self.worker is None:
+            return False
+        self._retry_pending = True
+        if not self.worker.retry_translation():
+            self._retry_pending = False
+            return False
+        self.console_page.retry_translation_btn.setEnabled(False)
+        return True
 
 
     def _on_overlay_position_changed(self, x: int, y: int):
@@ -221,9 +248,11 @@ class ControllerWindow(QWidget):
 
 
     def start_ocr(self):
+        if self.worker is not None and self.worker.is_running() is True:
+            return
         ai = self.settings_coordinator.snapshot().ai
         provider = ai.provider
-        if not ai.api_key.strip():
+        if ai.requires_api_key and not ai.api_key.strip():
             self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
             self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
             
@@ -243,6 +272,8 @@ class ControllerWindow(QWidget):
 
 
     def stop_ocr(self):
+        self._retry_pending = False
+        self.clear_translation_status()
         if self.worker:
             self.worker.stop_worker()
         if self.overlay is not None:

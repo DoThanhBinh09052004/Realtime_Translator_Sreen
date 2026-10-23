@@ -10,6 +10,9 @@ class AiPageState:
     api_key: str = field(repr=False)
     placeholder: str
     base_url: str = ""
+    requires_api_key: bool = True
+    supports_models: bool = True
+    supports_base_url: bool = False
 
 
 @dataclass(frozen=True)

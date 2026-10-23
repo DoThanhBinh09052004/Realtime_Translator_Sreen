@@ -29,7 +29,7 @@ class AiSettingsPage(QScrollArea):
         active_provider = state.provider
 
         # Card 1: Provider & Model Selector
-        prov_card = ModernCard("Nhà cung cấp & Mô hình AI", "Chọn Provider và Model thực hiện tác vụ dịch thuật")
+        prov_card = ModernCard("Công cụ dịch", "Chọn công cụ thực hiện tác vụ dịch thuật")
         
         row1 = QHBoxLayout()
         row1.setSpacing(12)
@@ -37,7 +37,7 @@ class AiSettingsPage(QScrollArea):
         # Provider col
         p_col = QVBoxLayout()
         p_col.setSpacing(4)
-        p_lbl = QLabel("AI Provider")
+        p_lbl = QLabel("Công cụ dịch")
         p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(providers)
@@ -48,7 +48,9 @@ class AiSettingsPage(QScrollArea):
         row1.addLayout(p_col)
 
         # Model col
-        m_col = QVBoxLayout()
+        self.model_container = QWidget()
+        m_col = QVBoxLayout(self.model_container)
+        m_col.setContentsMargins(0, 0, 0, 0)
         m_col.setSpacing(4)
         m_lbl = QLabel("Mô hình (Model ID)")
         m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
@@ -59,9 +61,12 @@ class AiSettingsPage(QScrollArea):
         self.model_combo.currentTextChanged.connect(self.model_changed.emit)
         m_col.addWidget(m_lbl)
         m_col.addWidget(self.model_combo)
-        row1.addLayout(m_col)
+        row1.addWidget(self.model_container)
 
         prov_card.layout.addLayout(row1)
+        self.google_note = QLabel('Dịch trực tuyến, không cần API key')
+        self.google_note.setWordWrap(True)
+        prov_card.layout.addWidget(self.google_note)
 
         self.base_url_container = QWidget()
         base_url_layout = QVBoxLayout(self.base_url_container)
@@ -119,6 +124,7 @@ class AiSettingsPage(QScrollArea):
 
         # Card 3: Guide Note
         note_card = ModernCard("Hướng dẫn lấy API Key")
+        self.guide_card = note_card
         note_text = QLabel(
             "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
             "• OpenAI: Truy cập platform.openai.com/api-keys\n"
@@ -155,11 +161,18 @@ class AiSettingsPage(QScrollArea):
             self.api_key_input.setPlaceholderText(state.placeholder)
             self.base_url_input.setText(state.base_url)
             del blockers
-        self.base_url_container.setVisible(state.provider == 'Custom API')
+        self.base_url_container.setVisible(state.supports_base_url)
+        self.model_container.setVisible(state.supports_models)
+        self.key_card.setVisible(state.requires_api_key)
+        self.guide_card.setVisible(state.requires_api_key)
+        self.google_note.setVisible(not state.requires_api_key)
         self._render_status(state)
 
     def _render_status(self, state):
-        if state.provider == 'Custom API' and not state.base_url.strip():
+        if not state.requires_api_key:
+            self.api_status_lbl.setText('Trạng thái: Google Translate không cần API key')
+            color = CYBER_PALETTE['neon_green']
+        elif state.provider == 'Custom API' and not state.base_url.strip():
             self.api_status_lbl.setText('Trạng thái: Chưa có Base URL hợp lệ cho Custom API')
             color = CYBER_PALETTE['neon_amber']
         elif state.api_key.strip():

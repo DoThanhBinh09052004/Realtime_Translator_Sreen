@@ -3,6 +3,7 @@ from core import config
 
 
 def test_missing_key_routes_to_ai_without_starting(ui_window):
+    ui_window.provider_combo.setCurrentText('Google Gemini')
     ui_window.worker.reset_mock()
     ui_window.start_ocr()
     assert ui_window.pages.currentIndex() == 1
