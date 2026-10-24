@@ -1,0 +1,130 @@
+{
+  "provenance": {
+    "transcript": "scratch/dialogue-overlay-20261024/record/transcript.json",
+    "sha256": "e95802767fad21e7481ada7171a4687e8936022ad7355a75634960d85ee5c55a",
+    "video": "tests\\GENSHIN IMPACT Prologue All Cutscenes (Game Movie) 1080p 60FPS HD [2m55s-3m15s].mp4",
+    "rectangles": "production group_spans on recorded real OCR spans",
+    "translations": "fixed manually for layout verification; short case deliberately abbreviated"
+  },
+  "frames": [
+    {
+      "id": "game-4s",
+      "video_time_s": 4.830157799999142,
+      "crop": [
+        0.2,
+        0.75,
+        0.8,
+        0.89
+      ],
+      "image_size_px": [
+        796,
+        99
+      ],
+      "blocks": [
+        {
+          "block_id": 0,
+          "source_text": "Paimon few of these statues scattered across the land to show The Seven's protecti",
+          "translated_text": "Có vài bức tượng rải rác khắp vùng đất để thể hiện sự bảo vệ của Bảy Vị Thần",
+          "source_rect": {
+            "x": 92.0,
+            "y": 8.0,
+            "width": 699.0,
+            "height": 48.0
+          }
+        },
+        {
+          "block_id": 1,
+          "source_text": "over the world",
+          "translated_text": "trên khắp thế giới.",
+          "source_rect": {
+            "x": 326.0,
+            "y": 61.0,
+            "width": 138.0,
+            "height": 14.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "game-7s",
+      "video_time_s": 6.988751499999125,
+      "crop": [
+        0.2,
+        0.75,
+        0.8,
+        0.89
+      ],
+      "image_size_px": [
+        796,
+        99
+      ],
+      "blocks": [
+        {
+          "block_id": 0,
+          "source_text": "Paimon Among the seven gods, this god controls the wind.",
+          "translated_text": "Trong số bảy vị thần, vị thần này điều khiển gió.",
+          "source_rect": {
+            "x": 166.0,
+            "y": 6.0,
+            "width": 462.0,
+            "height": 52.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "game-10s",
+      "video_time_s": 10.02511740000009,
+      "crop": [
+        0.2,
+        0.75,
+        0.8,
+        0.89
+      ],
+      "image_size_px": [
+        796,
+        99
+      ],
+      "blocks": [
+        {
+          "block_id": 0,
+          "source_text": "Paimon Among the seven gods, this god controls the wind",
+          "translated_text": "Trong số bảy vị thần, vị thần này điều khiển gió.",
+          "source_rect": {
+            "x": 167.0,
+            "y": 6.0,
+            "width": 460.0,
+            "height": 52.0
+          }
+        }
+      ]
+    },
+    {
+      "id": "game-short-translation",
+      "video_time_s": 6.988751499999125,
+      "crop": [
+        0.2,
+        0.75,
+        0.8,
+        0.89
+      ],
+      "image_size_px": [
+        796,
+        99
+      ],
+      "blocks": [
+        {
+          "block_id": 0,
+          "source_text": "Paimon Among the seven gods, this god controls the wind.",
+          "translated_text": "Thần gió.",
+          "source_rect": {
+            "x": 166.0,
+            "y": 6.0,
+            "width": 462.0,
+            "height": 52.0
+          }
+        }
+      ]
+    }
+  ]
+}

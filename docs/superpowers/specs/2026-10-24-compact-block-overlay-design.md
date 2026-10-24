@@ -2,7 +2,7 @@
 
 Ngày: 2026-10-24
 
-Trạng thái: Đã thống nhất hướng xử lý; chờ duyệt tài liệu trước khi lập kế hoạch triển khai.
+Trạng thái: Người dùng đã duyệt kế hoạch và triển khai Native; đang kiểm chứng và review cuối đợt.
 
 ## Mục đích
 

@@ -62,18 +62,18 @@ $env:TMP = $testRun
 
 **Interfaces:** Consumes `OverlayFrame(revision, frame_id, geometry, blocks)`, `OverlayBlock(block_id, source_text, translated_text, source_rect)`, `Rect` và `ocr_rect_to_overlay(rect, geometry)`. Produces nguyên API `layout_blocks(frame: OverlayFrame, *, max_font_px: int, font_family: str = 'Segoe UI') -> tuple[PlacedBlock, ...]`; giữ các field của `PlacedBlock`.
 
-- [ ] **Step 1: Viết regression test cho nền ngắn và mở rộng ngang tối thiểu.**
+- [x] **Step 1: Viết regression test cho nền ngắn và mở rộng ngang tối thiểu.**
 
   `test_short_translation_keeps_source_box`: nguồn `Rect(20,20,320,40)`, dịch `Xin chào`, canvas 800×600; assert `view_rect == source_rect`, font ưu tiên không giảm, `clipped is False`.
 
   `test_horizontal_growth_is_minimal`: nguồn `Rect(10,10,30,40)`, dịch `Vị thần điều khiển gió`, max font 22; assert giữ x/y/height, rộng hơn nguồn nhưng nhỏ hơn khoảng trống đến canvas, font giữ mức ưu tiên, chữ vừa. Đo lại bằng `QTextLayout` với font của khối và padding tổng 4px; giảm chiều rộng 1 logical pixel phải không còn vừa nếu chưa chạm chiều rộng nguồn. Không dùng tỷ lệ 40%/55% như ngưỡng thuật toán.
 
-- [ ] **Step 2: Chạy hai test mới để thấy FAIL do khối chiếm hết khoảng trống.**
+- [x] **Step 2: Chạy hai test mới để thấy FAIL do khối chiếm hết khoảng trống.**
 
   Run: `.venv/Scripts/python.exe -m pytest tests/test_block_layout.py -q --basetemp <unique-path>`.
   Expected: các assertion giữ khung/mở rộng tối thiểu thất bại trên code cũ; ghi nhận kết quả trước khi sửa.
 
-- [ ] **Step 3: Bổ sung các test về thứ tự ưu tiên và hình học.**
+- [x] **Step 3: Bổ sung các test về thứ tự ưu tiên và hình học.**
 
   `test_wraps_and_grows_height_before_shrinking`: nguồn sát mép phải; bản dịch dài buộc nhiều dòng; assert tăng chiều cao vừa đủ, giữ font ưu tiên khi canvas đủ cao, giữ neo/phủ nguồn, không tràn. Giảm height 1px phải làm mất fit nếu height đã vượt nguồn.
 
@@ -83,15 +83,15 @@ $env:TMP = $testRun
 
   `test_fractional_geometry_and_tiny_canvas_stay_safe`: parameterize mapping logical/physical 1:1 và 1:1.25, nguồn cắt biên, canvas 30×12, chuỗi Việt/CJK dài; assert Rect dương trong canvas, font trong giới hạn hiện hành, clipped khi không vừa và không crash. Giữ test cũ về CJK/va chạm; thêm ca nguồn vốn chồng nhau chỉ yêu cầu kết quả an toàn, không yêu cầu phủ cả hai nguồn.
 
-- [ ] **Step 4: Sửa `layout_blocks` trong `ui/block_layout.py`.**
+- [x] **Step 4: Sửa `layout_blocks` trong `ui/block_layout.py`.**
 
   Đo bằng `_lines`/`QTextLayout`; giữ padding 2px mỗi phía, công thức font ưu tiên hiện có `max(10, min(max_font_px, round(.8*source.height)))`. Nếu chữ vừa khung nguồn đã clip thì trả khung đó. Nếu không, tìm mức mở rộng ngang nhỏ nhất đủ dùng trong chiều cao nguồn; nếu chiều cao nguồn còn thiếu cho một dòng thì không nới ngang vô ích. Tiếp theo chọn khung an toàn có xuống dòng và tăng chiều cao tối thiểu; chỉ sau khi không có khung hợp lệ ở font ưu tiên mới tìm cỡ chữ nhỏ hơn, sàn 10px, rồi clipping hiện có.
 
   Xét các giới hạn từ canvas, tất cả khung nguồn khác và khung đã đặt, kể cả vật cản chéo phía dưới. Các nguồn không chồng nhau phải giữ neo và được khung kết quả chứa đủ; không dùng phép chọn mảnh diện tích lớn nhất làm mất neo khi mở rộng gặp vật cản. Với nguồn vốn chồng nhau giữ fallback trừ/cắt an toàn. Có thể thêm helper private trong cùng file; không tách module hay đổi schema. Sai số kích thước tối thiểu tối đa 1 logical pixel; xử lý tọa độ float bằng ceil khi tìm kích thước.
 
-- [ ] **Step 5: Chạy toàn bộ `tests/test_block_layout.py` và `tests/test_block_geometry.py`; expected PASS.** Không giảm assertion cũ về giới hạn cỡ chữ, clipping, hình học để làm test xanh.
+- [x] **Step 5: Chạy toàn bộ `tests/test_block_layout.py` và `tests/test_block_geometry.py`; expected PASS.** Không giảm assertion cũ về giới hạn cỡ chữ, clipping, hình học để làm test xanh.
 
-- [ ] **Step 6: Commit riêng Task 1.** `git add ui/block_layout.py tests/test_block_layout.py`; `git commit -m "fix: size block overlays to source and translated text"`.
+- [x] **Step 6: Commit riêng Task 1.** `git add ui/block_layout.py tests/test_block_layout.py`; `git commit -m "fix: size block overlays to source and translated text"`.
 
 ### Task 2: Kiểm chứng nền thực tế và frame game có sẵn
 
@@ -99,21 +99,21 @@ $env:TMP = $testRun
 
 **Interfaces:** Consumes kết quả Task 1; `paint_blocks(painter, blocks, *, bg_color, text_color)` và `BlockOverlay.set_frame(frame)`, `apply_style(...)`. Produces CLI `python tools/render_block_layout_preview.py --fixture PATH --video PATH --baseline-ref REF --out DIR`; fixture UTF-8 gồm `video_time_s`, `crop`, `image_size_px`, `blocks` (source_text, translated_text, source_rect) cho mỗi frame. Hàm testable `render_comparison(image: QImage, frame: OverlayFrame, *, baseline_layout, max_font_px: int, out_dir: Path) -> dict` trả đường dẫn ảnh và số đo hai phiên bản.
 
-- [ ] **Step 1: Thêm `test_compact_background_pixels_and_relayout` trong `tests/test_block_overlay.py`.** Với canvas trong suốt, nguồn dài/dịch ngắn, dùng `paint_blocks` vào `QImage.Format_ARGB32_Premultiplied`; assert pixel nền gần mép phải khung nguồn có alpha, điểm cách mép phải khối 5px có alpha 0. Qua `BlockOverlay` với capture exclusion fake, cập nhật frame dài→ngắn và đổi font/style: assert `placed_blocks` được đo lại, không giữ khung dài cũ, nền ngoài khối mới trong suốt. Giữ kiểm tra capture exclusion/click-through sẵn có.
+- [x] **Step 1: Thêm `test_compact_background_pixels_and_relayout` trong `tests/test_block_overlay.py`.** Với canvas trong suốt, nguồn dài/dịch ngắn, dùng `paint_blocks` vào `QImage.Format_ARGB32_Premultiplied`; assert pixel nền gần mép phải khung nguồn có alpha, điểm cách mép phải khối 5px có alpha 0. Qua `BlockOverlay` với capture exclusion fake, cập nhật frame dài→ngắn và đổi font/style: assert `placed_blocks` được đo lại, không giữ khung dài cũ, nền ngoài khối mới trong suốt. Giữ kiểm tra capture exclusion/click-through sẵn có.
 
-- [ ] **Step 2: Thêm `tests/test_compact_block_preview.py`.** Gọi `render_comparison` bằng ảnh tổng hợp và baseline callable trả khung rộng; assert tạo ảnh before/after và số đo khác nhau, pixel ngoài nền mới vẫn bằng ảnh gốc. Expected FAIL vì tool chưa tồn tại; không gọi OCR/network/config.
+- [x] **Step 2: Thêm `tests/test_compact_block_preview.py`.** Gọi `render_comparison` bằng ảnh tổng hợp và baseline callable trả khung rộng; assert tạo ảnh before/after và số đo khác nhau, pixel ngoài nền mới vẫn bằng ảnh gốc. Expected FAIL vì tool chưa tồn tại; không gọi OCR/network/config.
 
-- [ ] **Step 3: Tạo tool `tools/render_block_layout_preview.py`.** Dùng API Task 1 và `paint_blocks`; đọc video bằng OpenCV, crop/resize khớp fixture, ghép nền/chữ qua QPainter. Để so sánh, đọc duy nhất `ui/block_layout.py` từ `git show REF:ui/block_layout.py` của repo này và nạp thành module baseline riêng; không checkout/reset file. Dùng ref trước Task 1 đã ghi lúc bắt đầu thực thi, không mặc định HEAD sau sửa. Lưu `before-*.png`, `after-*.png`, `comparison.png`, `metrics.json` với source/view/font/clipped. Gặp video không tồn tại hoặc không giải mã được thì báo lỗi rõ, exit khác 0. Không mở ứng dụng hoặc tải model.
+- [x] **Step 3: Tạo tool `tools/render_block_layout_preview.py`.** Dùng API Task 1 và `paint_blocks`; đọc video bằng OpenCV, crop/resize khớp fixture, ghép nền/chữ qua QPainter. Để so sánh, đọc duy nhất `ui/block_layout.py` từ `git show REF:ui/block_layout.py` của repo này và nạp thành module baseline riêng; không checkout/reset file. Dùng ref trước Task 1 đã ghi lúc bắt đầu thực thi, không mặc định HEAD sau sửa. Lưu `before-*.png`, `after-*.png`, `comparison.png`, `metrics.json` với source/view/font/clipped. Gặp video không tồn tại hoặc không giải mã được thì báo lỗi rõ, exit khác 0. Không mở ứng dụng hoặc tải model.
 
-- [ ] **Step 4: Tạo fixture từ dữ liệu thật hiện có.** Đọc `scratch/dialogue-overlay-20261024/record/transcript.json`, chọn quan sát gần giây 4/7/10 có spans dùng được; lấy block bằng `group_spans(spans, image_size_px)`, ghi đúng thời điểm capture/crop/size từ transcript. Điền bản dịch Việt cố định cho nội dung đã chọn. Không dùng rect giả làm bằng chứng frame thật và không phụ thuộc file scratch trong test thường. Nếu transcript không còn, dùng video mẫu cục bộ và một lượt OCR offline có ghi nguồn; không gọi API dịch. Thêm ca dịch ngắn trên một nguồn thật để kiểm tra nền còn che đủ chữ gốc.
+- [x] **Step 4: Tạo fixture từ dữ liệu thật hiện có.** Đọc `scratch/dialogue-overlay-20261024/record/transcript.json`, chọn quan sát gần giây 4/7/10 có spans dùng được; lấy block bằng `group_spans(spans, image_size_px)`, ghi đúng thời điểm capture/crop/size từ transcript. Điền bản dịch Việt cố định cho nội dung đã chọn. Không dùng rect giả làm bằng chứng frame thật và không phụ thuộc file scratch trong test thường. Nếu transcript không còn, dùng video mẫu cục bộ và một lượt OCR offline có ghi nguồn; không gọi API dịch. Thêm ca dịch ngắn trên một nguồn thật để kiểm tra nền còn che đủ chữ gốc.
 
-- [ ] **Step 5: Chạy focused suite; expected PASS.** Run `.venv/Scripts/python.exe -m pytest tests/test_block_layout.py tests/test_block_geometry.py tests/test_block_overlay.py tests/test_compact_block_preview.py -q --basetemp <unique-path>`. Nếu kiểm tra pixel phát hiện lệch đo/vẽ, sửa tối thiểu `paint_blocks`/`BlockOverlay` trong phạm vi thiết kế rồi chạy lại; không đổi phụ đề cố định.
+- [x] **Step 5: Chạy focused suite; expected PASS.** Run `.venv/Scripts/python.exe -m pytest tests/test_block_layout.py tests/test_block_geometry.py tests/test_block_overlay.py tests/test_compact_block_preview.py -q --basetemp <unique-path>`. Nếu kiểm tra pixel phát hiện lệch đo/vẽ, sửa tối thiểu `paint_blocks`/`BlockOverlay` trong phạm vi thiết kế rồi chạy lại; không đổi phụ đề cố định.
 
-- [ ] **Step 6: Chạy tool trên video sẵn có và xem ảnh thật.** Video: `tests/GENSHIN IMPACT Prologue All Cutscenes (Game Movie) 1080p 60FPS HD [2m55s-3m15s].mp4`. Out: `scratch/compact-block-overlay/`. Kiểm tra ngắn→giữ nguồn, dài→nới đủ, nhiều dòng→nền chung, không kéo mép vô cớ. Các frame không có nút bên cạnh phải xuất hiện trong report; tình huống vật cản được chứng minh riêng bằng test tổng hợp. Không tuyên bố sửa OCR hay lỗi kẹt từ ảnh tĩnh.
+- [x] **Step 6: Chạy tool trên video sẵn có và xem ảnh thật.** Video: `tests/GENSHIN IMPACT Prologue All Cutscenes (Game Movie) 1080p 60FPS HD [2m55s-3m15s].mp4`. Out: `scratch/compact-block-overlay/`. Kiểm tra ngắn→giữ nguồn, dài→nới đủ, nhiều dòng→nền chung, không kéo mép vô cớ. Các frame không có nút bên cạnh phải xuất hiện trong report; tình huống vật cản được chứng minh riêng bằng test tổng hợp. Không tuyên bố sửa OCR hay lỗi kẹt từ ảnh tĩnh.
 
-- [ ] **Step 7: Ghi report và chạy suite đầy đủ.** Report `docs/testing/compact-block-overlay.md` ghi baseline ref, nguồn frame/crop, font và số đo, ảnh so sánh, focused/full test results và giới hạn (offscreen, không đo live capture/provider). Lưu ảnh so sánh nhỏ gọn cần cho review dưới `docs/testing/` và link tương đối trong report; video/ảnh scratch không commit. Run `.venv/Scripts/python.exe -m pytest -q --basetemp <unique-path>`; expected tất cả PASS. Chạy `git diff --check`, phân biệt thay đổi có sẵn.
+- [x] **Step 7: Ghi report và chạy suite đầy đủ.** Report `docs/testing/compact-block-overlay.md` ghi baseline ref, nguồn frame/crop, font và số đo, ảnh so sánh, focused/full test results và giới hạn (offscreen, không đo live capture/provider). Lưu ảnh so sánh nhỏ gọn cần cho review dưới `docs/testing/` và link tương đối trong report; video/ảnh scratch không commit. Run `.venv/Scripts/python.exe -m pytest -q --basetemp <unique-path>`; expected tất cả PASS. Chạy `git diff --check`, phân biệt thay đổi có sẵn.
 
-- [ ] **Step 8: Commit riêng Task 2**, stage đúng tests/fixture/tool/report và ảnh so sánh; không `git add -A`.
+- [x] **Step 8: Commit riêng Task 2**, stage đúng tests/fixture/tool/report và ảnh so sánh; không `git add -A`.
 
 - [ ] **Step 9: Review độc lập cuối đợt theo phương thức đã được duyệt.** Đưa spec, plan, phạm vi commit và ảnh thật cho một reviewer; tập trung năm Review Focus. Sửa finding được xác minh bằng regression, chạy lại nhóm test liên quan; chỉ chạy lại full suite khi sửa code. Báo kết quả và giới hạn kiểm chứng; không tự merge/push.
 
