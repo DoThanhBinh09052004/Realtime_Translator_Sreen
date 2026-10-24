@@ -65,6 +65,7 @@ class DialogueTrack:
 
     def miss(self, *, now_s: float) -> bool:
         if self.closed: return False
+        self._challenger = None
         self.missing_count += 1
         if self.missing_count < self.policy.absent_scans: return False
         self.closed = True

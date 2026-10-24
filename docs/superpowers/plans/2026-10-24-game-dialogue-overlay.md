@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, PyQt5 5.15.11, PaddleOCR/OpenCV, OpenAI SDK/httpx hiện có, pytest/pytest-qt, fake clock và fake HTTP. Không thêm dependency.
 
-**Spec:** [2026-10-24-game-dialogue-overlay-design.md](../specs/2026-10-24-game-dialogue-overlay-design.md). Hành vi đã chốt trong hội thoại, tài liệu và kế hoạch chờ đọc duyệt. Giữ lựa chọn thực thi Native trước đó nếu người dùng tiếp tục chọn triển khai theo kế hoạch; không thực thi chỉ vì file kế hoạch tồn tại.
+**Spec:** [2026-10-24-game-dialogue-overlay-design.md](../specs/2026-10-24-game-dialogue-overlay-design.md). Người dùng duyệt triển khai Native ngày 2026-10-24. Bảy task và một lượt sửa sau review đã hoàn tất; kết quả cuối tại `docs/testing/game-dialogue-overlay.md`.
 
 ## Global Constraints
 
@@ -169,7 +169,7 @@ assert frame_after_two_consecutive_misses.blocks == ()
 ```
 
 - [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_sessions.py','tests/test_block_session.py')`; FAIL contract mới/session thiếu.
-- [x] **Step 3: Triển khai sessions** dùng track chung, giữ trình bày cũ riêng với turn mới. Blocks giữ phép ghép IoU .30 / khoảng exact text max(64,4×height); không tái dùng ID track đã đóng trong cùng revision. OCR error không gọi miss; chỉ session có observation thành công mới cập nhật last_seen. Tick freshness 3s blocks/6s subtitle chỉ tạm ẩn, callback muộn không tự mở lại visibility trước scan mới.
+- [x] **Step 3: Triển khai sessions** dùng track chung, giữ trình bày cũ riêng với turn mới. Blocks giữ phép ghép IoU .30 / khoảng exact text max(64,4×height), sau review bổ sung prefix+containment .60 và điểm neo như spec để giữ track khi chữ chạy rộng/wrap; không tái dùng ID track đã đóng trong cùng revision. OCR error không gọi miss; chỉ session có observation thành công mới cập nhật last_seen. Tick freshness 3s blocks/6s subtitle chỉ tạm ẩn, callback muộn không tự mở lại visibility trước scan mới.
 - [x] **Step 4: Thêm regression** `test_two_nearby_blocks_never_swap_translations`, `test_geometry_moves_without_old_position_or_hold_delay`, `test_missing_one_block_keeps_other_blocks`, `test_ocr_error_is_not_absence_and_freshness_hides`, `test_recovery_requires_new_observation_before_cached_result_is_visible`. Thêm nguồn tăng nhiều câu/CJK không clear, >32 khối cắt theo thứ tự đọc hiện có và source quá dài báo một lần/version.
 - [x] **Step 5: Chạy GREEN** hai file trên; assertions geometry/matching hiện có được giữ hoặc chuyển sang version-aware, không giảm phạm vi.
 - [x] **Step 6: Commit** chỉ các file Task 3; `git commit -m "feat: retain dialogue overlays across OCR variation"`.

@@ -96,3 +96,12 @@ def test_oversized_and_empty_never_dispatch(runtime_settings):
         t=DialogueTrack(0)
         t.observe(source,now_s=0); t.observe(source,now_s=.25)
         assert t.job(revision=1,settings=runtime_settings,now_s=3) is None
+
+
+def test_absent_scan_breaks_consecutive_challenger_confirmation(runtime_settings,dialogue_result):
+    t,j=ready(runtime_settings,'Dialogue A')
+    t.observe('Dialogue B',now_s=1)
+    assert not t.miss(now_s=1.25)
+    t.observe('Dialogue B',now_s=1.5)
+    assert t.active_turn(1)==(1,7,j.turn_id)
+    assert t.apply_result(dialogue_result(j),now_s=1.6)

@@ -1,4 +1,5 @@
 from core.blocks.models import TextBlock, Rect
+import pytest
 
 
 def setup_subtitle(settings, factory):
@@ -100,3 +101,54 @@ def test_two_nearby_blocks_do_not_swap_and_track_bound(runtime_settings,capture_
     obs(many,0)
     obs((TextBlock(40,'new',Rect(10,10,40,10)),many[-1]),.5)
     assert len(s.active_turns)<=32
+
+
+def test_new_dialogue_cancels_previous_end_tail(runtime_settings,dialogue_result):
+    s,j=setup_subtitle(runtime_settings,dialogue_result)
+    s.observe('',now_s=1);s.observe('',now_s=1.5)
+    s.observe('Another dialogue',now_s=2);s.observe('Another dialogue',now_s=2.25)
+    # The previous 3s expiry must not hide the reading fallback while a real
+    # new dialogue is active and its replacement translation is still pending.
+    s.tick(now_s=4.6)
+    assert s.current_frame().text=='Xin chào'
+    assert not s.apply_result(dialogue_result(j,'late previous turn'),now_s=4.7)
+
+
+@pytest.mark.parametrize('tick_before_return',[False,True])
+def test_expired_tail_never_resurrects_on_new_dialogue(runtime_settings,dialogue_result,tick_before_return):
+    s,j=setup_subtitle(runtime_settings,dialogue_result)
+    s.observe('',now_s=1);s.observe('',now_s=1.5)
+    if tick_before_return:s.tick(now_s=4.5)
+    s.observe('Next dialogue',now_s=6);s.observe('Next dialogue',now_s=6.25)
+    assert s.current_frame().text==''
+    new,=s.translation_jobs(now_s=6.5);s.mark_dispatched(new,now_s=6.5)
+    assert s.apply_result(dialogue_result(new,'new'),now_s=6.6)
+    assert s.current_frame().text=='new'
+
+
+@pytest.mark.parametrize('old_x,new_x',[(10,10),(300,150),(300,0)])
+@pytest.mark.parametrize('height',[20,40])
+def test_typewriter_width_growth_keeps_track_and_latest_geometry(runtime_settings,capture_geometry,dialogue_result,old_x,new_x,height):
+    from core.blocks.session import BlockSession
+    s=BlockSession()
+    def observe(text,x,width,t,h=20):
+        s.observe((TextBlock(0,text,Rect(x,10,width,h)),),settings=runtime_settings,
+                  revision=1,frame_id=int(t*100),geometry=capture_geometry,now_s=t)
+    observe('Hello',old_x,100,0);observe('Hello',old_x,100,.25)
+    j,=s.translation_jobs(now_s=.5);s.mark_dispatched(j,now_s=.5)
+    observe('Hello world, a longer dialogue',new_x,400,.6,height)
+    assert s.active_turns==frozenset({(1,j.block_id,j.turn_id)})
+    assert s.apply_result(dialogue_result(j),now_s=.7)
+    shown,=s.current_frame().blocks
+    assert shown.source_rect==Rect(new_x,10,400,height)
+
+
+def test_progressive_containment_prefers_aligned_anchor(runtime_settings,capture_geometry):
+    from core.blocks.session import BlockSession
+    s=BlockSession()
+    def obs(blocks,t):
+        s.observe(blocks,settings=runtime_settings,revision=1,frame_id=int(t*100),geometry=capture_geometry,now_s=t)
+    obs((TextBlock(0,'Hello',Rect(10,10,100,20)),TextBlock(1,'Hello',Rect(130,10,100,20))),0)
+    obs((TextBlock(0,'Hello world',Rect(10,10,400,20)),),.25)
+    assert {key[1] for key in s.active_turns}=={0,1}
+    assert s._tracks[0].rect==Rect(10,10,400,20)

@@ -26,8 +26,10 @@ class SubtitleDialogueSession:
         return self.track.has_pending or (not self.track.closed and self.track.missing_count > 0)
 
     def observe(self, text, *, now_s):
+        self._expire_tail(now_s)
         self._now = self._last_success = now_s
         if text.strip():
+            self._end_until = None
             self.track.observe(text,now_s=now_s)
         elif self.track.miss(now_s=now_s):
             self._end_until = now_s+self.policy.subtitle_end_hold_s
@@ -53,7 +55,13 @@ class SubtitleDialogueSession:
 
     def tick(self, *, now_s):
         self._now=now_s
+        self._expire_tail(now_s)
         self.track.advance(now_s=now_s)
+
+    def _expire_tail(self, now_s):
+        if self._end_until is not None and now_s >= self._end_until:
+            self.track.presentation = None
+            self._end_until = None
 
     def current_frame(self):
         if self._revision is None: return None

@@ -22,9 +22,9 @@ Nhận diện là heuristic từ OCR, không đọc trạng thái nội bộ gam
 - Task 4: RED thiếu signal/active-key contract; GREEN 53 queue/Google-priority tests, gồm latest pending/fairness/retry khi source version đổi.
 - Task 5: RED thiếu coordinator; GREEN 31 policy/track/session/coordinator tests. Kết quả queued tới sink trong 100ms khi event loop rảnh, OCR vẫn bị giữ bằng Event.
 - Task 6: RED 14 integration failures; GREEN 435 toàn suite trước các test bổ sung, sau đó tám hard-invalidation tests và 51 focused tests sau khi xóa nhánh Google/block cũ khỏi worker.
-- Task 7: RED thiếu tool; GREEN bốn replay/CLI tests ở latency 0/700/2000ms. Fixture có expected turn độc lập và có cả lượt đủ dài để nhận được phản hồi 2s; không ép hiển thị kết quả của lượt ngắn đã kết thúc.
+- Task 7: RED thiếu tool; GREEN bốn replay/CLI tests ở latency 0/700/2000ms. Thêm regression giữ owner tới khi backend drain: RED rồi GREEN tổng năm test. Fixture có expected turn độc lập và có cả lượt đủ dài để nhận được phản hồi 2s; không ép hiển thị kết quả của lượt ngắn đã kết thúc.
 
-Kết quả cuối sau review được ghi bổ sung ở phần cuối tài liệu. Suite mặc định không gọi mạng, không chụp desktop hoặc tải model OCR. Test dùng thư mục TEMP/TMP mới ngoài repository như hướng dẫn trong plan.
+Kết quả cuối sau review: **459 PASS, exit 0, 53,48 giây**; `git diff --check` sạch. Suite mặc định không gọi mạng, không chụp desktop hoặc tải model OCR. Test dùng thư mục TEMP/TMP mới ngoài repository như hướng dẫn trong plan.
 
 ## Record và replay riêng
 
@@ -39,9 +39,9 @@ Replay đã chạy exit 0 cho cả hai mode ở ba mức latency. Backend replay
 
 | Latency giả lập | Subtitle: số cập nhật có chữ | Subtitle: số lần clear | Blocks: số cập nhật có chữ | Blocks: số lần clear |
 |---|---:|---:|---:|---:|
-| 0ms | 6 | 0 | 12 | 1 |
-| 700ms | 5 | 0 | 10 | 1 |
-| 2000ms | 3 | 0 | 7 | 1 |
+| 0ms | 6 | 0 | 13 | 1 |
+| 700ms | 5 | 0 | 12 | 1 |
+| 2000ms | 3 | 0 | 5 | 1 |
 
 Blocks có nhiều lần cập nhật vị trí nên số cập nhật không phải số lượt thoại. Một lần clear blocks chưa được gán nguyên nhân ngữ nghĩa bằng nhãn thủ công. Transcript video thật không có oracle, các metric `clears_within_active_turn`/`shown_closed_turn_results` là null, không giả định luôn bằng 0. Fixture được gán turn trong suite mới kiểm chứng hai metric đó.
 
@@ -73,4 +73,14 @@ Thiếu provider hoặc `--allow-network` trả code 2 trước khi khởi tạo
 
 ## Review cuối
 
-Chưa ghi verdict cho đến khi reviewer hoàn tất và suite cuối chạy xong; phần này được cập nhật trong commit bàn giao.
+Reviewer độc lập `gpt-6-astra` đọc range `ff13a7e..b2f583f`: không có Critical, hai Important và một Minor. Một lượt sửa cuối đã thêm regression và kiểm chứng:
+
+1. Hủy timer kết thúc cũ khi hội thoại mới quay lại trước hết hạn; phần đã hết hạn không hồi sinh. Test slow replacement, có/không tick trước khi quay lại.
+2. Ghép prefix + containment + điểm neo trước IoU để chữ chạy rộng 100→400 px hoặc xuống dòng giữ track và geometry. Test căn trái/tâm/phải, wrap và khối gần nhau.
+3. Thành công nhưng không thấy chữ làm đứt hai quan sát challenger liên tiếp. Executor nâng Minor này thành Important vì có thể đóng lượt và loại kết quả hợp lệ chỉ sau OCR hụt xen giữa; đã có regression A→B→empty→B.
+
+Nhóm regression cuối quan sát **9 FAIL trước sửa**, sau sửa focused **36 PASS** và suite toàn bộ **459 PASS / 0 FAIL** (exit 0, 53,48 giây). Không dispatch review lại theo quy trình Native một lượt sửa cuối. Không còn finding được hoãn.
+
+Reviewer không kết luận về tốc độ/chất lượng provider thật, GPU/native capture exclusion, chuyển trang có nội dung giống/prefix khi không bắt được khoảng trống, hoặc bảo đảm dịch hết mọi lượt ngắn dưới API chậm. Executor giữ các giới hạn này, không coi offline replay là bằng chứng vượt qua chúng. Các compatibility/logging đã ghi phía trên được reviewer chấp nhận là quyết định có chủ đích.
+
+Giữ nhánh feature hiện tại để người dùng chạy thử; không merge, push hay mở PR ngoài yêu cầu triển khai trong workspace.

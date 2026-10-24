@@ -4,7 +4,7 @@ from math import hypot
 from core.contracts import EngineError
 from core.blocks.models import OverlayBlock, OverlayFrame
 from core.dialogue.track import DialogueTrack
-from core.dialogue.policy import DEFAULT_DIALOGUE_POLICY, identity_text
+from core.dialogue.policy import DEFAULT_DIALOGUE_POLICY, identity_text, classify_text
 
 @dataclass
 class _LocatedTrack:
@@ -18,6 +18,17 @@ def _distance(a, b):
 def _iou(a, b):
     intersection = max(0, min(a.right, b.right)-max(a.x, b.x))*max(0, min(a.bottom, b.bottom)-max(a.y, b.y))
     return intersection / (a.width*a.height+b.width*b.height-intersection)
+
+
+def _containment(a, b):
+    intersection = max(0,min(a.right,b.right)-max(a.x,b.x))*max(0,min(a.bottom,b.bottom)-max(a.y,b.y))
+    return intersection/min(a.width*a.height,b.width*b.height)
+
+
+def _anchor_delta(a, b):
+    horizontal = min(abs(a.x-b.x),abs(a.right-b.right),abs(a.x+a.width/2-b.x-b.width/2))
+    vertical = min(abs(a.y-b.y),abs(a.bottom-b.bottom),abs(a.y+a.height/2-b.y-b.height/2))
+    return horizontal+vertical
 
 
 class BlockSession:
@@ -53,7 +64,7 @@ class BlockSession:
         blocks=tuple(sorted((b for b in blocks if b.source_text.strip()),
                             key=lambda b:(b.source_rect.y,b.source_rect.x,b.source_text)))[:32]
         matches,used={},set()
-        for exact in (True,False):
+        for phase in ('exact','progressive','spatial'):
             pairs=[]
             for i,b in enumerate(blocks):
                 if i in matches: continue
@@ -61,9 +72,20 @@ class BlockSession:
                     if key in used: continue
                     distance=_distance(b.source_rect,t.rect)
                     score=_iou(b.source_rect,t.rect)
-                    valid=(identity_text(b.source_text)==identity_text(t.state.source_text)
-                           and distance<=max(64,4*max(b.source_rect.height,t.rect.height))) if exact else score>=.30
-                    if valid:pairs.append((0 if exact else -score,distance,key,i))
+                    if phase=='exact':
+                        valid=(identity_text(b.source_text)==identity_text(t.state.source_text)
+                               and distance<=max(64,4*max(b.source_rect.height,t.rect.height)))
+                        rank=(0,distance)
+                    elif phase=='progressive':
+                        containment=_containment(b.source_rect,t.rect)
+                        anchor=_anchor_delta(b.source_rect,t.rect)
+                        valid=(classify_text(t.state.source_text,b.source_text) in ('append','regression')
+                               and containment>=.60 and anchor<=max(16,b.source_rect.height,t.rect.height))
+                        rank=(-containment,anchor)
+                    else:
+                        valid=score>=.30
+                        rank=(-score,distance)
+                    if valid:pairs.append((*rank,key,i))
             for _,_,key,i in sorted(pairs):
                 if key not in used and i not in matches:
                     matches[i]=key;used.add(key)

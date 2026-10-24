@@ -1,6 +1,6 @@
 # Overlay cho hội thoại game hiện dần
 
-Ngày: 2026-10-24. Trạng thái: hành vi bên dưới đã được thống nhất trong hội thoại; tài liệu thiết kế và kế hoạch đi kèm đang chờ người dùng đọc duyệt trước khi triển khai.
+Ngày: 2026-10-24. Trạng thái: người dùng đã duyệt triển khai Native; bảy task và một lượt sửa sau review đã hoàn tất, kết quả tại `docs/testing/game-dialogue-overlay.md`.
 
 ## Mục đích và bằng chứng
 
@@ -73,7 +73,7 @@ State trình bày tách khỏi state chữ mới nhất. Thay đổi OCR không 
 
 **Phụ đề cố định:** hai scan OCR thành công rỗng liên tiếp xác nhận kết thúc (đề xuất kỹ thuật). Đóng turn ngay ở lần xác nhận thứ hai, hủy quyền áp dụng callback cũ; phần đang nhìn được giữ đúng ba giây từ đó. Hết hạn thì ẩn cả khi OCR đang bận. Lặp scan rỗng không gia hạn; lỗi OCR không tính rỗng. Thoại quay lại mở turn mới; callback/cache mới hợp lệ có thể thay phần cũ trước hết ba giây. Nếu đang đợi lượt mới khi thoại còn tồn tại, giữ phần cũ đến khi có bản mới hoặc tới điều kiện kết thúc/hard invalidation đã nêu.
 
-**Theo khối:** giữ phép ghép không gian hiện có (IoU tối thiểu 0,30; ghép exact text trong khoảng max(64 px, 4× chiều cao)). Mỗi lần OCR thành công không match tăng missing_count, match lại reset về 0. Hai scan không match đóng track/turn và gỡ cả hình học lẫn chữ. Một lần mất giữ vị trí cuối; không tính tick/ảnh bỏ qua/error thành mất. Khối match và di chuyển cập nhật vị trí hiện tại ngay, không để lại bản ở tọa độ cũ; timer một giây chỉ giữ chữ, không giữ vị trí. Track mới không thừa hưởng callback track bị đóng dù ở cùng tọa độ. Các khối khác không bị xóa khi một khối mất. Không giữ khối bằng danh sách nguồn OCR cũ không có hạn.
+**Theo khối:** giữ ghép exact text trong khoảng max(64 px, 4× chiều cao), sau đó ghép prefix append/regression có containment trên khối nhỏ ít nhất 0,60 và điểm neo cạnh/tâm lệch không quá max(16 px, chiều cao hai khối), rồi mới fallback IoU tối thiểu 0,30. Đây là hiệu chỉnh kỹ thuật sau review: chỉ IoU sẽ mất track khi typewriter tăng chiều rộng trên 3,33 lần hoặc xuống dòng. Ghép luôn một-một, ưu tiên điểm neo gần để không đổi chéo khối gần nhau. Mỗi lần OCR thành công không match tăng missing_count, match lại reset về 0. Hai scan không match đóng track/turn và gỡ cả hình học lẫn chữ. Một lần mất giữ vị trí cuối; không tính tick/ảnh bỏ qua/error thành mất. Khối match và di chuyển cập nhật vị trí hiện tại ngay, không để lại bản ở tọa độ cũ; timer một giây chỉ giữ chữ, không giữ vị trí. Track mới không thừa hưởng callback track bị đóng dù ở cùng tọa độ. Các khối khác không bị xóa khi một khối mất. Không giữ khối bằng danh sách nguồn OCR cũ không có hạn.
 
 OCR lỗi giữ chính sách retry và trạng thái lỗi hiện có, không giả vờ đã xác nhận nguồn biến mất. Không gia hạn deadline kết thúc hoặc resurrect turn từ lỗi. Giới hạn an toàn khi ngừng nhận quan sát thành công: sau **3 giây** kể từ scan thành công cuối, tạm ẩn khối; phụ đề cố định tạm ẩn sau **6 giây**. Đây là đề xuất kỹ thuật bảo vệ freshness, không đóng turn chỉ vì OCR lỗi; chỉ cho hiện lại sau một quan sát mới còn hợp lệ. Không coi heartbeat/capture thành công là OCR thành công; không đưa cache/kết quả dịch muộn lên khi freshness đã hết.
 
@@ -102,3 +102,5 @@ Chấp nhận khi: chữ nối thêm/dao động dấu câu không xóa overlay,
 ## Trạng thái kiểm tra thiết kế
 
 Builder check độc lập ngày 2026-10-24: reviewer đã đọc tài liệu và code liên quan, kết luận `nothing important left`. Những con số do người thiết kế đề xuất (freshness 3/6 giây, xác nhận challenger, tick 25 ms) vẫn được phân biệt với lựa chọn của người dùng để xem cùng kế hoạch. Chưa có triển khai sản phẩm trong lượt viết tài liệu này.
+
+Triển khai Native đã được người dùng cho phép ngày 2026-10-24. Review code cuối bổ sung ba quy tắc kiểm chứng: thoại xuất hiện lại trước hạn kết thúc hủy hạn cũ để giữ placeholder đang nhìn, nhưng phần đã hết hạn không được hồi sinh; ghép geometry progressive như trên; một scan thành công rỗng làm đứt chuỗi xác nhận challenger, còn lỗi OCR không được giả thành scan rỗng. Kết quả triển khai và kiểm thử cuối tại `docs/testing/game-dialogue-overlay.md`.
