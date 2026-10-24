@@ -35,7 +35,7 @@ def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monk
         if request.url.host == 'clients5.google.com':
             return httpx.Response(200, json=[translated])
         return httpx.Response(200, json=[[[translated]]])
-    def service():
+    def service(**kwargs):
         return TranslationService(google_factory=lambda:GoogleTranslateClient(client_factory=lambda:httpx.Client(transport=httpx.MockTransport(respond))))
     class Capture:
         def __enter__(self): return self
@@ -59,7 +59,8 @@ def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monk
     w.configure(replace(config.load_runtime_settings(state,100),overlay_mode=mode))
     w.set_capture_geometry(capture_geometry); w.start_worker()
     try:
-        for index,t in enumerate((0,1,3,7)):
+        qtbot.waitUntil(lambda:w._coordinator._scan_id >= 2)
+        for index,t in enumerate((.5,1.5,3.5,7.5)):
             now[0]=t
             qtbot.waitUntil(lambda:len(requests)==index+1)
             qtbot.waitUntil(lambda:w._google_recovery.snapshot(now_s=t).phase!='ready')
@@ -70,6 +71,8 @@ def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monk
         assert requests==['A']*4
         fail[0]=False
         assert window.retry_translation()
+        qtbot.waitUntil(lambda:w._coordinator._scan_id >= 2)
+        now[0]=10000.5
         qtbot.waitUntil(lambda:len(requests)==5)
         assert requests[-1]=='B'
         if mode=='subtitle':

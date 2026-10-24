@@ -14,6 +14,7 @@ def test_configure_after_stop_does_not_restart_draining_google(qtbot, monkeypatc
     entered, release = Event(), Event()
     shutdown = []
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, *args):
             entered.set()
             assert release.wait(4)
@@ -53,6 +54,7 @@ def test_start_during_internal_restart_preserves_google_session(qtbot, monkeypat
     import core.worker as module
     entered, release = Event(), Event()
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, *args):
             entered.set()
             assert release.wait(4)

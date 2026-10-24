@@ -12,6 +12,7 @@ def test_moving_blocks_update_while_translation_is_in_flight(qtbot, monkeypatch,
     entered, release = Event(), Event()
     counts = {'capture': 0, 'request': 0}
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, text, settings):
             counts['request'] += 1
             entered.set()
@@ -60,6 +61,7 @@ def test_mode_switch_waits_for_active_request_before_subtitle_request(qtbot, mon
     entered, release = Event(), Event()
     calls = []
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, text, settings):
             calls.append(settings.overlay_mode)
             if settings.overlay_mode == 'blocks':
@@ -96,6 +98,7 @@ def test_stop_is_nonblocking_and_restart_waits_for_both_threads(qtbot, monkeypat
     entered, release, closed = Event(), Event(), Event()
     threads, capture_count = [], []
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, *a):
             threads.append(get_ident())
             entered.set()
@@ -146,6 +149,7 @@ def test_window_close_waits_for_held_translation_before_shutdown_finished(qtbot,
     entered, release = Event(), Event()
     shutdown, close_calls = [], []
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self, *args):
             entered.set()
             release.wait(4)

@@ -37,6 +37,8 @@ class Overlay(QLabel):
         self._mode_revision = 0
         self._block_frame_id = -1
         self._last_subtitle_candidate_id = -1
+        self._subtitle_render_sequence = 0
+        self._managed_subtitle = False
         self.block_overlay = BlockOverlay(self)
         self.block_overlay.block_error.connect(self.block_error.emit)
 
@@ -244,7 +246,8 @@ class Overlay(QLabel):
             return
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
-        self.hide_timer.start()
+        if not self._managed_subtitle:
+            self.hide_timer.start()
 
     def clear(self):
         self.block_overlay.clear()
@@ -255,7 +258,8 @@ class Overlay(QLabel):
     def _show_with_timer(self):
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
-        self.hide_timer.start()
+        if not self._managed_subtitle:
+            self.hide_timer.start()
 
     def fade_in(self):
         self.fade_anim.stop()
@@ -295,6 +299,8 @@ class Overlay(QLabel):
         self.block_overlay.clear()
         self._mode, self._mode_revision, self._block_frame_id = mode, revision, -1
         self._last_subtitle_candidate_id = -1
+        self._subtitle_render_sequence = 0
+        self._managed_subtitle = False
         self.is_drag_mode = False
         self.setText('')
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
@@ -311,8 +317,14 @@ class Overlay(QLabel):
         self.block_overlay.set_frame(frame)
 
     def update_subtitle(self, frame):
-        if (self._mode != 'subtitle' or frame.revision != self._mode_revision
-                or frame.candidate_id < self._last_subtitle_candidate_id):
+        if self._mode != 'subtitle' or frame.revision != self._mode_revision:
+            return
+        if frame.render_sequence:
+            if frame.render_sequence <= self._subtitle_render_sequence: return
+            self._managed_subtitle = True
+            self._subtitle_render_sequence = frame.render_sequence
+            self.hide_timer.stop()
+        elif self._managed_subtitle or frame.candidate_id < self._last_subtitle_candidate_id:
             return
         self._last_subtitle_candidate_id = frame.candidate_id
         if frame.text:

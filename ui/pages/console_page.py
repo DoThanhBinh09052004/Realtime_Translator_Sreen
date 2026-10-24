@@ -1,6 +1,6 @@
 import math
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QPlainTextEdit
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.styles import CYBER_PALETTE, HERO_START_STYLE, HERO_STOP_STYLE, SECONDARY_BUTTON_STYLE
@@ -116,6 +116,23 @@ class ConsolePage(QWidget):
         quick_card.layout.addLayout(q_row)
         layout.addWidget(quick_card)
 
+        log_card = ModernCard('Nhật ký dịch', 'Hiển thị nội dung request và thời gian phản hồi')
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setMaximumBlockCount(300)
+        self.log_view.setPlaceholderText('Nhật ký sẽ xuất hiện khi bắt đầu quét.')
+        self.log_view.setMinimumHeight(120)
+        self.log_view.setMaximumHeight(190)
+        log_card.layout.addWidget(self.log_view)
+        log_buttons = QHBoxLayout()
+        log_buttons.addStretch()
+        self.clear_log_btn = QPushButton('Xóa nhật ký')
+        self.clear_log_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.clear_log_btn.clicked.connect(self.log_view.clear)
+        log_buttons.addWidget(self.clear_log_btn)
+        log_card.layout.addLayout(log_buttons)
+        layout.addWidget(log_card)
+
         layout.addStretch()
         self.select_region_btn = quick_select_btn
         self.subtitle_settings_btn = quick_sub_btn
@@ -130,6 +147,10 @@ class ConsolePage(QWidget):
 
     def set_run_status(self, text: str):
         self.metric_cards['status'].set_value(text)
+
+    def append_log(self, line: str):
+        self.log_view.appendPlainText(line)
+        self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
 
     def clear_translation_status(self):
         self._translation_status = None

@@ -16,7 +16,7 @@ def make_worker():
     return TranslationWorker(config.State(), config.DEFAULT_REGION)
 
 
-def install_capture(monkeypatch, worker, on_frame=lambda count: None, frames=5, changing=False):
+def install_capture(monkeypatch, worker, on_frame=lambda count: None, frames=5, changing=False, continuous=False):
     from core import worker as module
 
     class Capture:
@@ -31,18 +31,19 @@ def install_capture(monkeypatch, worker, on_frame=lambda count: None, frames=5, 
         def grab(self, region):
             self.count += 1
             on_frame(self.count)
-            if self.count > frames:
+            if not continuous and self.count > frames:
                 with module.QMutexLocker(worker._mutex):
                     worker._is_running = False
             return np.full((8, 8, 4), self.count * 20 if changing else 0, dtype=np.uint8)
 
     monkeypatch.setattr(module.mss, "mss", Capture)
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    if not continuous:
+        monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
     monkeypatch.setattr(module, "compact_memory", lambda: None)
 
 
 @pytest.mark.parametrize("change", ["source", "target", "model", "key", "base_url", "provider"])
-def test_changed_settings_reprocess_static_frame(monkeypatch, fake_translator, change):
+def test_changed_settings_reprocess_static_frame(monkeypatch, fake_translator, change, qtbot):
     worker = make_worker()
     original = config.load_runtime_settings(worker.state, 500)
     changes = {
@@ -54,11 +55,14 @@ def test_changed_settings_reprocess_static_frame(monkeypatch, fake_translator, c
         "provider": replace(original, provider=replace(original.provider, name="OpenAI", base_url=None)),
     }
     changed = changes[change]
-    install_capture(monkeypatch, worker, lambda count: worker.configure(changed) if count == 3 else None)
+    install_capture(monkeypatch, worker, lambda count: worker.configure(changed) if count == 3 else None, continuous=True)
     emitted = []
     worker.text_translated.connect(emitted.append)
-    worker._is_running = True
-    worker.run()
+    worker.start_worker()
+    try:
+        qtbot.waitUntil(lambda:len(emitted)==2,timeout=5000)
+    finally:
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert fake_translator.call_count == 2
     assert emitted == ["fake translation", "fake translation"]
     request = fake_translator.call_args.kwargs
@@ -78,7 +82,7 @@ def test_configure_only_marks_invalidation_without_mutating_worker_cache():
     assert worker._prev_frame_thumb is old_thumb
 
 
-def test_reconfiguration_during_request_discards_old_result_and_does_not_deadlock(monkeypatch, fake_translator):
+def test_reconfiguration_during_request_discards_old_result_and_does_not_deadlock(monkeypatch, fake_translator, qtbot):
     worker = make_worker()
     original = config.load_runtime_settings(worker.state, 500)
     changed = replace(original, provider=replace(original.provider, model_id="new-model"))
@@ -90,25 +94,29 @@ def test_reconfiguration_during_request_discards_old_result_and_does_not_deadloc
         return "new translation"
 
     fake_translator.side_effect = completion
-    install_capture(monkeypatch, worker)
-    emitted = []
+    install_capture(monkeypatch, worker, continuous=True)
+    emitted=[]
     worker.text_translated.connect(emitted.append)
-    worker._is_running = True
-    worker.run()
+    worker.start_worker()
+    try:qtbot.waitUntil(lambda:emitted==['new translation'],timeout=4000)
+    finally:
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert emitted == ["new translation"]
     assert [call.kwargs["model"] for call in fake_translator.call_args_list] == [
         original.provider.model_id, "new-model"]
 
 
-def test_translation_error_is_never_emitted_as_subtitle(monkeypatch, fake_translator):
+def test_translation_error_is_never_emitted_as_subtitle(monkeypatch, fake_translator, qtbot):
     worker = make_worker()
     fake_translator.side_effect = RuntimeError("fake-secret")
-    install_capture(monkeypatch, worker)
+    install_capture(monkeypatch, worker, continuous=True)
     translated, errors = [], []
     worker.text_translated.connect(translated.append)
     worker.error_occurred.connect(errors.append)
-    worker._is_running = True
-    worker.run()
+    worker.start_worker()
+    try:qtbot.waitUntil(lambda:bool(errors),timeout=3000)
+    finally:
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert translated == []
     assert len(errors) == 1
     assert errors[0].code == "internal"
@@ -174,13 +182,13 @@ def test_client_created_used_and_closed_on_worker_thread(monkeypatch, qtbot):
 
     monkeypatch.setattr(translator, "OpenAI", factory)
     worker = make_worker()
-    install_capture(monkeypatch, worker, frames=2)
+    install_capture(monkeypatch, worker, continuous=True)
     assert calls == []
     worker.start_worker()
     try:
-        qtbot.waitUntil(lambda: not worker.isRunning(), timeout=2000)
+        qtbot.waitUntil(lambda: any(kind == "request" for kind, _ in calls), timeout=3000)
     finally:
-        assert worker.wait(2000)
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert [kind for kind, _ in calls] == ["create", "request", "close"]
     assert len({thread for _, thread in calls}) == 1
     assert calls[0][1] != owner
@@ -211,7 +219,7 @@ def test_changing_key_does_not_close_client_while_request_is_in_flight(monkeypat
 
     monkeypatch.setattr(translator, "OpenAI", factory)
     worker = make_worker()
-    install_capture(monkeypatch, worker)
+    install_capture(monkeypatch, worker, continuous=True)
     worker.start_worker()
     try:
         qtbot.waitUntil(entered.is_set, timeout=2000)
@@ -219,46 +227,41 @@ def test_changing_key_does_not_close_client_while_request_is_in_flight(monkeypat
         worker.configure(replace(original, provider=replace(original.provider, api_key="fake-new-key")))
         assert clients[0].close.call_count == 0
         released.set()
-        qtbot.waitUntil(lambda: not worker.isRunning(), timeout=2000)
+        qtbot.waitUntil(lambda: (1, "returned") in calls, timeout=4000)
     finally:
         released.set()
-        assert worker.wait(4000)
+        worker.stop_worker();assert worker.wait(4000);assert worker._block_translator.wait(4000)
     assert calls == [(0, "request"), (0, "returned"), (0, "close"),
                      (1, "request"), (1, "returned"), (1, "close")]
 
 
-def test_worker_uses_snapshot_instead_of_mutable_ui_state(monkeypatch, fake_translator):
+def test_worker_uses_snapshot_instead_of_mutable_ui_state(monkeypatch, fake_translator, qtbot):
     worker = make_worker()
 
     def on_frame(count):
         worker.state.source = "Korean"
         worker.state.target = "English"
 
-    install_capture(monkeypatch, worker, on_frame)
-    worker._is_running = True
-    worker.run()
+    install_capture(monkeypatch, worker, on_frame, continuous=True)
+    worker.start_worker()
+    try:qtbot.waitUntil(lambda:fake_translator.call_count==1,timeout=3000)
+    finally:
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert fake_translator.call_count == 1
     content = fake_translator.call_args.kwargs["messages"][1]["content"]
     assert "from English to Vietnamese" in content
 
 
-def test_worker_shutdown_clears_untranslated_pending_candidate(monkeypatch, fake_translator):
-    worker = make_worker()
-    pending_before_stop = []
-
-    def on_frame(count):
-        if count == 2:
-            pending_before_stop.append(worker._stabilizer.has_pending)
-
-    install_capture(monkeypatch, worker, on_frame, frames=1)
-    emitted = []
-    worker.text_translated.connect(emitted.append)
-    worker._is_running = True
-    worker.run()
-    assert pending_before_stop == [True]
-    assert not worker._stabilizer.has_pending
-    assert emitted == []
-    assert fake_translator.call_count == 0
+def test_worker_shutdown_clears_untranslated_pending_candidate(monkeypatch, fake_translator, qtbot):
+    worker=make_worker()
+    install_capture(monkeypatch,worker,continuous=True)
+    emitted=[];worker.text_translated.connect(emitted.append)
+    worker.start_worker()
+    qtbot.waitUntil(lambda:worker._coordinator.session.needs_scan,timeout=1000)
+    assert fake_translator.call_count==0
+    worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
+    assert not worker._coordinator._running and emitted==[]
+    assert fake_translator.call_count==0
 
 
 @pytest.mark.parametrize("changing,source,expected", [(False, "", 2), (True, "fake source", 1)])

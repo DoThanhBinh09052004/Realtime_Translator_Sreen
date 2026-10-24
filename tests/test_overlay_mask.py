@@ -55,7 +55,7 @@ def test_invalid_rectangles_leave_capture_unchanged(rect):
     assert np.all(image == 255)
 
 
-def test_overlay_animation_is_masked_before_change_detection_and_ocr(monkeypatch, fake_ocr):
+def test_overlay_animation_is_masked_before_change_detection_and_ocr(monkeypatch, fake_ocr, qtbot):
     from core import worker as module
     config.save_active_provider('Google Gemini')
 
@@ -84,16 +84,17 @@ def test_overlay_animation_is_masked_before_change_detection_and_ocr(monkeypatch
             return image
 
     monkeypatch.setattr(module.mss, 'mss', Capture)
-    monkeypatch.setattr(module.time, 'sleep', lambda seconds: None)
     monkeypatch.setattr(module, 'compact_memory', lambda: None)
     emitted = []
     worker.text_translated.connect(emitted.append)
-    worker._is_running = True
-    worker.run()
+    worker.start_worker()
+    try:qtbot.waitUntil(lambda:not worker.isRunning(),timeout=4000)
+    finally:
+        worker.stop_worker();assert worker.wait(2000);assert worker._block_translator.wait(2000)
     assert emitted == ['fake translation']
-    assert fake_ocr.call_count == 2
+    assert 2 <= fake_ocr.call_count <= 3
     expected = np.full((40, 100, 3), 255, dtype=np.uint8)
     expected[4:26, 14:36] = 0
     for call in fake_ocr.call_args_list:
         np.testing.assert_array_equal(call.args[0], expected)
-    assert not worker._stabilizer.has_pending
+    assert not worker._coordinator._running

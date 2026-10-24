@@ -36,7 +36,7 @@ class ControllerWindow(QWidget):
 
         # Window and navigation shell
         self.setWindowTitle("Translate HUD - Realtime Screen Translator")
-        self.resize(740, 560)
+        self.resize(740, 720)
         self.setMinimumSize(660, 480)
         self.setStyleSheet(get_app_stylesheet())
 
@@ -102,6 +102,7 @@ class ControllerWindow(QWidget):
         self.metric_cards = self.console_page.metric_cards
         self.console_page.start_requested.connect(self.start_ocr)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
+        self.worker.log_updated.connect(self.console_page.append_log)
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))

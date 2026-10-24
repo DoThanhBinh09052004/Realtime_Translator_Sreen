@@ -13,6 +13,7 @@ def test_google_capture_continues_while_http_is_held(qtbot,monkeypatch,runtime_s
     entered, release=Event(),Event()
     calls, captures, threads=[],[],[]
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self,text,settings):
             calls.append(text); threads.append(get_ident()); entered.set(); release.wait(4)
             return TranslationResult('Xin chào')
@@ -43,7 +44,7 @@ def test_google_capture_continues_while_http_is_held(qtbot,monkeypatch,runtime_s
         assert w.wait(2000) and w._block_translator.wait(2000)
 
 
-def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime_settings):
+def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime_settings,qtbot):
     import core.worker as module
     from core.contracts import OcrResult
     w=TranslationWorker(config.State(),config.DEFAULT_REGION)
@@ -56,9 +57,13 @@ def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime
     monkeypatch.setattr(module,'ocr_image',lambda *a,**k:OcrResult('Current scene'))
     img=np.zeros((40,100),dtype='uint8')
     w._take_snapshot()
-    w._process_google_subtitle_frame(img,settings,w.revision)
-    w._process_google_subtitle_frame(img,settings,w.revision)
-    assert [j.source_text for j in w._google_subtitle.translation_jobs()]==['Current scene']
+    now=[0.];monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
+    try:
+        for t in (0,.25):
+            now[0]=t;w._process_dialogue_frame(img,settings,w.revision);qtbot.wait(1)
+        now[0]=.5;w._coordinator.tick()
+        assert [j.source_text for j in w._coordinator.session.translation_jobs(now_s=.5)]==['Current scene']
+    finally:w.stop_worker()
 
 
 def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatch,runtime_settings):
@@ -69,6 +74,7 @@ def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatc
     rev=w.configure(runtime_settings); w._is_running=True
     frames=[]; w.subtitle_updated.connect(frames.append)
     class Service:
+        def __init__(self, **kwargs): pass
         def translate(self,*a): return TranslationResult('Xin chào')
     img=np.zeros((40,100),dtype='uint8')
     w._process_frame(img,runtime_settings,rev,Service())
