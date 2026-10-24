@@ -159,6 +159,27 @@ def fake_clock():
 
 
 @pytest.fixture
+def dialogue_result():
+    from core.blocks.models import BlockTranslationResult
+    from core.contracts import TranslationResult
+    def make(job, text='Xin chào', error=None):
+        return BlockTranslationResult(job.revision, job.block_id, job.source_text,
+                                      TranslationResult(text, error), job.turn_id, job.text_version)
+    return make
+
+
+@pytest.fixture
+def dialogue_observation(runtime_settings):
+    from core.dialogue.models import DialogueObservation
+    from core.contracts import OcrResult
+    def make(text='Hello', *, revision=1, scan_id=1, captured_at_s=0.,
+             completed_at_s=0., settings=None, geometry=None, spans=(), error=None):
+        return DialogueObservation(revision,scan_id,captured_at_s,completed_at_s,
+                                  settings or runtime_settings,OcrResult(text,error,spans),geometry)
+    return make
+
+
+@pytest.fixture
 def ui_window(qtbot):
     from ui.controller import ControllerWindow
     worker = Mock()

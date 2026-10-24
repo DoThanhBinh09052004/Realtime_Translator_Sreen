@@ -97,3 +97,4 @@ class SubtitleFrame:
     candidate_id: int
     source_text: str
     text: str
+    render_sequence: int = 0

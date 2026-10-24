@@ -56,6 +56,12 @@ class BlockJob:
     block_id: int
     source_text: str
     settings: RuntimeSettings
+    turn_id: int = 0
+    text_version: int = 0
+
+    @property
+    def request_key(self):
+        return (self.revision, self.block_id, self.turn_id, self.text_version)
 
 
 @dataclass(frozen=True)
@@ -64,6 +70,12 @@ class BlockTranslationResult:
     block_id: int
     source_text: str
     result: TranslationResult
+    turn_id: int = 0
+    text_version: int = 0
+
+    @property
+    def request_key(self):
+        return (self.revision, self.block_id, self.turn_id, self.text_version)
 
 
 @dataclass(frozen=True)
