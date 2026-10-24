@@ -95,7 +95,7 @@ Các tuple identity không chứa source text hoặc key:
 - Produces frozen `DialogueObservation(revision: int, scan_id: int, captured_at_s: float, completed_at_s: float, settings: RuntimeSettings, ocr: OcrResult, geometry: CaptureGeometry | None)` và `TrackPresentation(turn_id: int, text_version: int, source_text: str, text: str)`.
 - Produces contract bổ sung trong bản đồ trên; fixtures `dialogue_observation` tạo observation với geometry tùy chọn, `dialogue_result(job, text='Xin chào', error=None)` sao chép đúng identity và source snapshot của job. Fixtures là factory dữ liệu, không gọi thuật toán sản phẩm.
 
-- [ ] **Step 1: Viết test RED** `test_policy_values_and_identity_contracts` với assertions `(.5,1.5,1.0,3.0,2)` cho quiet/continuous/min_read/end_hold/absent. `classify_text('gods,this','gods, this') == 'same'`; `('but..','but.') == 'same'`; `('now here','nowhere')`, `('I can go','I cannot go')`, `('Take 1','Take 2')`, `('Go?','Go!')` đều `different`; prefix tăng nhiều câu/CJK là `append`, nguồn ngắn hơn là `regression`. Assert constructors cũ còn chạy và metadata mới có request_key đúng.
+- [x] **Step 1: Viết test RED** `test_policy_values_and_identity_contracts` với assertions `(.5,1.5,1.0,3.0,2)` cho quiet/continuous/min_read/end_hold/absent. `classify_text('gods,this','gods, this') == 'same'`; `('but..','but.') == 'same'`; `('now here','nowhere')`, `('I can go','I cannot go')`, `('Take 1','Take 2')`, `('Go?','Go!')` đều `different`; prefix tăng nhiều câu/CJK là `append`, nguồn ngắn hơn là `regression`. Assert constructors cũ còn chạy và metadata mới có request_key đúng.
 
 ```python
 def test_policy_values_and_identity_contracts():
@@ -107,10 +107,10 @@ def test_policy_values_and_identity_contracts():
         assert classify_text(before, after) == 'different'
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_policy.py')`; FAIL vì module/contract chưa tồn tại.
-- [ ] **Step 3: Tạo interfaces** đúng signatures ở trên, chuẩn hóa NFC/khoảng trắng quanh dấu câu và đuôi period/ellipsis; không thêm thư viện fuzzy hoặc bỏ mọi khoảng trắng.
-- [ ] **Step 4: Chạy GREEN** cùng lệnh; PASS, rồi `tests/test_engine_results.py` và `tests/test_block_geometry.py` vẫn PASS.
-- [ ] **Step 5: Commit** stage đúng các file Task 1; `git commit -m "feat: define game dialogue identity and timing policy"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_policy.py')`; FAIL vì module/contract chưa tồn tại.
+- [x] **Step 3: Tạo interfaces** đúng signatures ở trên, chuẩn hóa NFC/khoảng trắng quanh dấu câu và đuôi period/ellipsis; không thêm thư viện fuzzy hoặc bỏ mọi khoảng trắng.
+- [x] **Step 4: Chạy GREEN** cùng lệnh; PASS, rồi `tests/test_engine_results.py` và `tests/test_block_geometry.py` vẫn PASS.
+- [x] **Step 5: Commit** stage đúng các file Task 1; `git commit -m "feat: define game dialogue identity and timing policy"`.
 
 ### Task 2: Một track biết lượt thoại, phiên bản và thời gian đọc
 
@@ -123,7 +123,7 @@ def test_policy_values_and_identity_contracts():
 - `apply_result(result: BlockTranslationResult, *, now_s: float) -> bool`, `advance(*, now_s: float) -> bool` (True khi presentation đổi).
 - `active_turn(revision: int) -> ActiveTurnKey | None`; read-only `presentation: TrackPresentation | None`, `has_pending: bool`, `last_seen_s: float`.
 
-- [ ] **Step 1: Viết RED** `test_quiet_and_continuous_dispatch`: observe `Hello` ở 0, `Hello world` ở .25; job ở .749 là None, ở .75 có source đầy đủ. Chuỗi nối thêm mỗi .25s chưa có hai scan giống nhau vẫn có job ở 1.5s. Sau mark_dispatched tại 1.5, không thêm job cùng source và không gửi phần mới trước min gap .5.
+- [x] **Step 1: Viết RED** `test_quiet_and_continuous_dispatch`: observe `Hello` ở 0, `Hello world` ở .25; job ở .749 là None, ở .75 có source đầy đủ. Chuỗi nối thêm mỗi .25s chưa có hai scan giống nhau vẫn có job ở 1.5s. Sau mark_dispatched tại 1.5, không thêm job cùng source và không gửi phần mới trước min gap .5.
 
 ```python
 def test_quiet_dispatch_boundary(runtime_settings):
@@ -136,11 +136,11 @@ def test_quiet_dispatch_boundary(runtime_settings):
     assert job.request_key == (1, 7, 1, job.text_version)
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_track.py')`; FAIL module thiếu.
-- [ ] **Step 3: Triển khai turn/version và eligibility** theo các interface; challenger cần hai scan tương thích; regression ngắn không lùi source đã gom, sau hai scan và .5s mới có thể xác nhận reset. Giữ snapshot in flight và pending mới nhất, không lưu lịch sử mọi version.
-- [ ] **Step 4: Thêm test RED cho receipt/presentation**: `test_older_prefix_result_survives_growth` cho result v1 sau observe v2 vẫn được áp; `test_newer_result_never_regresses` loại v1 sau khi v2 đã áp. `test_punctuation_does_not_clear_or_requeue`, `test_one_second_hold_keeps_only_latest` nhận v2/v3 trong một giây chỉ hiện v3 ở deadline; repaint cùng text không reset đồng hồ. `test_challenger_and_a_b_a_retire_old_result` cùng tên/khác phủ định và A→B→A không tái dùng turn; callback bị giữ trong challenger chỉ xét lại nếu challenger bị bác. `test_oversized_and_empty_never_dispatch` giữ nguồn >2000, không cắt.
-- [ ] **Step 5: Hoàn thiện thuật toán và chạy GREEN** cùng lệnh, toàn bộ assertions PASS. Không dùng edit distance tổng quát để merge các trường hợp phủ định/số.
-- [ ] **Step 6: Commit** `core/dialogue/track.py`, `tests/test_dialogue_track.py`; `git commit -m "feat: track progressive dialogue turns and presentation"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_track.py')`; FAIL module thiếu.
+- [x] **Step 3: Triển khai turn/version và eligibility** theo các interface; challenger cần hai scan tương thích; regression ngắn không lùi source đã gom, sau hai scan và .5s mới có thể xác nhận reset. Giữ snapshot in flight và pending mới nhất, không lưu lịch sử mọi version.
+- [x] **Step 4: Thêm test RED cho receipt/presentation**: `test_older_prefix_result_survives_growth` cho result v1 sau observe v2 vẫn được áp; `test_newer_result_never_regresses` loại v1 sau khi v2 đã áp. `test_punctuation_does_not_clear_or_requeue`, `test_one_second_hold_keeps_only_latest` nhận v2/v3 trong một giây chỉ hiện v3 ở deadline; repaint cùng text không reset đồng hồ. `test_challenger_and_a_b_a_retire_old_result` cùng tên/khác phủ định và A→B→A không tái dùng turn; callback bị giữ trong challenger chỉ xét lại nếu challenger bị bác. `test_oversized_and_empty_never_dispatch` giữ nguồn >2000, không cắt.
+- [x] **Step 5: Hoàn thiện thuật toán và chạy GREEN** cùng lệnh, toàn bộ assertions PASS. Không dùng edit distance tổng quát để merge các trường hợp phủ định/số.
+- [x] **Step 6: Commit** `core/dialogue/track.py`, `tests/test_dialogue_track.py`; `git commit -m "feat: track progressive dialogue turns and presentation"`.
 
 ### Task 3: Session phụ đề và khối giữ đúng chữ, vị trí, deadline
 
@@ -151,7 +151,7 @@ def test_quiet_dispatch_boundary(runtime_settings):
 - BlockSession giữ `reset()` và `observe(blocks, *, settings, revision, frame_id, geometry, now_s)` hiện có, đổi internals sang DialogueTrack; bổ sung `tick`, `mark_dispatched`, `apply_result(result, *, now_s)`, `translation_jobs(*, now_s)`, `active_turns`, `needs_scan`. `drain_errors()` vẫn trả lỗi oversized hữu hạn. Session không sinh render sequence; coordinator phụ trách publication.
 - Consumes Track Task 2, hiện có group_spans/geometry. `active_turns` là frozenset ActiveTurnKey, không phải mọi phiên bản source.
 
-- [ ] **Step 1: Viết RED** `test_subtitle_empty_confirmation_and_three_second_tail`: một scan rỗng giữ turn, scan thứ hai tại t=2 đóng turn; frame còn bản cuối ở 4.999, rỗng ở 5.0; empty scan thêm không gia hạn. `test_reappearing_same_text_is_new_turn` sau xác nhận mất rồi xuất hiện cùng text không nhận callback turn cũ; cache phải có job mới hợp lệ. `test_block_missing_counter_is_not_text_change`: một miss giữ, match lại reset, hai miss mới gỡ.
+- [x] **Step 1: Viết RED** `test_subtitle_empty_confirmation_and_three_second_tail`: một scan rỗng giữ turn, scan thứ hai tại t=2 đóng turn; frame còn bản cuối ở 4.999, rỗng ở 5.0; empty scan thêm không gia hạn. `test_reappearing_same_text_is_new_turn` sau xác nhận mất rồi xuất hiện cùng text không nhận callback turn cũ; cache phải có job mới hợp lệ. `test_block_missing_counter_is_not_text_change`: một miss giữ, match lại reset, hai miss mới gỡ.
 
 ```python
 # test_subtitle_empty_confirmation_and_three_second_tail:
@@ -168,11 +168,11 @@ assert len(frame_after_match.blocks) == 1
 assert frame_after_two_consecutive_misses.blocks == ()
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_sessions.py','tests/test_block_session.py')`; FAIL contract mới/session thiếu.
-- [ ] **Step 3: Triển khai sessions** dùng track chung, giữ trình bày cũ riêng với turn mới. Blocks giữ phép ghép IoU .30 / khoảng exact text max(64,4×height); không tái dùng ID track đã đóng trong cùng revision. OCR error không gọi miss; chỉ session có observation thành công mới cập nhật last_seen. Tick freshness 3s blocks/6s subtitle chỉ tạm ẩn, callback muộn không tự mở lại visibility trước scan mới.
-- [ ] **Step 4: Thêm regression** `test_two_nearby_blocks_never_swap_translations`, `test_geometry_moves_without_old_position_or_hold_delay`, `test_missing_one_block_keeps_other_blocks`, `test_ocr_error_is_not_absence_and_freshness_hides`, `test_recovery_requires_new_observation_before_cached_result_is_visible`. Thêm nguồn tăng nhiều câu/CJK không clear, >32 khối cắt theo thứ tự đọc hiện có và source quá dài báo một lần/version.
-- [ ] **Step 5: Chạy GREEN** hai file trên; assertions geometry/matching hiện có được giữ hoặc chuyển sang version-aware, không giảm phạm vi.
-- [ ] **Step 6: Commit** chỉ các file Task 3; `git commit -m "feat: retain dialogue overlays across OCR variation"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_sessions.py','tests/test_block_session.py')`; FAIL contract mới/session thiếu.
+- [x] **Step 3: Triển khai sessions** dùng track chung, giữ trình bày cũ riêng với turn mới. Blocks giữ phép ghép IoU .30 / khoảng exact text max(64,4×height); không tái dùng ID track đã đóng trong cùng revision. OCR error không gọi miss; chỉ session có observation thành công mới cập nhật last_seen. Tick freshness 3s blocks/6s subtitle chỉ tạm ẩn, callback muộn không tự mở lại visibility trước scan mới.
+- [x] **Step 4: Thêm regression** `test_two_nearby_blocks_never_swap_translations`, `test_geometry_moves_without_old_position_or_hold_delay`, `test_missing_one_block_keeps_other_blocks`, `test_ocr_error_is_not_absence_and_freshness_hides`, `test_recovery_requires_new_observation_before_cached_result_is_visible`. Thêm nguồn tăng nhiều câu/CJK không clear, >32 khối cắt theo thứ tự đọc hiện có và source quá dài báo một lần/version.
+- [x] **Step 5: Chạy GREEN** hai file trên; assertions geometry/matching hiện có được giữ hoặc chuyển sang version-aware, không giảm phạm vi.
+- [x] **Step 6: Commit** chỉ các file Task 3; `git commit -m "feat: retain dialogue overlays across OCR variation"`.
 
 ### Task 4: Mailbox theo turn, start/result signals và hàng chờ công bằng
 
@@ -183,7 +183,7 @@ assert frame_after_two_consecutive_misses.blocks == ()
 - Signals `job_started = pyqtSignal(object)` và `result_ready = pyqtSignal(object)` phát job/result immutable theo đúng thứ tự, sau nhả condition lock. Backend vẫn sở hữu client, Google gate và cleanup.
 - Một in flight toàn cục; pending latest-per-track ≤32. In-flight cùng turn được giữ quyền trả kết quả khi pending version thay đổi trước start-ack. `_done` thay bằng highest done version mỗi active turn; retry AI theo active turn, Google theo gate. `drain_results()` có thể giữ tạm cho caller legacy nhưng đường app mới chỉ dùng signal, không áp hai lần.
 
-- [ ] **Step 1: Viết RED** `test_one_inflight_and_latest_pending_per_track`: giữ service bằng Event, enqueue v1 rồi v2/v3; xác nhận chỉ một request đang chạy, pending chỉ v3, completion v1 vẫn phát nếu turn còn active. `test_start_ack_precedes_result_even_when_source_advanced` giữ queued delivery đến sau observation v2, start v1 và result v1 vẫn đúng thứ tự.
+- [x] **Step 1: Viết RED** `test_one_inflight_and_latest_pending_per_track`: giữ service bằng Event, enqueue v1 rồi v2/v3; xác nhận chỉ một request đang chạy, pending chỉ v3, completion v1 vẫn phát nếu turn còn active. `test_start_ack_precedes_result_even_when_source_advanced` giữ queued delivery đến sau observation v2, start v1 và result v1 vẫn đúng thứ tự.
 
 ```python
 # test_one_inflight_and_latest_pending_per_track, using held fake service + qtbot:
@@ -199,11 +199,11 @@ assert ('result', v1.request_key) in events
 assert peak_inflight == 1
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_translation_queue.py')`; FAIL signal/contract chưa có.
-- [ ] **Step 3: Triển khai mailbox** duy trì order của track đang chờ qua replace snapshot, chuyển track vừa phục vụ xuống sau các track đang đợi; dùng active turn cho liveness và RequestKey cho done/version. Dọn retry/done khi turn đóng, không tạo state mỗi ký tự vô hạn; signal emission không ở trong condition lock.
-- [ ] **Step 4: Thêm test** `test_three_changing_tracks_get_fair_service`, `test_retired_turn_error_still_updates_google_gate`, `test_cache_does_not_heal_pause_or_retry_after`, `test_ai_auth_and_quota_block_until_reconfigure`, `test_ai_text_growth_does_not_reset_retry_budget`. Dùng MockTransport/Event/fake clock; migrate các queue fixture cũ sang turn/version, giữ assertion thứ tự batch→clients5→GTX và bốn lần lỗi tối đa.
-- [ ] **Step 5: Chạy GREEN** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_translation_queue.py','tests/test_block_translation_worker.py','tests/test_google_translation_queue.py','tests/test_google_web_priority.py')`; PASS không mạng.
-- [ ] **Step 6: Commit** các file Task 4; `git commit -m "feat: deliver versioned dialogue results from shared queue"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_translation_queue.py')`; FAIL signal/contract chưa có.
+- [x] **Step 3: Triển khai mailbox** duy trì order của track đang chờ qua replace snapshot, chuyển track vừa phục vụ xuống sau các track đang đợi; dùng active turn cho liveness và RequestKey cho done/version. Dọn retry/done khi turn đóng, không tạo state mỗi ký tự vô hạn; signal emission không ở trong condition lock.
+- [x] **Step 4: Thêm test** `test_three_changing_tracks_get_fair_service`, `test_retired_turn_error_still_updates_google_gate`, `test_cache_does_not_heal_pause_or_retry_after`, `test_ai_auth_and_quota_block_until_reconfigure`, `test_ai_text_growth_does_not_reset_retry_budget`. Dùng MockTransport/Event/fake clock; migrate các queue fixture cũ sang turn/version, giữ assertion thứ tự batch→clients5→GTX và bốn lần lỗi tối đa.
+- [x] **Step 5: Chạy GREEN** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_translation_queue.py','tests/test_block_translation_worker.py','tests/test_google_translation_queue.py','tests/test_google_web_priority.py')`; PASS không mạng.
+- [x] **Step 6: Commit** các file Task 4; `git commit -m "feat: deliver versioned dialogue results from shared queue"`.
 
 ### Task 5: Coordinator Qt áp kết quả và deadline độc lập OCR
 
@@ -215,7 +215,7 @@ assert peak_inflight == 1
 - Signals: `jobs_changed(object, object, int)` = jobs/active_turns/revision; `scan_policy_changed(int, bool)` = revision/needs_scan; `subtitle_updated(object)`, `blocks_updated(object)`, `error_occurred(object)`, `diagnostic_event(object)`.
 - Coordinator gọi group_spans cho blocks, tick/observe/apply sessions, sinh sequence publication tăng và emits chỉ trên owner thread. `diagnostic_event` chỉ mốc identity/thời gian/lý do/độ dài; replay bật recorder, không nối log OCR vào trang Tổng quan.
 
-- [ ] **Step 1: Viết RED** `test_result_reaches_overlay_sink_while_next_ocr_is_held`: mô phỏng OCR chưa hoàn tất bằng Event ở thread khác, gửi một observation ổn định và start-ack, sau đó result qua queued signal; qtbot xác nhận sink nhận bản dịch trong 100ms khi event loop rảnh, không nhả OCR. `test_read_and_expiry_deadlines_need_no_new_ocr`: advance fake clock tới một giây/ba giây, gọi tick; frame đổi đúng mốc dù không có observation mới.
+- [x] **Step 1: Viết RED** `test_result_reaches_overlay_sink_while_next_ocr_is_held`: mô phỏng OCR chưa hoàn tất bằng Event ở thread khác, gửi một observation ổn định và start-ack, sau đó result qua queued signal; qtbot xác nhận sink nhận bản dịch trong 100ms khi event loop rảnh, không nhả OCR. `test_read_and_expiry_deadlines_need_no_new_ocr`: advance fake clock tới một giây/ba giây, gọi tick; frame đổi đúng mốc dù không có observation mới.
 
 ```python
 # test_result_reaches_overlay_sink_while_next_ocr_is_held: emit the production
@@ -228,11 +228,11 @@ assert sequences == sorted(set(sequences))
 assert min(sequences) > 0
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_coordinator.py')`; FAIL module thiếu.
-- [ ] **Step 3: Triển khai slots/signals** theo interfaces, lọc revision, settings identity và scan_id tăng dần; dùng `completed_at_s` cho quan sát nguồn và owner clock khi áp/trình bày. Start/result cùng sender có thứ tự queued; không suy luận source snapshot từ text hiện tại. Mọi frame publication kể cả timer/result có render sequence mới, không dùng OCR scan_id làm frame_id cho blocks.
-- [ ] **Step 4: Thêm test** `test_late_scan_cannot_rewind_turn_or_geometry`, `test_a_b_a_and_unconfirmed_challenger`, `test_reset_during_hold_drops_timer_and_queued_result`, `test_cache_result_gets_same_identity_checks`, `test_every_presented_frame_has_monotonic_sequence`. Parametrize mode subtitle/blocks và Google/AI settings. Assert không có OCR/SDK call trên GUI từ coordinator.
-- [ ] **Step 5: Chạy GREEN** file Task 5 và ba nhóm policy/track/sessions; PASS. Test thời gian 100ms dùng queued events có qapp rảnh, không dùng deadline mạng thật.
-- [ ] **Step 6: Commit** `core/dialogue/coordinator.py`, `tests/test_dialogue_coordinator.py`; `git commit -m "feat: coordinate dialogue presentation independently of OCR"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_coordinator.py')`; FAIL module thiếu.
+- [x] **Step 3: Triển khai slots/signals** theo interfaces, lọc revision, settings identity và scan_id tăng dần; dùng `completed_at_s` cho quan sát nguồn và owner clock khi áp/trình bày. Start/result cùng sender có thứ tự queued; không suy luận source snapshot từ text hiện tại. Mọi frame publication kể cả timer/result có render sequence mới, không dùng OCR scan_id làm frame_id cho blocks.
+- [x] **Step 4: Thêm test** `test_late_scan_cannot_rewind_turn_or_geometry`, `test_a_b_a_and_unconfirmed_challenger`, `test_reset_during_hold_drops_timer_and_queued_result`, `test_cache_result_gets_same_identity_checks`, `test_every_presented_frame_has_monotonic_sequence`. Parametrize mode subtitle/blocks và Google/AI settings. Assert không có OCR/SDK call trên GUI từ coordinator.
+- [x] **Step 5: Chạy GREEN** file Task 5 và ba nhóm policy/track/sessions; PASS. Test thời gian 100ms dùng queued events có qapp rảnh, không dùng deadline mạng thật.
+- [x] **Step 6: Commit** `core/dialogue/coordinator.py`, `tests/test_dialogue_coordinator.py`; `git commit -m "feat: coordinate dialogue presentation independently of OCR"`.
 
 ### Task 6: Tích hợp worker, overlay, retry và lifecycle cho mọi provider
 
@@ -242,7 +242,7 @@ assert min(sequences) > 0
 
 `_new_block_translator` wires job_started/result_ready to GUI coordinator with queued connections; coordinator jobs_changed calls thread-safe replace_pending. Coordinator output forwards worker existing subtitle/blocks signals. Main/controller don't create extra client or modify provider config. Reset/start/stop coordinator on owner thread and keep revision/settings/session snapshots explicit; capture thread never reads mutable coordinator fields.
 
-- [ ] **Step 1: Viết RED** `test_all_provider_mode_combinations_keep_capture_running`: parametrize Google/OpenAI/Google Gemini/DeepSeek/Custom API và hai mode, giữ SDK fake bằng Event; OCR/capture phải tăng tiếp và active HTTP count luôn ≤1. `test_complete_path_result_does_not_wait_for_capture`: giữ OCR thứ ba, nhả translation, xác nhận production Overlay widget cập nhật mà OCR chưa nhả.
+- [x] **Step 1: Viết RED** `test_all_provider_mode_combinations_keep_capture_running`: parametrize Google/OpenAI/Google Gemini/DeepSeek/Custom API và hai mode, giữ SDK fake bằng Event; OCR/capture phải tăng tiếp và active HTTP count luôn ≤1. `test_complete_path_result_does_not_wait_for_capture`: giữ OCR thứ ba, nhả translation, xác nhận production Overlay widget cập nhật mà OCR chưa nhả.
 
 ```python
 # test_all_provider_mode_combinations_keep_capture_running, for all 10 cases:
@@ -255,12 +255,12 @@ assert not release_ocr.is_set()
 # The blocks variant asserts placed_blocks text instead of QLabel text.
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_worker_integration.py')`; FAIL AI subtitle còn sync/chưa wired coordinator.
-- [ ] **Step 3: Tích hợp worker** giữ frame-change detection, periodic scan tối đa một giây khi idle và force scan khi coordinator needs_scan; OCR retry chung tiếp tục ngay cả backend pause. Xóa nhánh AI subtitle đồng bộ khỏi đường runtime, bỏ state sessions cũ trên capture thread; `GoogleSubtitleSession`/`SubtitleStabilizer` cũ có thể còn module compatibility nhưng không dùng trong đường runtime mới. Giữ intended-running restart, không resurrect thread sau Stop; giữ GoogleRecoveryGate qua internal restart/switch.
-- [ ] **Step 4: Sửa Overlay**: managed SubtitleFrame sequence>0 lọc theo revision/render_sequence, tắt hide_timer 6000ms cũ, không để refresh()/cache repaint gia hạn deadline. Sequence0 giữ legacy candidate guard/timer chỉ trước frame managed đầu tiên của revision; sau đó bỏ legacy frame cùng revision. Blocks dùng frame_id publication tăng. Empty/hard reset xóa ngay và queued frame cũ không hồi sinh. Emit legacy text_translated chỉ khi một bản dịch hợp lệ thực sự được publish, không từ stale result.
-- [ ] **Step 5: Viết regression lifecycle/UI** `test_stop_provider_model_language_region_and_mode_clear_held_output`, `test_selector_restart_preserves_google_pause_and_deadline`, `test_wrong_provider_status_is_ignored`, `test_block_position_updates_during_minimum_read_hold`, `test_old_legacy_refresh_cannot_revive_managed_subtitle`. Migrate direct `_process_frame` sync tests sang observation+fake backend/coordinator; giữ assertions lỗi/retry/prompt/cache/config/stop. Update fixture factory mocks để nhận `log_callback` khi cần, không bỏ test capture-continues.
-- [ ] **Step 6: Chạy GREEN** file mới và các file regression Task 6; sau đó `Invoke-DialogueTests -TestTargets @('tests')` xác nhận toàn suite PASS. Nếu test khác có giả định source-exact keys hoặc sync lane, sửa đúng fixture/contract và giữ mục đích assertion. `git diff --check` không có whitespace errors.
-- [ ] **Step 7: Commit** chỉ files Task 6 và tests compatibility thật sự đổi; `git commit -m "feat: enable shared game dialogue overlays for every provider"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_worker_integration.py')`; FAIL AI subtitle còn sync/chưa wired coordinator.
+- [x] **Step 3: Tích hợp worker** giữ frame-change detection, periodic scan tối đa một giây khi idle và force scan khi coordinator needs_scan; OCR retry chung tiếp tục ngay cả backend pause. Xóa nhánh AI subtitle đồng bộ khỏi đường runtime, bỏ state sessions cũ trên capture thread; `GoogleSubtitleSession`/`SubtitleStabilizer` cũ có thể còn module compatibility nhưng không dùng trong đường runtime mới. Giữ intended-running restart, không resurrect thread sau Stop; giữ GoogleRecoveryGate qua internal restart/switch.
+- [x] **Step 4: Sửa Overlay**: managed SubtitleFrame sequence>0 lọc theo revision/render_sequence, tắt hide_timer 6000ms cũ, không để refresh()/cache repaint gia hạn deadline. Sequence0 giữ legacy candidate guard/timer chỉ trước frame managed đầu tiên của revision; sau đó bỏ legacy frame cùng revision. Blocks dùng frame_id publication tăng. Empty/hard reset xóa ngay và queued frame cũ không hồi sinh. Emit legacy text_translated chỉ khi một bản dịch hợp lệ thực sự được publish, không từ stale result.
+- [x] **Step 5: Viết regression lifecycle/UI** `test_stop_provider_model_language_region_and_mode_clear_held_output`, `test_selector_restart_preserves_google_pause_and_deadline`, `test_wrong_provider_status_is_ignored`, `test_block_position_updates_during_minimum_read_hold`, `test_old_legacy_refresh_cannot_revive_managed_subtitle`. Migrate direct `_process_frame` sync tests sang observation+fake backend/coordinator; giữ assertions lỗi/retry/prompt/cache/config/stop. Update fixture factory mocks để nhận `log_callback` khi cần, không bỏ test capture-continues.
+- [x] **Step 6: Chạy GREEN** file mới và các file regression Task 6; sau đó `Invoke-DialogueTests -TestTargets @('tests')` xác nhận toàn suite PASS. Nếu test khác có giả định source-exact keys hoặc sync lane, sửa đúng fixture/contract và giữ mục đích assertion. `git diff --check` không có whitespace errors.
+- [x] **Step 7: Commit** chỉ files Task 6 và tests compatibility thật sự đổi; `git commit -m "feat: enable shared game dialogue overlays for every provider"`.
 
 ### Task 7: Replay xác định, video thật và bàn giao bằng chứng
 
@@ -272,7 +272,7 @@ Replay nhập observation transcript vào coordinator, fake backend latency và 
 
 Tool exposes `main(argv: list[str] | None = None) -> int` và `run_replay(transcript_path: Path, *, latency_ms: int, mode: Literal['subtitle','blocks','both'], out_dir: Path) -> dict`. Summary bắt buộc có `clears_within_active_turn`, `shown_closed_turn_results`, `peak_inflight`, `peak_pending`; transcript fixture có expected turn boundaries độc lập để assertions không chỉ tin kết luận classifier của sản phẩm. Thiếu provider/allow-network của live trả code 2 trước khi tạo OCR/client.
 
-- [ ] **Step 1: Viết RED** `test_transcript_preserves_progressive_dialogue`: fixture chứa hai lượt, nhiều câu nối thêm/CJK, punctuation jitter, một scan mất và hai scan mất; assert không clear trong cùng turn, có bản phần đầu trước khi kết thúc lượt, callback lượt đã đóng không show. `test_ready_cache_waits_only_read_deadline_not_ocr`: latency0 vẫn dùng đúng deadline, không bị scan dài chặn. `test_live_requires_explicit_provider_and_network_flag`: thiếu một cờ exit≠0 và zero network calls.
+- [x] **Step 1: Viết RED** `test_transcript_preserves_progressive_dialogue`: fixture chứa hai lượt, nhiều câu nối thêm/CJK, punctuation jitter, một scan mất và hai scan mất; assert không clear trong cùng turn, có bản phần đầu trước khi kết thúc lượt, callback lượt đã đóng không show. `test_ready_cache_waits_only_read_deadline_not_ocr`: latency0 vẫn dùng đúng deadline, không bị scan dài chặn. `test_live_requires_explicit_provider_and_network_flag`: thiếu một cờ exit≠0 và zero network calls.
 
 ```python
 def test_transcript_preserves_progressive_dialogue(tmp_path):
@@ -284,11 +284,11 @@ def test_transcript_preserves_progressive_dialogue(tmp_path):
     assert summary['peak_pending'] <= 32
 ```
 
-- [ ] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_replay.py')`; FAIL tool/fixture thiếu.
-- [ ] **Step 3: Triển khai CLI/fixture** kết nối production interfaces, không sao chép state machine vào tool. Khi đọc video phải phát hiện actual decodable EOF, không tin duy nhất frame_count/fps (clip mẫu báo 24,09s nhưng giải mã được khoảng 19,92s); hold cuối hai giây phải ghi riêng. Dùng transcript như evidence quan sát, không encode expected output trong fake OCR.
-- [ ] **Step 4: Chạy GREEN và kiểm chứng cuối** file replay rồi full suite `Invoke-DialogueTests -TestTargets @('tests')`, `git diff --check`. Chạy replay offline cho latency 0/700/2000ms, so số clear do jitter=0, show/drop có lý do, queue bounds/fairness và deadline. Record video thật riêng nếu có file/mô hình; live là smoke opt-in sau người dùng yêu cầu/duyệt, không tự gọi tất cả AI có phí. Không tuyên bố đã sửa trải nghiệm game chỉ dựa trên test fake; ghi rõ phần live/on-screen chưa đo nếu chưa chạy.
-- [ ] **Step 5: Ghi tài liệu kiểm chứng** lệnh, exit status, số test thực tế, artifact replay và giới hạn crop/Qt offscreen/mạng; đối chiếu với `scratch/video_overlay_diagnostic_15044/report.md` bằng cùng ROI/đầu vào, không so khác crop rồi gán toàn bộ chênh lệch cho policy.
-- [ ] **Step 6: Commit** chỉ file Task 7; `git commit -m "test: verify progressive game dialogue and overlay timing"`.
+- [x] **Step 2: Chạy RED** `Invoke-DialogueTests -TestTargets @('tests/test_dialogue_replay.py')`; FAIL tool/fixture thiếu.
+- [x] **Step 3: Triển khai CLI/fixture** kết nối production interfaces, không sao chép state machine vào tool. Khi đọc video phải phát hiện actual decodable EOF, không tin duy nhất frame_count/fps (clip mẫu báo 24,09s nhưng giải mã được khoảng 19,92s); hold cuối hai giây phải ghi riêng. Dùng transcript như evidence quan sát, không encode expected output trong fake OCR.
+- [x] **Step 4: Chạy GREEN và kiểm chứng cuối** file replay rồi full suite `Invoke-DialogueTests -TestTargets @('tests')`, `git diff --check`. Chạy replay offline cho latency 0/700/2000ms, so số clear do jitter=0, show/drop có lý do, queue bounds/fairness và deadline. Record video thật riêng nếu có file/mô hình; live là smoke opt-in sau người dùng yêu cầu/duyệt, không tự gọi tất cả AI có phí. Không tuyên bố đã sửa trải nghiệm game chỉ dựa trên test fake; ghi rõ phần live/on-screen chưa đo nếu chưa chạy.
+- [x] **Step 5: Ghi tài liệu kiểm chứng** lệnh, exit status, số test thực tế, artifact replay và giới hạn crop/Qt offscreen/mạng; đối chiếu với `scratch/video_overlay_diagnostic_15044/report.md` bằng cùng ROI/đầu vào, không so khác crop rồi gán toàn bộ chênh lệch cho policy.
+- [x] **Step 6: Commit** chỉ file Task 7; `git commit -m "test: verify progressive game dialogue and overlay timing"`.
 
 ## Tự rà soát kế hoạch
 
@@ -299,4 +299,4 @@ def test_transcript_preserves_progressive_dialogue(tmp_path):
 
 ## Bàn giao
 
-Đọc cả spec và plan, đặc biệt các đề xuất kỹ thuật do người thiết kế chọn. Bảy task đều chưa thực hiện. Sau người dùng duyệt tài liệu, dùng `superpowers:executing-plans` nếu giữ Native; nếu họ đổi lựa chọn thì dùng `superpowers:subagent-driven-development`. Không suy ra việc duyệt code từ lựa chọn hành vi trong brainstorming.
+Đọc cả spec và plan, đặc biệt các đề xuất kỹ thuật do người thiết kế chọn. Bảy task đã thực hiện Native; review cuối và kết quả bàn giao ở docs/testing/game-dialogue-overlay.md. Sau người dùng duyệt tài liệu, dùng `superpowers:executing-plans` nếu giữ Native; nếu họ đổi lựa chọn thì dùng `superpowers:subagent-driven-development`. Không suy ra việc duyệt code từ lựa chọn hành vi trong brainstorming.
