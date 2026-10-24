@@ -120,6 +120,18 @@ def test_overlapping_sources_keep_safe_fallback(qapp, capture_geometry):
     assert all(not a.view_rect.intersects(b.view_rect) for i, a in enumerate(blocks) for b in blocks[i+1:])
 
 
+@pytest.mark.parametrize('inner', [Rect(20, 20, 50, 40), Rect(10, 10, 200, 80)])
+def test_nested_source_translation_is_not_discarded_when_free_space_exists(qapp, capture_geometry, inner):
+    from ui.block_layout import layout_blocks
+    blocks = layout_blocks(OverlayFrame(1, 1, capture_geometry, (
+        OverlayBlock(0, 'Outer', 'Hello world', Rect(10, 10, 200, 80)),
+        OverlayBlock(1, 'Inner', 'Hello world', inner))), max_font_px=22)
+    assert {b.block_id for b in blocks} == {0, 1}
+    assert not blocks[0].view_rect.intersects(blocks[1].view_rect)
+    assert all(Rect(0, 0, 800, 600).contains(b.view_rect) for b in blocks)
+    assert all(not b.clipped for b in blocks)
+
+
 def test_long_vietnamese_and_cjk_fit_or_clip_inside_canvas(qapp, capture_geometry):
     from ui.block_layout import layout_blocks
     frame = OverlayFrame(1, 1, capture_geometry, (

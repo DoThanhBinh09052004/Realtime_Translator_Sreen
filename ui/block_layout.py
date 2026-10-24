@@ -86,13 +86,15 @@ def _compact_layout(text, source, canvas, obstacles, preferred, font_family):
         reserved.append(obstacle if not source.intersects(obstacle) and source.intersects(padded) else padded)
     anchor = source
     if any(anchor.intersects(o) for o in reserved):
-        # Intrinsically overlapping OCR boxes cannot both be fully covered.
-        pieces = [anchor]
+        # Preserve the legacy expand/subtract escape for nested OCR boxes.
+        # Subtracting only from the source would silently discard inner boxes.
+        pieces = [Rect(anchor.x, anchor.y, canvas.right-anchor.x, canvas.bottom-anchor.y)]
         for obstacle in reserved:
             pieces = [p for piece in pieces for p in _subtract(piece, obstacle)]
         if not pieces:
             return None
-        anchor = min(pieces, key=lambda r: (-r.width*r.height, r.y, r.x))
+        free = min(pieces, key=lambda r: (-r.width*r.height, r.y, r.x))
+        anchor = Rect(free.x, free.y, min(source.width, free.width), min(source.height, free.height))
     spaces = _available_rects(anchor, canvas, reserved)
     measurements, fonts = {}, {}
 

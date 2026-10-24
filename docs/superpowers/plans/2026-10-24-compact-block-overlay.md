@@ -115,7 +115,9 @@ $env:TMP = $testRun
 
 - [x] **Step 8: Commit riêng Task 2**, stage đúng tests/fixture/tool/report và ảnh so sánh; không `git add -A`.
 
-- [ ] **Step 9: Review độc lập cuối đợt theo phương thức đã được duyệt.** Đưa spec, plan, phạm vi commit và ảnh thật cho một reviewer; tập trung năm Review Focus. Sửa finding được xác minh bằng regression, chạy lại nhóm test liên quan; chỉ chạy lại full suite khi sửa code. Báo kết quả và giới hạn kiểm chứng; không tự merge/push.
+- [x] **Step 9: Review độc lập cuối đợt theo phương thức đã được duyệt.** Đưa spec, plan, phạm vi commit và ảnh thật cho một reviewer; tập trung năm Review Focus. Sửa finding được xác minh bằng regression, chạy lại nhóm test liên quan; chỉ chạy lại full suite khi sửa code. Báo kết quả và giới hạn kiểm chứng; không tự merge/push.
+
+Kết quả: reviewer độc lập phát hiện 1 Important (khung lồng nhau bị bỏ mất bản dịch), đã sửa qua 2 regression RED→GREEN; focused 28 PASS và full suite 481 PASS, exit 0. Báo cáo: `docs/testing/compact-block-overlay.md`. Không có Minor bị hoãn.
 
 ## Plan self-review
 

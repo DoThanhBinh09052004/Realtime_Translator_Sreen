@@ -2,7 +2,7 @@
 
 Ngày: 2026-10-24
 
-Trạng thái: Người dùng đã duyệt kế hoạch và triển khai Native; đang kiểm chứng và review cuối đợt.
+Trạng thái: Đã triển khai Native, kiểm chứng frame thật, review độc lập và sửa finding; full suite 481 PASS.
 
 ## Mục đích
 

@@ -48,6 +48,7 @@ Chạy qua `.venv/Scripts/python.exe -m pytest` với `TEMP`/`TMP` và `--basete
 - RED Task 2: **3 FAIL** vì chưa có công cụ đối chiếu; test vẽ nền đã PASS sau Task 1 nên không cần sửa widget.
 - Focused cuối Task 2: **26 PASS**, exit 0, gồm bố trí, hình học, nền thực tế và tool.
 - Full suite trước review: **479 PASS**, exit 0, **54.84 giây**.
+- Full suite sau sửa finding review: **481 PASS**, exit 0, **56.50 giây**.
 
 Các test xác minh khung ngắn, mở rộng tối thiểu (sai số tối đa 1 logical pixel), chiều cao tối thiểu, font ưu tiên, nguồn thấp, nguồn vốn chồng nhau, vật cản ngang/dưới/chéo, DPI 1.25, crop biên, vùng nhỏ, tiếng Việt và CJK. Test ảnh xác minh alpha phủ đủ nguồn và bằng 0 ngoài khối, cả sau đổi nội dung/style. Test CLI lỗi video chạy trong subprocess vì lượt chạy chung Qt/native codec từng exit `0xC0000008` ở teardown dù các assertion PASS; sau tách theo vòng đời CLI, focused suite exit 0.
 
@@ -59,6 +60,15 @@ Các test xác minh khung ngắn, mở rộng tối thiểu (sai số tối đa 
 
 ## Review và giới hạn
 
-Một reviewer độc lập sẽ kiểm tra cuối đợt; kết quả được ghi bổ sung trước khi bàn giao.
+Reviewer độc lập `gpt-6-astra`, fresh context, kiểm tra hai commit `87d7bcd..c5468ae`: không có Critical/Minor, có một Important về khung nguồn lồng nhau khiến bản dịch bên trong bị bỏ mất. Reviewer tự chạy focused suite 26 PASS, thêm 100 ca ngẫu nhiên không chồng nguồn đều đạt phủ nguồn/biên/không giao nhau; phép đo tổng hợp khoảng 5ms/10 khối, 20ms/30 khối không chứng minh vấn đề hiệu năng chặn bàn giao.
+
+Đã thêm regression cho khung lồng nhau và hai khung trùng nhau: **2 FAIL trước sửa → PASS sau sửa**. Nhánh nguồn vốn chồng nhau dùng lại lối thoát mở rộng/trừ vật cản, rồi bắt đầu từ một khung nhỏ ở vùng trống và áp dụng phép đo vừa đủ. Chỉ trường hợp nguồn vốn chồng nhau mới được dời neo để giữ bản dịch; không dời các nguồn ban đầu tách rời. Focused sau sửa: **28 PASS**, exit 0; full suite cuối **481 PASS**, exit 0. Không dispatch vòng review thứ hai theo quy trình Native. Dựng lại ảnh thật sau sửa cho cùng SHA256 với ảnh đối chiếu đã lưu. Không có finding Minor bị hoãn.
+
+Các phần reviewer chưa thể kết luận được xử lý như sau:
+
+- Đối số `font_family` khác mặc định vốn đo bằng font tùy chọn nhưng vẽ Segoe UI từ trước thay đổi này. Giữ hành vi cũ, vì caller sản phẩm hiện dùng mặc định; caller tự gọi font khác vẫn có giới hạn đã biết.
+- Live capture exclusion/compositor/DPI/font fallback không được xác nhận qua offscreen; native code không đổi. Cần thử desktop thực nếu muốn kết luận phần đó.
+- Chất lượng OCR/nhóm khối, độ trễ dịch và hàng chờ cũ không thay đổi; lỗi giữ bản dịch cũ vẫn có thể tồn tại.
+- Các thay đổi riêng của người dùng được giữ nguyên và nằm ngoài review này; chúng chưa được review độc lập trong đợt này.
 
 Ảnh tĩnh xác nhận kích thước và cách vẽ Qt, không xác nhận live capture exclusion, hiệu năng OCR/API, nhịp chuyển câu hoặc lỗi giữ bản dịch cũ. Không thay đổi các file/config đang được chỉnh sẵn trong workspace. Không merge hoặc push.
