@@ -1,42 +1,43 @@
-# Virtual Environment
+# Local environments and credentials
 .venv/
 venv/
 env/
-
-# Environment Variables
 .env
-.env.local
-.env.development
-.env.production
+.env.*
+!.env.example
 
-# Python
+# Python caches
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyz
-*.pyzw
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# VS Code
+# Editors and machine caches
+.vs/
 .vscode/
-*.code-workspace
-
-# IDE
 .idea/
+Microsoft/
+*.code-workspace
 *.swp
 *.swo
 
-# Build & PyInstaller
+# Generated packages
 build/
 dist/
 *.spec
+*.egg-info/
 
-# Scratch scripts
+# Development-only content (maintained on develop)
+tests/
+test/
+tools/
 scratch/
-
-# Agent documentation & planning
-docs/*
-!docs/testing/
-!docs/testing/**
-!docs/release/
-!docs/release/**
+docs/
+.agent/
+.agents/
+.superpowers/
+pytest.ini
+requirements-dev.txt

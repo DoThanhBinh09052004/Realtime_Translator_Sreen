@@ -1,3 +1,0 @@
-# Install runtime dependencies from requirements.txt first.
-pytest==8.4.2
-pytest-qt==4.5.0
