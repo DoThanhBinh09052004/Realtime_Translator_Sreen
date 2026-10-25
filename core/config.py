@@ -6,11 +6,11 @@ import tempfile
 import threading
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 from core.paths import get_app_paths
 from core.secrets import SecretStore, SecretStoreError
+from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
 
 _config_lock = threading.RLock()
 
@@ -411,15 +411,10 @@ def save_provider_model_id(provider: str, model_id: str):
 
 
 def _normalize_custom_api_base_url(value: str, *, allow_empty: bool = False) -> str:
-    if not isinstance(value, str):
-        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
-    value = value.strip().rstrip("/")
-    if not value and allow_empty:
-        return ""
-    parsed = urlsplit(value)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
-    return value
+    try:
+        return normalize_custom_api_endpoint(value, allow_empty=allow_empty)
+    except EndpointPolicyError as error:
+        raise ConfigError(str(error)) from None
 
 
 def load_custom_api_base_url() -> str:
