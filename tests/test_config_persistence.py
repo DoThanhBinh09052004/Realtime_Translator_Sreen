@@ -48,6 +48,7 @@ def test_multi_field_update_has_one_atomic_commit(monkeypatch):
 def test_model_saved_once_without_changing_env(monkeypatch):
     env = Path(config.ENV_PATH)
     env.write_text("MODEL_ID=legacy-model\n# keep\n", encoding="utf-8")
+    monkeypatch.setenv('TRANSLATE_HUD_DEV_ENV', '1')
     assert config.load_provider_model_id("OpenAI") == "legacy-model"
     replace = Mock(wraps=os.replace)
     monkeypatch.setattr(config.os, "replace", replace)
@@ -86,7 +87,6 @@ def controller(qtbot):
     ("tgt_combo", "setCurrentText", "English", "Vietnamese"),
     ("provider_combo", "setCurrentText", "OpenAI", config.DEFAULT_PROVIDER),
     ("model_combo", "setCurrentText", "fake-new-model", config.DEFAULT_MODEL_ID),
-    ("api_key_input", "setText", "fake-new-key", ""),
     ("interval_spin", "setValue", 800, 500),
 ])
 def test_failed_save_restores_widget_and_state(controller, monkeypatch, widget, setter, value, expected):

@@ -4,9 +4,13 @@ import math
 import re
 import tempfile
 import threading
+import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
+from core.paths import get_app_paths
+from core.secrets import SecretStore, SecretStoreError
 
 _config_lock = threading.RLock()
 
@@ -15,7 +19,29 @@ class ConfigError(Exception):
     """A settings operation failed; messages must never contain secrets."""
 
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+LEGACY_CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config.json'
+CONFIG_PATH = str(get_app_paths().config_dir / 'config.json')
+_secret_store = None
+
+
+def get_secret_store():
+    global _secret_store
+    with _config_lock:
+        if _secret_store is None:
+            _secret_store = SecretStore(get_app_paths().config_dir / 'credentials')
+        return _secret_store
+
+
+def initialize_user_storage(*, legacy_config=None):
+    """Copy legacy settings once; never mutate the original or import its keys."""
+    if Path(CONFIG_PATH).exists():
+        return
+    legacy = Path(legacy_config) if legacy_config is not None else LEGACY_CONFIG_PATH
+    try:
+        raw = json.loads(legacy.read_text(encoding='utf-8')) if legacy.is_file() else {}
+    except (OSError, ValueError, UnicodeError):
+        raw = {}
+    _atomic_write(CONFIG_PATH, json.dumps(normalize_config(raw), ensure_ascii=False, indent=2))
 
 SUPPORTED_LANGUAGES = {
     "English": "en",
@@ -56,10 +82,11 @@ def load_config() -> dict:
 def _atomic_write(path: str, content: str) -> None:
     temporary = None
     try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         # Close the temporary file before replace (required on Windows).
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=os.path.dirname(os.path.abspath(path)),
-            prefix=".settings-", suffix=".tmp", delete=False,
+            prefix=".settings-", suffix=".tmp", delete=False, newline='',
         ) as f:
             temporary = f.name
             f.write(content)
@@ -109,6 +136,16 @@ def _bounded_int(value, default: int, low: int, high: int) -> int:
 def normalize_config(raw: object) -> dict:
     """Validate known settings while retaining unrelated persisted fields."""
     cfg = dict(raw) if isinstance(raw, dict) else {}
+    def without_secrets(value):
+        if isinstance(value, dict):
+            return {k: without_secrets(v) for k, v in value.items()
+                    if isinstance(k, str) and k.casefold() not in ('api_key', 'credentials', 'secrets', 'access_token')
+                    and not k.casefold().endswith('_api_key')}
+        if isinstance(value, list):
+            return [without_secrets(v) for v in value]
+        return value
+    cfg = without_secrets(cfg)
+    cfg['schema_version'] = 1
     for field, default, low, high in (
         ("font_size", DEFAULT_FONT_SIZE, 14, 36),
         ("bg_opacity", DEFAULT_BG_OPACITY, 0, 100),
@@ -280,61 +317,69 @@ def _read_env() -> dict:
         return env_vars
 
 
-def _write_env_var(key: str, value: str):
-    if not isinstance(value, str) or any(char in value for char in ("\n", "\r", "\0")):
-        raise ConfigError("Giá trị thiết lập không hợp lệ.")
-    with _config_lock:
-        lines = []
-        key_found = False
-        try:
-            with open(ENV_PATH, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            pass
-        except (OSError, UnicodeError):
-            raise ConfigError("Không thể đọc tệp API key để lưu thiết lập.") from None
-
-        new_lines = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith(f"{key}=") or stripped == key:
-                new_lines.append(f"{key}={value}\n")
-                key_found = True
-            else:
-                new_lines.append(line)
-
-        if not key_found:
-            if new_lines and not new_lines[-1].endswith("\n"):
-                new_lines[-1] += "\n"
-            new_lines.append(f"{key}={value}\n")
-
-        _atomic_write(ENV_PATH, "".join(new_lines))
-        os.environ[key] = value
-
-
 def load_provider_api_key(provider: str = None) -> str:
-    """Đọc API key của provider từ file .env (hoặc biến môi trường)"""
+    """Read protected/session credentials; development env access is opt-in."""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
     if env_key is None:
         return ""
-    val = _read_env().get(env_key, "")
-    if not val:
-        val = os.environ.get(env_key, "")
-    if val == "key_ở_đây":
-        return ""
-    return val
+    try:
+        val = get_secret_store().get(provider)
+    except SecretStoreError:
+        return ''
+    if val is None and not getattr(sys, 'frozen', False) and os.environ.get('TRANSLATE_HUD_DEV_ENV') == '1':
+        val = os.environ.get(env_key) or _read_env().get(env_key)
+    return '' if not val or val == 'key_ở_đây' else val
 
 
-def save_provider_api_key(provider: str, key: str):
-    """Lưu API key của provider vào file .env"""
+def save_provider_api_key(provider: str, key: str, *, persist: bool = True):
+    """Never write credentials into configuration, .env or os.environ."""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
     if env_key is None:
         return
-    _write_env_var(env_key, key)
+    try:
+        if key == '':
+            get_secret_store().delete(provider)
+        else:
+            get_secret_store().set(provider, key, persist=persist)
+    except SecretStoreError as error:
+        raise ConfigError(str(error)) from None
+
+
+def provider_key_storage(provider: str) -> str:
+    if not get_provider_capabilities(provider).requires_api_key:
+        return 'none'
+    try:
+        return get_secret_store().storage(provider)
+    except SecretStoreError:
+        return 'unavailable'
+
+
+def import_legacy_provider_key(provider: str, *, persist: bool):
+    env_key = PROVIDERS.get(provider, {}).get('env_key')
+    key = _read_env().get(env_key, '') if env_key else ''
+    if not key or key == 'key_ở_đây':
+        raise ConfigError('Không tìm thấy key cũ cho công cụ đã chọn.')
+    save_provider_api_key(provider, key, persist=persist)
+
+
+def remove_legacy_provider_key(provider: str):
+    """Explicit cleanup only after the same legacy key was protected successfully."""
+    env_key = PROVIDERS.get(provider, {}).get('env_key')
+    with _config_lock:
+        legacy = _read_env().get(env_key, '')
+        if not legacy or provider_key_storage(provider) != 'saved' or load_provider_api_key(provider) != legacy:
+            raise ConfigError('Chỉ xóa key cũ sau khi đã lưu chính key đó bằng mã hóa Windows.')
+        try:
+            with open(ENV_PATH, encoding='utf-8', newline='') as stream:
+                lines = stream.readlines()
+        except (OSError, UnicodeError):
+            raise ConfigError('Không thể đọc tệp key cũ.') from None
+        kept = [line for line in lines if line.strip().split('=', 1)[0].strip() != env_key]
+        _atomic_write(ENV_PATH, ''.join(kept))
 
 
 def load_provider_model_id(provider: str = None) -> str:
@@ -347,7 +392,9 @@ def load_provider_model_id(provider: str = None) -> str:
     models_map = load_config().get("provider_models", {})
     val = models_map.get(provider)
     if not val and provider == "OpenAI":
-        val = _read_env().get("MODEL_ID") or load_config().get("model_id")
+        val = load_config().get("model_id")
+        if not val and not getattr(sys, 'frozen', False) and os.environ.get('TRANSLATE_HUD_DEV_ENV') == '1':
+            val = _read_env().get('MODEL_ID')
     return val or cfg["default_model"]
 
 

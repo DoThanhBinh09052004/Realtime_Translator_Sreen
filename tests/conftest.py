@@ -19,9 +19,12 @@ for _name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "CUSTOM_AP
     _bootstrap.delenv(_name, raising=False)
 
 from core import config
+from core.secrets import SecretStore
 
 _bootstrap.setattr(config, "CONFIG_PATH", str(Path(_session_dir.name) / "config.json"))
 _bootstrap.setattr(config, "ENV_PATH", str(Path(_session_dir.name) / ".env"))
+_bootstrap.setattr(config, '_secret_store', SecretStore(Path(_session_dir.name) / 'credentials'))
+_bootstrap.delenv('TRANSLATE_HUD_DEV_ENV', raising=False)
 
 
 def _deny_network(*args, **kwargs):
@@ -102,6 +105,8 @@ def isolated_config(tmp_path, monkeypatch):
     """Every test, including UI tests, gets fresh config files and no real keys."""
     monkeypatch.setattr(config, "CONFIG_PATH", str(tmp_path / "config.json"))
     monkeypatch.setattr(config, "ENV_PATH", str(tmp_path / ".env"))
+    monkeypatch.setattr(config, '_secret_store', SecretStore(tmp_path / 'credentials'))
+    monkeypatch.delenv('TRANSLATE_HUD_DEV_ENV', raising=False)
     # Register absent keys too so app writes to os.environ are undone at teardown.
     for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "DEEPSEEK_API_KEY", "CUSTOM_API_KEY", "MODEL_ID"):
         monkeypatch.setenv(name, "fake-bootstrap")

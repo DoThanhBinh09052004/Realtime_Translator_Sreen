@@ -30,7 +30,8 @@ def test_config_and_env_paths_are_temporary(isolated_config, tmp_path):
     assert config.load_provider_api_key("Custom API") == ""
     config.save_provider_api_key("OpenAI", "fake-openai-key")
     assert config.load_provider_api_key("OpenAI") == "fake-openai-key"
-    assert "sentinel-user-key" not in Path(config.ENV_PATH).read_text()
+    assert not Path(config.ENV_PATH).exists()
+    assert config.get_secret_store()._directory.is_relative_to(tmp_path)
 
 
 def test_network_is_blocked():

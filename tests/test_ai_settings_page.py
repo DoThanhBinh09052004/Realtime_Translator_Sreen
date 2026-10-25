@@ -26,6 +26,8 @@ def test_ai_render_keeps_editors_and_blocks_saves(qtbot, ui_snapshot):
     page.provider_combo.setCurrentText('OpenAI')
     page.api_key_input.setText('new-key')
     assert list(spies[0]) == [['OpenAI']]
+    assert list(spies[2]) == []
+    page.save_key_btn.click()
     assert list(spies[2]) == [['new-key']]
     page.render(ui_snapshot.ai, changed_field='rollback')
     assert page.api_key_input.text() == 'fake-test-key'

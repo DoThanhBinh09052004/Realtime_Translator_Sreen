@@ -17,7 +17,9 @@ def test_deepseek_provider_has_current_models_and_persists_its_own_key():
     assert snapshot.name == "DeepSeek"
     assert snapshot.model_id == "deepseek-flash"
     assert snapshot.api_key == "fake-deepseek-key"
-    assert "DEEPSEEK_API_KEY=fake-deepseek-key" in open(config.ENV_PATH, encoding="utf-8").read()
+    from pathlib import Path
+    assert not Path(config.ENV_PATH).exists()
+    assert config.provider_key_storage('DeepSeek') == 'saved'
 
 
 def test_deepseek_uses_official_endpoint_and_selected_model(monkeypatch):

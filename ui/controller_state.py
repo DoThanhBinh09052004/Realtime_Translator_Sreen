@@ -13,6 +13,7 @@ class AiPageState:
     requires_api_key: bool = True
     supports_models: bool = True
     supports_base_url: bool = False
+    key_storage: str = 'none'
 
 
 @dataclass(frozen=True)

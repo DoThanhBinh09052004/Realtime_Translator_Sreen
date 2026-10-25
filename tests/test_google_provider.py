@@ -26,9 +26,11 @@ def test_every_saved_valid_provider_is_preserved(provider):
 def test_google_key_and_model_access_do_not_touch_env_or_ai_models():
     config.save_provider_api_key('OpenAI','fake-saved-key')
     config.save_provider_model_id('OpenAI','saved-model')
-    before = Path(config.ENV_PATH).read_bytes(), Path(config.CONFIG_PATH).read_bytes()
+    credential = config.get_secret_store()._directory / 'openai.bin'
+    before = credential.read_bytes(), Path(config.CONFIG_PATH).read_bytes()
     config.save_provider_api_key('Google Translate','ignored')
     config.save_provider_model_id('Google Translate','ignored')
     assert config.load_provider_api_key('Google Translate') == ''
     assert config.load_provider_model_id('Google Translate') == ''
-    assert before == (Path(config.ENV_PATH).read_bytes(), Path(config.CONFIG_PATH).read_bytes())
+    assert before == (credential.read_bytes(), Path(config.CONFIG_PATH).read_bytes())
+    assert not Path(config.ENV_PATH).exists()

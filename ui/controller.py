@@ -1,7 +1,7 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog, QMessageBox
 from PyQt5.QtCore import QObject
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
@@ -116,7 +116,9 @@ class ControllerWindow(QWidget):
         self.key_card = self.ai_page.key_card
         self.ai_page.provider_changed.connect(self.settings_coordinator.set_provider)
         self.ai_page.model_changed.connect(self.settings_coordinator.set_model)
-        self.ai_page.api_key_changed.connect(self.settings_coordinator.set_api_key)
+        self.ai_page.api_key_save_requested.connect(self.settings_coordinator.set_api_key)
+        self.ai_page.api_key_delete_requested.connect(self.settings_coordinator.delete_api_key)
+        self.ai_page.legacy_key_import_requested.connect(self._import_legacy_key)
         self.ai_page.base_url_changed.connect(self.settings_coordinator.set_custom_base_url)
         self.page_ai = self.ai_page
         snapshot = self.settings_coordinator.snapshot()
@@ -188,7 +190,7 @@ class ControllerWindow(QWidget):
     def _render_snapshot(self, snapshot, changed_field):
         if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback'):
             self.clear_translation_status()
-        if changed_field in ('provider', 'model', 'api_key', 'rollback'):
+        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'rollback'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
             self.ocr_page.render(snapshot.ocr)
@@ -199,6 +201,15 @@ class ControllerWindow(QWidget):
 
     def _show_save_error(self, message):
         self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+
+    def _import_legacy_key(self, persist):
+        if not self.settings_coordinator.import_legacy_key(persist):
+            return
+        if persist and QMessageBox.question(
+                self, 'Key cũ trong .env',
+                'Đã lưu key bằng mã hóa Windows. Xóa các dòng key của công cụ này khỏi .env cũ? Các biến khác được giữ nguyên.',
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+            self.settings_coordinator.remove_legacy_key()
 
     def show_overlay_error(self, error):
         self._show_save_error(error.user_message)

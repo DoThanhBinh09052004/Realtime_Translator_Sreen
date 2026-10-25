@@ -1,9 +1,9 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
-from core.config import State, load_config, load_region
+from core.config import State, load_config, load_region, initialize_user_storage, ConfigError
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
@@ -37,7 +37,13 @@ def apply_selected_region(controller, worker, new_region: dict) -> bool:
 
 def main():
     app = QApplication(sys.argv)
+    app.setOrganizationName('TranslateHUD')
+    app.setApplicationName('TranslateHUD')
     setup_dark_theme(app)
+    try:
+        initialize_user_storage()
+    except ConfigError as error:
+        QMessageBox.warning(None, 'Không thể lưu thiết lập', str(error))
 
     logo_path = os.path.join(os.path.dirname(__file__), "ui", "logo.png")
     if os.path.exists(logo_path):

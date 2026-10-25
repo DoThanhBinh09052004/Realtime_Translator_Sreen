@@ -298,9 +298,14 @@ def test_ui_configures_worker_only_after_successful_save(qtbot, monkeypatch, wid
 
     worker.configure.side_effect = configured
     setter(value)
+    if widget == 'api_key_input':
+        worker.configure.assert_not_called()
+        window.ai_page.save_key_btn.click()
     worker.configure.assert_called_once()
     worker.reset_mock()
     monkeypatch.setattr(config.os, "replace", Mock(side_effect=OSError("fake-secret")))
     setter("Korean" if widget == "src_combo" else "Vietnamese" if widget == "tgt_combo" else (
         "Google Gemini" if widget == "provider_combo" else "fake-next-value"))
+    if widget == 'api_key_input':
+        window.ai_page.save_key_btn.click()
     worker.configure.assert_not_called()

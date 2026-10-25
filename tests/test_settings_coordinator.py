@@ -62,8 +62,12 @@ def test_failure_rolls_back_before_safe_error_without_apply(coordinator, monkeyp
         raise OSError('fake-secret')
     monkeypatch.setattr(config.os, 'replace', denied)
     assert not getattr(coordinator, method)(*args)
-    assert events[0] == ('rollback', before)
-    assert events[1][0] == 'error' and 'fake-secret' not in events[1][1]
+    if field == 'api_key':
+        assert len(events) == 1 and events[0][0] == 'error'
+        assert 'fake-secret' not in events[0][1]
+    else:
+        assert events[0] == ('rollback', before)
+        assert events[1][0] == 'error' and 'fake-secret' not in events[1][1]
     assert coordinator.snapshot() == before
     coordinator.worker.configure.assert_not_called()
     coordinator.worker.set_region.assert_not_called()
