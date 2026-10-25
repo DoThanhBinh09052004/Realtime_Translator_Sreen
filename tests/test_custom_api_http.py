@@ -79,6 +79,27 @@ def test_custom_client_closes_transport():
     assert transport.closes == 1
 
 
+def test_redirect_cleanup_error_cannot_mask_policy_failure():
+    from core.endpoint_policy import EndpointPolicyError
+    class Stream(httpx.SyncByteStream):
+        reads = 0
+        closes = 0
+        def __iter__(self):
+            self.reads += 1
+            yield b'fake-body-secret'
+        def close(self):
+            self.closes += 1
+            raise OSError('fake-cleanup-secret')
+    stream = Stream()
+    def respond(request):
+        return httpx.Response(307, headers={'Location': 'http://remote.example.test'}, stream=stream)
+    with make_client('https://api.example.test/v1', httpx.MockTransport(respond)) as client:
+        with pytest.raises(EndpointPolicyError) as error:
+            client.post('https://api.example.test/v1/chat/completions')
+    assert stream.reads == 0 and stream.closes == 1
+    assert 'fake-cleanup-secret' not in str(error.value)
+
+
 def test_environment_proxy_is_not_used_and_tls_stays_enabled(monkeypatch):
     from engines.custom_api_http import build_custom_api_http_client
     from httpx import _client

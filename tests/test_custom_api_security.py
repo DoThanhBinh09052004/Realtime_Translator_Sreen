@@ -117,6 +117,30 @@ def test_real_sdk_success_and_reconfigure_close(monkeypatch):
     assert [t.closes for t in transports] == [1, 1]
 
 
+def test_real_sdk_redirect_cleanup_error_is_permanent(monkeypatch):
+    class Stream(httpx.SyncByteStream):
+        reads = 0
+        def __iter__(self):
+            self.reads += 1
+            yield b'fake-body-secret'
+        def close(self):
+            raise OSError('fake-cleanup-secret')
+    stream, received = Stream(), []
+    def respond(request):
+        received.append(request)
+        return httpx.Response(307, headers={'Location': 'http://remote.example.test'}, stream=stream)
+    install_real_sdk(monkeypatch, respond)
+    service = translator.TranslationService()
+    try:
+        result = service.translate('Hello', settings())
+    finally:
+        service.close()
+    assert result.error.code == 'invalid_endpoint' and not result.error.retryable
+    assert RetryState().next_due(0., result.error) is None
+    assert len(received) == 1 and stream.reads == 0
+    assert 'fake-cleanup-secret' not in str(result.error)
+
+
 def test_sdk_constructor_failure_closes_new_transport(monkeypatch):
     transports = install_real_sdk(monkeypatch, lambda request: httpx.Response(200, json=completion()))
     monkeypatch.setattr(translator, 'OpenAI', Mock(side_effect=ValueError('fake-api-key')))

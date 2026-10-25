@@ -45,11 +45,24 @@ is made; no real config/key or sample video is read.
   constructor to show that environment proxies are not selected; mock transport
   injection is deliberately not used for that check.
 
-Full suite: **611 passed in 55.68 s**, exit 0, on Windows / Python 3.10.22.
+Initial full suite: **611 passed in 55.68 s**, exit 0, on Windows / Python 3.10.22.
 Command: `.venv/Scripts/python.exe -m pytest tests -q -p no:cacheprovider`.
 `git diff --check` passed. A Qt offscreen screenshot with an empty key and sample
-URL verified that the endpoint help text fits the existing page. Final independent
-review will be recorded after it finishes.
+URL verified that the endpoint help text fits the existing page.
+
+Independent review by gpt-6-astra found one Important issue: a redirect response
+stream raising during close could mask the permanent endpoint error and become
+a retryable SDK network error. Two regression tests reproduced both the escaping
+cleanup error and the wrong SDK classification (2 FAIL before the fix). Cleanup
+errors now cannot override the fixed policy refusal, and the response body is
+not read. The focused transport/SDK suite passed 65 tests after the fix.
+
+**Final full suite after the review fix: 613 passed in 55.17 s**, exit 0.
+No other actionable finding or deferred minor was reported. No second review was
+dispatched; the final fix was verified by the failing-then-passing regressions and
+the full suite. The review did not claim live TLS/provider, SSRF firewall,
+endpoint/local-server trust, other-provider, content-log, DPAPI, dependency or
+release verification; these remain the spec's explicit scope boundaries.
 
 ## Limits / compatibility
 
