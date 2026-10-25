@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
 from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE, CARD_FRAME_STYLE
@@ -10,6 +10,9 @@ class AiSettingsPage(QScrollArea):
     provider_changed = pyqtSignal(str)
     model_changed = pyqtSignal(str)
     api_key_changed = pyqtSignal(str)
+    api_key_save_requested = pyqtSignal(str, bool)
+    api_key_delete_requested = pyqtSignal()
+    legacy_key_import_requested = pyqtSignal(bool)
     base_url_changed = pyqtSignal(str)
 
     def __init__(self, state: AiPageState, providers: tuple[str, ...], parent=None):
@@ -29,7 +32,7 @@ class AiSettingsPage(QScrollArea):
         active_provider = state.provider
 
         # Card 1: Provider & Model Selector
-        prov_card = ModernCard("Nhà cung cấp & Mô hình AI", "Chọn Provider và Model thực hiện tác vụ dịch thuật")
+        prov_card = ModernCard("Công cụ dịch", "Chọn công cụ thực hiện tác vụ dịch thuật")
         
         row1 = QHBoxLayout()
         row1.setSpacing(12)
@@ -37,7 +40,7 @@ class AiSettingsPage(QScrollArea):
         # Provider col
         p_col = QVBoxLayout()
         p_col.setSpacing(4)
-        p_lbl = QLabel("AI Provider")
+        p_lbl = QLabel("Công cụ dịch")
         p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(providers)
@@ -48,7 +51,9 @@ class AiSettingsPage(QScrollArea):
         row1.addLayout(p_col)
 
         # Model col
-        m_col = QVBoxLayout()
+        self.model_container = QWidget()
+        m_col = QVBoxLayout(self.model_container)
+        m_col.setContentsMargins(0, 0, 0, 0)
         m_col.setSpacing(4)
         m_lbl = QLabel("Mô hình (Model ID)")
         m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
@@ -59,9 +64,12 @@ class AiSettingsPage(QScrollArea):
         self.model_combo.currentTextChanged.connect(self.model_changed.emit)
         m_col.addWidget(m_lbl)
         m_col.addWidget(self.model_combo)
-        row1.addLayout(m_col)
+        row1.addWidget(self.model_container)
 
         prov_card.layout.addLayout(row1)
+        self.google_note = QLabel('Dịch trực tuyến, không cần API key')
+        self.google_note.setWordWrap(True)
+        prov_card.layout.addWidget(self.google_note)
 
         self.base_url_container = QWidget()
         base_url_layout = QVBoxLayout(self.base_url_container)
@@ -83,7 +91,7 @@ class AiSettingsPage(QScrollArea):
         layout.addWidget(prov_card)
 
         # Card 2: API Key Management
-        self.key_card = ModernCard("Khóa API (API Key)", "Khóa được lưu cục bộ an toàn trong file .env")
+        self.key_card = ModernCard("Khóa API (API Key)", "Lưu bằng mã hóa Windows hoặc chỉ dùng trong phiên hiện tại")
         
         k_layout = QVBoxLayout()
         k_layout.setSpacing(6)
@@ -95,7 +103,6 @@ class AiSettingsPage(QScrollArea):
         self.api_key_input.setEchoMode(QLineEdit.Password)
         self.api_key_input.setPlaceholderText(state.placeholder)
         self.api_key_input.setText(state.api_key)
-        self.api_key_input.textChanged.connect(self.api_key_changed.emit)
         k_input_row.addWidget(self.api_key_input)
 
         self.toggle_key_btn = QPushButton()
@@ -110,6 +117,21 @@ class AiSettingsPage(QScrollArea):
 
         k_layout.addLayout(k_input_row)
 
+        self.persist_key_checkbox = QCheckBox('Lưu key mã hóa cho lần sau')
+        self.persist_key_checkbox.setChecked(True)
+        k_layout.addWidget(self.persist_key_checkbox)
+        actions = QHBoxLayout()
+        self.save_key_btn = QPushButton('Áp dụng key')
+        self.delete_key_btn = QPushButton('Xóa key')
+        self.import_key_btn = QPushButton('Nhập key cũ từ .env')
+        for button in (self.save_key_btn, self.delete_key_btn, self.import_key_btn):
+            button.setStyleSheet(SECONDARY_BUTTON_STYLE)
+            actions.addWidget(button)
+        self.save_key_btn.clicked.connect(self._apply_key)
+        self.delete_key_btn.clicked.connect(self.api_key_delete_requested.emit)
+        self.import_key_btn.clicked.connect(lambda: self.legacy_key_import_requested.emit(self.persist_key_checkbox.isChecked()))
+        k_layout.addLayout(actions)
+
         self.api_status_lbl = QLabel()
         self._render_status(state)
         k_layout.addWidget(self.api_status_lbl)
@@ -119,6 +141,7 @@ class AiSettingsPage(QScrollArea):
 
         # Card 3: Guide Note
         note_card = ModernCard("Hướng dẫn lấy API Key")
+        self.guide_card = note_card
         note_text = QLabel(
             "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
             "• OpenAI: Truy cập platform.openai.com/api-keys\n"
@@ -133,6 +156,10 @@ class AiSettingsPage(QScrollArea):
         self.setWidget(content)
         self.render(state)
 
+    def _apply_key(self):
+        self.api_key_save_requested.emit(self.api_key_input.text(), self.persist_key_checkbox.isChecked())
+        self.api_key_changed.emit(self.api_key_input.text())
+
     def toggle_key_visibility(self):
         if self.api_key_input.echoMode() == QLineEdit.Password:
             self.api_key_input.setEchoMode(QLineEdit.Normal)
@@ -142,7 +169,7 @@ class AiSettingsPage(QScrollArea):
             self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
 
     def render(self, state: AiPageState, *, changed_field='initial'):
-        if changed_field in ('initial', 'provider', 'rollback'):
+        if changed_field in ('initial', 'provider', 'rollback', 'api_key_import', 'api_key_deleted'):
             blockers = [QSignalBlocker(widget) for widget in (
                 self.provider_combo, self.model_combo, self.api_key_input, self.base_url_input,
             )]
@@ -154,17 +181,30 @@ class AiSettingsPage(QScrollArea):
             self.api_key_input.setText(state.api_key)
             self.api_key_input.setPlaceholderText(state.placeholder)
             self.base_url_input.setText(state.base_url)
+            self.persist_key_checkbox.setChecked(state.key_storage != 'session')
+            self.api_key_input.setEchoMode(QLineEdit.Password)
             del blockers
-        self.base_url_container.setVisible(state.provider == 'Custom API')
+        self.base_url_container.setVisible(state.supports_base_url)
+        self.model_container.setVisible(state.supports_models)
+        self.key_card.setVisible(state.requires_api_key)
+        self.guide_card.setVisible(state.requires_api_key)
+        self.google_note.setVisible(not state.requires_api_key)
         self._render_status(state)
 
     def _render_status(self, state):
-        if state.provider == 'Custom API' and not state.base_url.strip():
+        if not state.requires_api_key:
+            self.api_status_lbl.setText('Trạng thái: Google Translate không cần API key')
+            color = CYBER_PALETTE['neon_green']
+        elif state.provider == 'Custom API' and not state.base_url.strip():
             self.api_status_lbl.setText('Trạng thái: Chưa có Base URL hợp lệ cho Custom API')
             color = CYBER_PALETTE['neon_amber']
+        elif state.key_storage == 'unavailable':
+            self.api_status_lbl.setText('Không đọc được key đã lưu. Có thể nhập key chỉ dùng trong phiên.')
+            color = CYBER_PALETTE['neon_amber']
         elif state.api_key.strip():
-            self.api_status_lbl.setText(f'Trạng thái: {state.provider} sẵn sàng (.env)')
-            color = CYBER_PALETTE['neon_green']
+            mode = 'Chỉ dùng trong phiên' if state.key_storage == 'session' else 'Đã lưu key mã hóa'
+            self.api_status_lbl.setText(f'{mode}; chưa kiểm tra kết nối')
+            color = CYBER_PALETTE['neon_amber']
         else:
             self.api_status_lbl.setText(f'Trạng thái: Chưa có API Key cho {state.provider}')
             color = CYBER_PALETTE['neon_amber']

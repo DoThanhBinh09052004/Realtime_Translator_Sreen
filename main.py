@@ -1,13 +1,15 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
-from core.config import State, load_config, load_region
+from core.config import State, load_config, load_region, initialize_user_storage, ConfigError
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
 from ui.selector import RegionSelector
+from ui.screen_geometry import ScreenGeometryProvider
+from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
 
 
 from ui.styles import CYBER_PALETTE
@@ -35,7 +37,13 @@ def apply_selected_region(controller, worker, new_region: dict) -> bool:
 
 def main():
     app = QApplication(sys.argv)
+    app.setOrganizationName('TranslateHUD')
+    app.setApplicationName('TranslateHUD')
     setup_dark_theme(app)
+    try:
+        initialize_user_storage()
+    except ConfigError as error:
+        QMessageBox.warning(None, 'Không thể lưu thiết lập', str(error))
 
     logo_path = os.path.join(os.path.dirname(__file__), "ui", "logo.png")
     if os.path.exists(logo_path):
@@ -56,16 +64,34 @@ def main():
         overlay.move(state.overlay_x, state.overlay_y)
     else:
         overlay.apply_preset(state.overlay_preset)
-    overlay.show()
 
     # ===== 3. Khởi tạo Background Worker =====
     worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"])
-    overlay.capture_geometry_changed.connect(worker.set_overlay_rect)
-    worker.set_overlay_rect(overlay.get_geometry_rect())
+    geometry_provider = ScreenGeometryProvider(app)
+    capture_geometry = None
+
+    def sync_geometry():
+        nonlocal capture_geometry
+        selected = load_region()
+        capture_geometry = resolve_capture_geometry(selected, geometry_provider.snapshot(), (selected['width'], selected['height']))
+        revision = worker.set_capture_geometry(capture_geometry)
+        overlay.set_mode(state.overlay_mode, revision)
+        sync_mask(overlay.get_geometry_rect())
+
+    def sync_mask(rect):
+        worker.set_overlay_rect(subtitle_mask_rect(rect, capture_geometry) if capture_geometry is not None else rect)
+
+    overlay.capture_geometry_changed.connect(sync_mask)
+    geometry_provider.changed.connect(sync_geometry)
+    worker.revision_changed.connect(lambda revision: overlay.set_mode(state.overlay_mode, revision))
+    sync_geometry()
 
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
-    worker.text_translated.connect(overlay.update_text)
+    # Versioned frames prevent queued AI subtitles from resurfacing after a
+    # switch to Google (or back); the legacy string signal stays public.
     worker.text_unchanged.connect(overlay.refresh)
+    worker.blocks_updated.connect(overlay.update_blocks)
+    worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
     # ===== 4. Controller & Selector =====
@@ -78,13 +104,13 @@ def main():
         # Tạm dừng worker trong lúc người dùng đang chọn vùng
         was_running = worker.is_running()
         if was_running:
-            worker.stop_worker()
+            worker.stop_worker(preserve_translation_session=True)
 
         controller.hide()
         overlay.hide()
 
         # Tạo và giữ reference của RegionSelector
-        selector = RegionSelector()
+        selector = RegionSelector(geometry_provider=geometry_provider)
         selector.show()
         selector.raise_()
         selector.activateWindow()
@@ -93,21 +119,36 @@ def main():
             controller.show()
             overlay.show()
             if was_running:
-                worker.start_worker()
+                worker.start_worker(preserve_translation_session=True)
 
         def on_region_selected(new_region):
             nonlocal selector
-            apply_selected_region(controller, worker, new_region)
+            if apply_selected_region(controller, worker, new_region):
+                sync_geometry()
             restore_ui()
 
         selector.region_selected.connect(on_region_selected)
         selector.cancelled.connect(restore_ui)
 
 
+    quitting = False
+    app.setQuitOnLastWindowClosed(False)
+
+    def on_shutdown_finished():
+        if quitting:
+            overlay.close()
+            app.quit()
+
+    worker.shutdown_finished.connect(on_shutdown_finished)
+
     def on_quit():
+        nonlocal quitting
+        if quitting:
+            return
+        quitting = True
+        controller.hide()
+        overlay.clear()
         worker.stop_worker()
-        overlay.close()
-        app.quit()
 
     controller = ControllerWindow(
         worker=worker,
@@ -116,6 +157,16 @@ def main():
         on_quit=on_quit,
         overlay=overlay
     )
+    def on_overlay_error(error):
+        worker.stop_worker()
+        overlay.clear()
+        controller.show_overlay_error(error)
+
+    overlay.block_error.connect(on_overlay_error)
+    worker.translation_status_updated.connect(controller.show_translation_status)
+    worker.revision_changed.connect(lambda revision: controller.clear_translation_status())
+    worker.error_occurred.connect(lambda error: on_overlay_error(error) if error.code == 'capture_geometry' else None)
+    controller.settings_coordinator.settings_changed.connect(lambda snapshot, field: sync_geometry() if field == 'region' else None)
     controller.show()
 
     sys.exit(app.exec_())

@@ -1,6 +1,9 @@
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import Qt, QRect, pyqtSignal
-from PyQt5.QtGui import QPainter, QColor, QPen, QFont
+from PyQt5.QtGui import QPainter, QColor, QPen, QFont, QCursor
+from core.blocks.models import Rect
+from core.blocks.geometry import qt_selection_to_physical
+from ui.screen_geometry import ScreenGeometryProvider
 
 
 class RegionSelector(QWidget):
@@ -12,12 +15,21 @@ class RegionSelector(QWidget):
     region_selected = pyqtSignal(dict)
     cancelled = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, *, geometry_provider=None):
         super().__init__()
+        self.geometry_provider = geometry_provider or ScreenGeometryProvider(self)
+        cursor = QCursor.pos()
+        self.mapping = next((s for s in self.geometry_provider.snapshot()
+                             if s.logical_rect.x <= cursor.x() < s.logical_rect.right
+                             and s.logical_rect.y <= cursor.y() < s.logical_rect.bottom), None)
 
         # Cửa sổ phủ toàn màn hình, không viền, luôn ở trên
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
-        self.setWindowState(Qt.WindowFullScreen)
+        if self.mapping is not None:
+            r = self.mapping.logical_rect
+            self.setGeometry(int(r.x), int(r.y), int(r.width), int(r.height))
+        else:
+            self.setWindowState(Qt.WindowFullScreen)
 
         # Nền trong suốt để vẽ overlay
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -44,6 +56,8 @@ class RegionSelector(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
+        if self.dragging:
+            self.end = event.pos()
         if self.start and self.end:
             # Chuẩn hóa tọa độ (kéo ngược hoặc xuôi đều đúng)
             x1 = min(self.start.x(), self.end.x())
@@ -54,13 +68,12 @@ class RegionSelector(QWidget):
             w = x2 - x1
             h = y2 - y1
             if w > 10 and h > 10:
-                region = {
-                    "top": y1,
-                    "left": x1,
-                    "width": w,
-                    "height": h
-                }
-                self.region_selected.emit(region)
+                if self.mapping is not None:
+                    r = self.mapping.logical_rect
+                    region = qt_selection_to_physical(Rect(r.x+x1, r.y+y1, w, h), self.mapping)
+                    self.region_selected.emit(region)
+                else:
+                    self.cancelled.emit()
             else:
                 self.cancelled.emit()
 

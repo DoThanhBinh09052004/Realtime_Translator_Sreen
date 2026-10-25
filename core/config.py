@@ -4,9 +4,13 @@ import math
 import re
 import tempfile
 import threading
+import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
-from core.contracts import ProviderSettings, RuntimeSettings
+from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
+from core.paths import get_app_paths
+from core.secrets import SecretStore, SecretStoreError
 
 _config_lock = threading.RLock()
 
@@ -15,7 +19,29 @@ class ConfigError(Exception):
     """A settings operation failed; messages must never contain secrets."""
 
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
+LEGACY_CONFIG_PATH = Path(__file__).resolve().parent.parent / 'config.json'
+CONFIG_PATH = str(get_app_paths().config_dir / 'config.json')
+_secret_store = None
+
+
+def get_secret_store():
+    global _secret_store
+    with _config_lock:
+        if _secret_store is None:
+            _secret_store = SecretStore(get_app_paths().config_dir / 'credentials')
+        return _secret_store
+
+
+def initialize_user_storage(*, legacy_config=None):
+    """Copy legacy settings once; never mutate the original or import its keys."""
+    if Path(CONFIG_PATH).exists():
+        return
+    legacy = Path(legacy_config) if legacy_config is not None else LEGACY_CONFIG_PATH
+    try:
+        raw = json.loads(legacy.read_text(encoding='utf-8')) if legacy.is_file() else {}
+    except (OSError, ValueError, UnicodeError):
+        raw = {}
+    _atomic_write(CONFIG_PATH, json.dumps(normalize_config(raw), ensure_ascii=False, indent=2))
 
 SUPPORTED_LANGUAGES = {
     "English": "en",
@@ -56,10 +82,11 @@ def load_config() -> dict:
 def _atomic_write(path: str, content: str) -> None:
     temporary = None
     try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         # Close the temporary file before replace (required on Windows).
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=os.path.dirname(os.path.abspath(path)),
-            prefix=".settings-", suffix=".tmp", delete=False,
+            prefix=".settings-", suffix=".tmp", delete=False, newline='',
         ) as f:
             temporary = f.name
             f.write(content)
@@ -109,6 +136,16 @@ def _bounded_int(value, default: int, low: int, high: int) -> int:
 def normalize_config(raw: object) -> dict:
     """Validate known settings while retaining unrelated persisted fields."""
     cfg = dict(raw) if isinstance(raw, dict) else {}
+    def without_secrets(value):
+        if isinstance(value, dict):
+            return {k: without_secrets(v) for k, v in value.items()
+                    if isinstance(k, str) and k.casefold() not in ('api_key', 'credentials', 'secrets', 'access_token')
+                    and not k.casefold().endswith('_api_key')}
+        if isinstance(value, list):
+            return [without_secrets(v) for v in value]
+        return value
+    cfg = without_secrets(cfg)
+    cfg['schema_version'] = 1
     for field, default, low, high in (
         ("font_size", DEFAULT_FONT_SIZE, 14, 36),
         ("bg_opacity", DEFAULT_BG_OPACITY, 0, 100),
@@ -120,6 +157,7 @@ def normalize_config(raw: object) -> dict:
         ("target_lang", SUPPORTED_TARGETS, "Vietnamese"),
         ("current_provider", PROVIDERS, DEFAULT_PROVIDER),
         ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
+        ("overlay_mode", ("subtitle", "blocks"), "subtitle"),
     ):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and value in choices else default
@@ -165,12 +203,13 @@ class State:
         self.overlay_preset = cfg.get("overlay_preset", DEFAULT_OVERLAY_PRESET)
         self.overlay_x = cfg.get("overlay_x", None)
         self.overlay_y = cfg.get("overlay_y", None)
+        self.overlay_mode = cfg.get("overlay_mode", "subtitle")
 
     def update(self, **kwargs) -> None:
         names = {"source": "source_lang", "target": "target_lang"}
         names.update({k: k for k in (
             "bg_color", "bg_opacity", "text_color", "font_size",
-            "overlay_preset", "overlay_x", "overlay_y",
+            "overlay_preset", "overlay_x", "overlay_y", "overlay_mode",
         )})
         if any(k not in names for k in kwargs):
             raise ConfigError("Trường thiết lập không hợp lệ.")
@@ -194,6 +233,10 @@ def save_region(region: dict):
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
 
 PROVIDERS = {
+    "Google Translate": {
+        "env_key": None, "base_url": None, "default_model": "",
+        "models": [], "placeholder": "",
+    },
     "Google Gemini": {
         "env_key": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -230,7 +273,7 @@ PROVIDERS = {
     },
 }
 
-DEFAULT_PROVIDER = "Google Gemini"
+DEFAULT_PROVIDER = "Google Translate"
 DEFAULT_MODEL_ID = PROVIDERS[DEFAULT_PROVIDER]["default_model"]
 AVAILABLE_MODELS = PROVIDERS[DEFAULT_PROVIDER]["models"]
 
@@ -238,6 +281,11 @@ AVAILABLE_MODELS = PROVIDERS[DEFAULT_PROVIDER]["models"]
 def get_available_providers() -> list:
     """Trả về danh sách tên các LLM Provider được hỗ trợ"""
     return list(PROVIDERS.keys())
+
+
+def get_provider_capabilities(provider: str | None = None) -> ProviderCapabilities:
+    provider = provider if provider in PROVIDERS else load_active_provider()
+    return ProviderCapabilities(False, False, False) if provider == 'Google Translate' else ProviderCapabilities(True, True, provider == 'Custom API')
 
 
 def load_active_provider() -> str:
@@ -269,57 +317,69 @@ def _read_env() -> dict:
         return env_vars
 
 
-def _write_env_var(key: str, value: str):
-    if not isinstance(value, str) or any(char in value for char in ("\n", "\r", "\0")):
-        raise ConfigError("Giá trị thiết lập không hợp lệ.")
-    with _config_lock:
-        lines = []
-        key_found = False
-        try:
-            with open(ENV_PATH, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-        except FileNotFoundError:
-            pass
-        except (OSError, UnicodeError):
-            raise ConfigError("Không thể đọc tệp API key để lưu thiết lập.") from None
-
-        new_lines = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith(f"{key}=") or stripped == key:
-                new_lines.append(f"{key}={value}\n")
-                key_found = True
-            else:
-                new_lines.append(line)
-
-        if not key_found:
-            if new_lines and not new_lines[-1].endswith("\n"):
-                new_lines[-1] += "\n"
-            new_lines.append(f"{key}={value}\n")
-
-        _atomic_write(ENV_PATH, "".join(new_lines))
-        os.environ[key] = value
-
-
 def load_provider_api_key(provider: str = None) -> str:
-    """Đọc API key của provider từ file .env (hoặc biến môi trường)"""
+    """Read protected/session credentials; development env access is opt-in."""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
-    val = _read_env().get(env_key, "")
-    if not val:
-        val = os.environ.get(env_key, "")
-    if val == "key_ở_đây":
+    if env_key is None:
         return ""
-    return val
+    try:
+        val = get_secret_store().get(provider)
+    except SecretStoreError:
+        return ''
+    if val is None and not getattr(sys, 'frozen', False) and os.environ.get('TRANSLATE_HUD_DEV_ENV') == '1':
+        val = os.environ.get(env_key) or _read_env().get(env_key)
+    return '' if not val or val == 'key_ở_đây' else val
 
 
-def save_provider_api_key(provider: str, key: str):
-    """Lưu API key của provider vào file .env"""
+def save_provider_api_key(provider: str, key: str, *, persist: bool = True):
+    """Never write credentials into configuration, .env or os.environ."""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     env_key = PROVIDERS[provider]["env_key"]
-    _write_env_var(env_key, key)
+    if env_key is None:
+        return
+    try:
+        if key == '':
+            get_secret_store().delete(provider)
+        else:
+            get_secret_store().set(provider, key, persist=persist)
+    except SecretStoreError as error:
+        raise ConfigError(str(error)) from None
+
+
+def provider_key_storage(provider: str) -> str:
+    if not get_provider_capabilities(provider).requires_api_key:
+        return 'none'
+    try:
+        return get_secret_store().storage(provider)
+    except SecretStoreError:
+        return 'unavailable'
+
+
+def import_legacy_provider_key(provider: str, *, persist: bool):
+    env_key = PROVIDERS.get(provider, {}).get('env_key')
+    key = _read_env().get(env_key, '') if env_key else ''
+    if not key or key == 'key_ở_đây':
+        raise ConfigError('Không tìm thấy key cũ cho công cụ đã chọn.')
+    save_provider_api_key(provider, key, persist=persist)
+
+
+def remove_legacy_provider_key(provider: str):
+    """Explicit cleanup only after the same legacy key was protected successfully."""
+    env_key = PROVIDERS.get(provider, {}).get('env_key')
+    with _config_lock:
+        legacy = _read_env().get(env_key, '')
+        if not legacy or provider_key_storage(provider) != 'saved' or load_provider_api_key(provider) != legacy:
+            raise ConfigError('Chỉ xóa key cũ sau khi đã lưu chính key đó bằng mã hóa Windows.')
+        try:
+            with open(ENV_PATH, encoding='utf-8', newline='') as stream:
+                lines = stream.readlines()
+        except (OSError, UnicodeError):
+            raise ConfigError('Không thể đọc tệp key cũ.') from None
+        kept = [line for line in lines if line.strip().split('=', 1)[0].strip() != env_key]
+        _atomic_write(ENV_PATH, ''.join(kept))
 
 
 def load_provider_model_id(provider: str = None) -> str:
@@ -327,10 +387,14 @@ def load_provider_model_id(provider: str = None) -> str:
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
     cfg = PROVIDERS[provider]
+    if not get_provider_capabilities(provider).supports_models:
+        return ""
     models_map = load_config().get("provider_models", {})
     val = models_map.get(provider)
     if not val and provider == "OpenAI":
-        val = _read_env().get("MODEL_ID") or load_config().get("model_id")
+        val = load_config().get("model_id")
+        if not val and not getattr(sys, 'frozen', False) and os.environ.get('TRANSLATE_HUD_DEV_ENV') == '1':
+            val = _read_env().get('MODEL_ID')
     return val or cfg["default_model"]
 
 
@@ -338,6 +402,8 @@ def save_provider_model_id(provider: str, model_id: str):
     """Lưu model ID của provider vào config.json"""
     if not provider or provider not in PROVIDERS:
         provider = load_active_provider()
+    if not get_provider_capabilities(provider).supports_models:
+        return
     with _config_lock:
         models_map = _read_config(strict=True)["provider_models"]
         models_map[provider] = model_id
@@ -382,6 +448,7 @@ def load_runtime_settings(state: State, interval_ms: int) -> RuntimeSettings:
             source_lang=state.source, target_lang=state.target,
             provider=load_provider_settings(),
             interval_ms=_bounded_int(interval_ms, 500, 100, 3000),
+            overlay_mode=state.overlay_mode,
         )
 
 

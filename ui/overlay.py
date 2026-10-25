@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QLabel, QGraphicsDropShadowEffect
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
 from PyQt5.QtGui import QColor
+from ui.block_overlay import BlockOverlay
 
 
 class Overlay(QLabel):
@@ -12,6 +13,7 @@ class Overlay(QLabel):
 
     position_changed = pyqtSignal(int, int)
     capture_geometry_changed = pyqtSignal(object)
+    block_error = pyqtSignal(object)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -31,6 +33,14 @@ class Overlay(QLabel):
 
     def __init__(self, bg_hex="#1e1e2e", opacity_pct=80, text_hex="#ffffff", font_size=22):
         super().__init__()
+        self._mode = 'subtitle'
+        self._mode_revision = 0
+        self._block_frame_id = -1
+        self._last_subtitle_candidate_id = -1
+        self._subtitle_render_sequence = 0
+        self._managed_subtitle = False
+        self.block_overlay = BlockOverlay(self)
+        self.block_overlay.block_error.connect(self.block_error.emit)
 
         # ===== 1. Cấu hình Window Flag =====
         self.setWindowFlags(
@@ -86,6 +96,7 @@ class Overlay(QLabel):
         """
         Cập nhật màu nền, độ mờ đục, màu chữ và cỡ chữ cho phụ đề.
         """
+        self.block_overlay.apply_style(bg_hex, opacity_pct, text_hex, font_size)
         if bg_hex is not None:
             self.bg_hex = bg_hex
         if opacity_pct is not None:
@@ -144,6 +155,8 @@ class Overlay(QLabel):
 
     def set_drag_mode(self, enabled: bool):
         """Bật/tắt chế độ kéo thả định vị phụ đề trên màn hình"""
+        if self._mode == 'blocks':
+            return
         self.is_drag_mode = enabled
         if enabled:
             self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
@@ -194,12 +207,14 @@ class Overlay(QLabel):
         self.apply_preset("bottom_center")
 
     def get_geometry_rect(self):
-        if not self.isVisible():
+        if self._mode == 'blocks' or not self.isVisible():
             return None
         return (self.x(), self.y(), self.width(), self.height())
 
     # ===== Cập nhật hiển thị =====
     def update_text(self, text: str):
+        if self._mode == 'blocks':
+            return
         if not text or not text.strip():
             self.fade_out()
             return
@@ -227,11 +242,15 @@ class Overlay(QLabel):
 
     def refresh(self):
         """Giữ cho overlay sáng và reset timer tự ẩn"""
+        if self._mode == 'blocks' or not self.text().strip():
+            return
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
-        self.hide_timer.start()
+        if not self._managed_subtitle:
+            self.hide_timer.start()
 
     def clear(self):
+        self.block_overlay.clear()
         self.hide_timer.stop()
         self.fade_out()
 
@@ -239,7 +258,8 @@ class Overlay(QLabel):
     def _show_with_timer(self):
         if not self.isVisible() or self.windowOpacity() < 1.0:
             self.fade_in()
-        self.hide_timer.start()
+        if not self._managed_subtitle:
+            self.hide_timer.start()
 
     def fade_in(self):
         self.fade_anim.stop()
@@ -259,5 +279,58 @@ class Overlay(QLabel):
             self.hide()
 
     def show(self):
+        if self._mode == 'blocks':
+            return
         super().show()
         self.raise_()
+
+    def hide(self):
+        if hasattr(self, 'block_overlay'):
+            self.block_overlay.hide()
+        super().hide()
+
+    def closeEvent(self, event):
+        self.block_overlay.close()
+        super().closeEvent(event)
+
+    def set_mode(self, mode, revision):
+        self.hide_timer.stop()
+        self.fade_anim.stop()
+        self.block_overlay.clear()
+        self._mode, self._mode_revision, self._block_frame_id = mode, revision, -1
+        self._last_subtitle_candidate_id = -1
+        self._subtitle_render_sequence = 0
+        self._managed_subtitle = False
+        self.is_drag_mode = False
+        self.setText('')
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.unsetCursor()
+        self.apply_style()
+        self.hide()
+        self.capture_geometry_changed.emit(None)
+
+    def update_blocks(self, frame):
+        if (self._mode != 'blocks' or frame.revision != self._mode_revision
+                or frame.frame_id < self._block_frame_id):
+            return
+        self._block_frame_id = frame.frame_id
+        self.block_overlay.set_frame(frame)
+
+    def update_subtitle(self, frame):
+        if self._mode != 'subtitle' or frame.revision != self._mode_revision:
+            return
+        if frame.render_sequence:
+            if frame.render_sequence <= self._subtitle_render_sequence: return
+            self._managed_subtitle = True
+            self._subtitle_render_sequence = frame.render_sequence
+            self.hide_timer.stop()
+        elif self._managed_subtitle or frame.candidate_id < self._last_subtitle_candidate_id:
+            return
+        self._last_subtitle_candidate_id = frame.candidate_id
+        if frame.text:
+            self.update_text(frame.text)
+        else:
+            self.hide_timer.stop()
+            self.fade_anim.stop()
+            self.setText('')
+            self.hide()
