@@ -10,6 +10,10 @@ class AiPageState:
     api_key: str = field(repr=False)
     placeholder: str
     base_url: str = ""
+    requires_api_key: bool = True
+    supports_models: bool = True
+    supports_base_url: bool = False
+    key_storage: str = 'none'
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,7 @@ class SubtitlePageState:
     preset: str
     x: int | None
     y: int | None
+    overlay_mode: str = 'subtitle'
 
 
 @dataclass(frozen=True)

@@ -1,16 +1,40 @@
 from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QSlider, QPushButton, QFrame, QColorDialog
 from PyQt5.QtCore import Qt, QSignalBlocker, pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QPainter
 from ui.widgets.cards import ModernCard
 from ui.styles import CYBER_PALETTE
 from ui.presentation import subtitle_preview_style, color_button_presentation, drag_button_style
 from ui.controller_state import SubtitlePageState
+from core.blocks.models import Rect, ScreenMapping, CaptureGeometry, OverlayFrame, OverlayBlock
+from ui.block_layout import layout_blocks, paint_blocks
+
+
+class _BlockPreview(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(120)
+        self.state = None
+
+    def paintEvent(self, event):
+        if self.state is None or self.width() < 30:
+            return
+        w, h = self.width(), self.height()
+        r = Rect(0, 0, w, h)
+        geometry = CaptureGeometry(r, ScreenMapping('preview', r, r), (w, h))
+        frame = OverlayFrame(0, 0, geometry, (
+            OverlayBlock(1, 'Dialogue', 'Xin chào, nhà lữ hành!', Rect(8, 8, max(10, w*.55), 24)),
+            OverlayBlock(2, 'Menu', 'Nhiệm vụ mới', Rect(w*.5, 70, max(10, w*.45), 22))))
+        bg = QColor(self.state.bg_color)
+        bg.setAlpha(round(255*self.state.bg_opacity/100))
+        painter = QPainter(self)
+        paint_blocks(painter, layout_blocks(frame, max_font_px=self.state.font_size), bg_color=bg, text_color=QColor(self.state.text_color))
 
 
 class SubtitleSettingsPage(QScrollArea):
     style_changed = pyqtSignal(dict)
     preset_changed = pyqtSignal(str)
     drag_toggle_requested = pyqtSignal()
+    mode_changed = pyqtSignal(str)
 
     def __init__(self, state: SubtitlePageState, parent=None):
         super().__init__(parent)
@@ -21,6 +45,16 @@ class SubtitleSettingsPage(QScrollArea):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
+        mode_card = ModernCard('Cách hiển thị bản dịch', 'Chọn phụ đề hoặc phủ bản dịch lên vị trí chữ gốc')
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem('Phụ đề nổi', 'subtitle')
+        self.mode_combo.addItem('Theo vị trí chữ', 'blocks')
+        self.mode_combo.currentIndexChanged.connect(lambda: self.mode_changed.emit(self.mode_combo.currentData()))
+        mode_card.layout.addWidget(self.mode_combo)
+        self.capture_warning = QLabel('Overlay theo vị trí chữ có thể không xuất hiện trong ảnh chụp hoặc bản ghi hình.')
+        self.capture_warning.setWordWrap(True)
+        mode_card.layout.addWidget(self.capture_warning)
+        layout.addWidget(mode_card)
 
         # Card 1: Colors & Typography
         style_card = ModernCard("Màu sắc & Kích thước Chữ", "Tùy biến diện mạo hộp phụ đề nổi trên game")
@@ -62,6 +96,7 @@ class SubtitleSettingsPage(QScrollArea):
         # Font Size Slider
         font_header = QHBoxLayout()
         font_lbl = QLabel("Cỡ chữ phụ đề (Font Size)")
+        self.font_label = font_lbl
         font_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.font_size_val_lbl = QLabel(f"{state.font_size}px")
         self.font_size_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
@@ -196,6 +231,8 @@ class SubtitleSettingsPage(QScrollArea):
         self.live_preview_box.setStyleSheet(subtitle_preview_style(state))
 
         sim_layout.addWidget(self.live_preview_box)
+        self.block_preview = _BlockPreview()
+        sim_layout.addWidget(self.block_preview)
         preview_card.layout.addWidget(sim_container)
 
         layout.addWidget(preview_card)
@@ -206,7 +243,17 @@ class SubtitleSettingsPage(QScrollArea):
 
     def render(self, state: SubtitlePageState):
         self._state = state
-        blockers = [QSignalBlocker(widget) for widget in (self.font_size_slider, self.opacity_slider, self.preset_combo)]
+        blockers = [QSignalBlocker(widget) for widget in (self.font_size_slider, self.opacity_slider, self.preset_combo, self.mode_combo)]
+        blocks = state.overlay_mode == 'blocks'
+        self.mode_combo.setCurrentIndex(self.mode_combo.findData(state.overlay_mode))
+        self.capture_warning.setVisible(blocks)
+        self.preset_combo.setEnabled(not blocks)
+        self.drag_toggle_btn.setEnabled(not blocks)
+        self.font_label.setText('Cỡ chữ tối đa' if blocks else 'Cỡ chữ phụ đề (Font Size)')
+        self.live_preview_box.setVisible(not blocks)
+        self.block_preview.setVisible(blocks)
+        self.block_preview.state = state
+        self.block_preview.update()
         self.font_size_slider.setValue(state.font_size)
         self.opacity_slider.setValue(state.bg_opacity)
         self.font_size_val_lbl.setText(f'{state.font_size}px')

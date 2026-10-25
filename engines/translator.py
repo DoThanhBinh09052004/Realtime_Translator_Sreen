@@ -1,10 +1,14 @@
 """A translation service owned and used by one worker thread."""
 from collections import OrderedDict
+from dataclasses import replace
+from datetime import datetime
 import math
+from time import perf_counter
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from core.contracts import EngineError, ProviderSettings, RuntimeSettings, TranslationResult
+from engines.google_translate import GoogleTranslateClient, GOOGLE_ADAPTER_VERSION
 
 PROMPT_VERSION = 1
 DEFAULT_TIMEOUT_S = 8.0
@@ -79,13 +83,26 @@ def _provider_error(exc: Exception) -> TranslationResult:
 class TranslationService:
     """Owns a client and a FIFO cache; callers serialize use on the owning thread."""
 
-    def __init__(self):
+    def __init__(self, *, google_factory=GoogleTranslateClient, log_callback=None):
         self._client = None
+        self._google = None
+        self._google_factory = google_factory
+        self._log_callback = log_callback
         self._provider: ProviderSettings | None = None
         self._cache = OrderedDict()
 
+    def _log(self, message):
+        if self._log_callback is None:
+            return
+        timestamp = datetime.now().astimezone().strftime('%H:%M:%S.%f')[:-3]
+        try:
+            self._log_callback(f'[{timestamp}] {message}')
+        except Exception:
+            pass
+
     def close(self) -> None:
         client, self._client = self._client, None
+        google, self._google = self._google, None
         self._provider = None
         self._cache.clear()
         if client is not None:
@@ -94,6 +111,15 @@ class TranslationService:
             except Exception:
                 # Cleanup must not expose provider exceptions or skip thread teardown.
                 pass
+        if google is not None:
+            google.close()
+
+    def _store(self, key, result):
+        if result.error is None and result.text:
+            if len(self._cache) >= 300:
+                self._cache.popitem(last=False)
+            self._cache[key] = result
+        return result
 
     def _prepare_client(self, provider: ProviderSettings) -> None:
         previous = self._provider
@@ -120,6 +146,25 @@ class TranslationService:
         if not text:
             return TranslationResult()
         provider = settings.provider
+        if provider.name == 'Google Translate':
+            if self._provider is not None and self._provider != provider:
+                self.close()
+            self._provider = provider
+            key = (provider.name, '', settings.source_lang, settings.target_lang, text, GOOGLE_ADAPTER_VERSION)
+            if key in self._cache:
+                self._log(f'Dịch cache hit; {settings.source_lang} → {settings.target_lang}; văn bản={text!r}')
+                return replace(self._cache[key], from_cache=True)
+            if self._google is None:
+                self._google = self._google_factory()
+            started = perf_counter()
+            self._log(f'Gửi request Google Translate; {settings.source_lang} → {settings.target_lang}; văn bản={text!r}')
+            result = self._google.translate(text, settings.source_lang, settings.target_lang)
+            duration = perf_counter() - started
+            if result.error is None:
+                self._log(f'Nhận phản hồi Google Translate sau {duration:.3f}s; bản dịch={result.text!r}')
+            else:
+                self._log(f'Nhận lỗi Google Translate sau {duration:.3f}s; mã lỗi: {result.error.code}')
+            return self._store(key, result)
         if not provider.api_key:
             self.close()
             return _error("auth")
@@ -133,7 +178,10 @@ class TranslationService:
             key = (provider.name, provider.model_id, settings.source_lang,
                    settings.target_lang, text, PROMPT_VERSION)
             if key in self._cache:
-                return self._cache[key]
+                self._log(f'Dịch cache hit; {provider.name}/{provider.model_id}; văn bản={text!r}')
+                return replace(self._cache[key], from_cache=True)
+            started = perf_counter()
+            self._log(f'Gửi request {provider.name}/{provider.model_id}; {settings.source_lang} → {settings.target_lang}; văn bản={text!r}')
             response = self._client.chat.completions.create(
                 model=provider.model_id,
                 messages=[
@@ -144,15 +192,20 @@ class TranslationService:
             )
             content = response.choices[0].message.content
             if not isinstance(content, str) or not content.strip():
+                self._log(f'Nhận phản hồi rỗng/không hợp lệ sau {perf_counter() - started:.3f}s')
                 return _error("internal")
             usage = getattr(response, "usage", None)
             result = TranslationResult(
                 text=content.strip(), input_tokens=getattr(usage, "prompt_tokens", None),
                 output_tokens=getattr(usage, "completion_tokens", None),
             )
+            self._log(f'Nhận phản hồi {provider.name}/{provider.model_id} sau {perf_counter() - started:.3f}s; bản dịch={result.text!r}')
             if len(self._cache) >= 300:
                 self._cache.popitem(last=False)
             self._cache[key] = result
             return result
         except Exception as exc:
-            return _provider_error(exc)
+            result = _provider_error(exc)
+            if 'started' in locals():
+                self._log(f'Nhận lỗi {provider.name}/{provider.model_id} sau {perf_counter() - started:.3f}s; mã lỗi: {result.error.code}')
+            return result

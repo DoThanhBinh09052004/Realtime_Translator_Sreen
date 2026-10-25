@@ -1,5 +1,13 @@
 """Immutable values exchanged between settings, engines and worker threads."""
 from dataclasses import dataclass, field
+from typing import Literal
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    requires_api_key: bool = True
+    supports_models: bool = True
+    supports_base_url: bool = False
 
 
 @dataclass(frozen=True)
@@ -16,6 +24,7 @@ class RuntimeSettings:
     target_lang: str
     provider: ProviderSettings
     interval_ms: int
+    overlay_mode: Literal['subtitle', 'blocks'] = 'subtitle'
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,7 @@ class TranslationResult:
     error: EngineError | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    from_cache: bool = False
 
     def __post_init__(self):
         if self.error is not None:
@@ -39,13 +49,22 @@ class TranslationResult:
 
 
 @dataclass(frozen=True)
+class OcrSpan:
+    text: str
+    polygon: tuple[tuple[float, float], ...]
+    confidence: float
+
+
+@dataclass(frozen=True)
 class OcrResult:
     text: str = ""
     error: EngineError | None = None
+    spans: tuple[OcrSpan, ...] = ()
 
     def __post_init__(self):
         if self.error is not None:
             object.__setattr__(self, "text", "")
+            object.__setattr__(self, "spans", ())
 
 
 @dataclass(frozen=True)
@@ -60,3 +79,22 @@ class WorkerStatus:
             "retry_wait", "error", "stopping",
         }:
             raise ValueError("Unknown worker state")
+
+
+@dataclass(frozen=True)
+class TranslationStatus:
+    provider: str
+    revision: int
+    session_id: int
+    phase: Literal['active', 'retry_wait', 'paused', 'stopped']
+    retries_issued: int = 0
+    retry_at_s: float | None = None
+
+
+@dataclass(frozen=True)
+class SubtitleFrame:
+    revision: int
+    candidate_id: int
+    source_text: str
+    text: str
+    render_sequence: int = 0

@@ -1,5 +1,7 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+import math
+import time
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QPlainTextEdit
+from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.styles import CYBER_PALETTE, HERO_START_STYLE, HERO_STOP_STYLE, SECONDARY_BUTTON_STYLE
 from ui.icons import get_lucide_icon
@@ -11,10 +13,15 @@ class ConsolePage(QWidget):
     stop_requested = pyqtSignal()
     select_region_requested = pyqtSignal()
     subtitle_settings_requested = pyqtSignal()
+    retry_translation_requested = pyqtSignal()
 
     def __init__(self, snapshot: ControllerSnapshot, parent=None):
         super().__init__(parent)
         self.metric_cards = {}
+        self._translation_status = None
+        self._countdown = QTimer(self)
+        self._countdown.setInterval(500)
+        self._countdown.timeout.connect(self._refresh_countdown)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
@@ -42,7 +49,16 @@ class ConsolePage(QWidget):
 
         hero_row.addWidget(self.start_btn)
         hero_row.addWidget(self.stop_btn)
+        self.retry_translation_btn = QPushButton('Thử lại')
+        self.retry_translation_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.retry_translation_btn.clicked.connect(self.retry_translation_requested.emit)
+        self.retry_translation_btn.hide()
+        hero_row.addWidget(self.retry_translation_btn)
         hero_card.layout.addLayout(hero_row)
+        self.translation_message = QLabel()
+        self.translation_message.setWordWrap(True)
+        self.translation_message.hide()
+        hero_card.layout.addWidget(self.translation_message)
         layout.addWidget(hero_card)
 
         # Status Metrics Grid (4 thẻ tóm tắt với Lucide Icons)
@@ -53,7 +69,7 @@ class ConsolePage(QWidget):
         grid_row2.setSpacing(10)
 
         card_status = MetricCard("TRẠNG THÁI", "Đã dừng", icon_name="activity", icon_color=CYBER_PALETTE['neon_rose'])
-        card_ai = MetricCard("AI MODEL", snapshot.ai.provider, icon_name="cpu", icon_color=CYBER_PALETTE['neon_indigo'])
+        card_ai = MetricCard("CÔNG CỤ DỊCH", snapshot.ai.provider, icon_name="cpu", icon_color=CYBER_PALETTE['neon_indigo'])
         card_lang = MetricCard("NGÔN NGỮ", f"{snapshot.ocr.source} -> {snapshot.ocr.target}", icon_name="languages", icon_color=CYBER_PALETTE['text_muted'])
         
         reg = snapshot.ocr.region
@@ -100,16 +116,72 @@ class ConsolePage(QWidget):
         quick_card.layout.addLayout(q_row)
         layout.addWidget(quick_card)
 
+        log_card = ModernCard('Nhật ký dịch', 'Hiển thị nội dung request và thời gian phản hồi')
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setMaximumBlockCount(300)
+        self.log_view.setPlaceholderText('Nhật ký sẽ xuất hiện khi bắt đầu quét.')
+        self.log_view.setMinimumHeight(120)
+        self.log_view.setMaximumHeight(190)
+        log_card.layout.addWidget(self.log_view)
+        log_buttons = QHBoxLayout()
+        log_buttons.addStretch()
+        self.clear_log_btn = QPushButton('Xóa nhật ký')
+        self.clear_log_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.clear_log_btn.clicked.connect(self.log_view.clear)
+        log_buttons.addWidget(self.clear_log_btn)
+        log_card.layout.addLayout(log_buttons)
+        layout.addWidget(log_card)
+
         layout.addStretch()
         self.select_region_btn = quick_select_btn
         self.subtitle_settings_btn = quick_sub_btn
         self.render_summary(snapshot)
 
     def render_summary(self, snapshot: ControllerSnapshot):
-        self.metric_cards['ai'].set_value(f'{snapshot.ai.provider}\n{snapshot.ai.model_id}')
+        model = f'\n{snapshot.ai.model_id}' if snapshot.ai.supports_models else ''
+        self.metric_cards['ai'].set_value(snapshot.ai.provider+model)
         self.metric_cards['lang'].set_value(f'{snapshot.ocr.source} -> {snapshot.ocr.target}')
         region = snapshot.ocr.region
         self.metric_cards['region'].set_value(f'{region[2]} x {region[3]} px' if region else 'Chưa chọn vùng')
 
     def set_run_status(self, text: str):
         self.metric_cards['status'].set_value(text)
+
+    def append_log(self, line: str):
+        self.log_view.appendPlainText(line)
+        self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
+
+    def clear_translation_status(self):
+        self._translation_status = None
+        self._countdown.stop()
+        self.retry_translation_btn.hide()
+        self.translation_message.hide()
+
+    def _refresh_countdown(self):
+        if self._translation_status is not None:
+            self.render_translation_status(self._translation_status, now_s=time.monotonic())
+
+    def render_translation_status(self, status, *, now_s):
+        self._translation_status = status
+        google = status.provider == 'Google Translate'
+        paused = google and status.phase == 'paused'
+        waiting = google and status.phase == 'retry_wait'
+        self.retry_translation_btn.setVisible(paused)
+        self.retry_translation_btn.setEnabled(paused)
+        self.translation_message.setVisible(paused or waiting)
+        if paused:
+            self.translation_message.setText('Tạm dừng dịch Google. OCR vẫn đang quét. Bấm Thử lại để tiếp tục.')
+            self.set_run_status('Tạm dừng dịch Google')
+        elif waiting:
+            remaining = max(0, math.ceil((status.retry_at_s or now_s)-now_s))
+            self.translation_message.setText(f'Google Translate: chờ {remaining} giây trước khi thử lại (lượt {status.retries_issued}/3).')
+            self.set_run_status('Chờ thử lại Google')
+        elif status.phase == 'stopped':
+            self.set_run_status('Đã dừng')
+        else:
+            self.set_run_status('Đang hoạt động')
+        if waiting:
+            self._countdown.start()
+        else:
+            self._countdown.stop()

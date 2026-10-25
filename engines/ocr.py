@@ -8,7 +8,7 @@ os.environ['FLAGS_fraction_of_cpu_memory_to_use'] = '0.05'
 import cv2
 import numpy as np
 from paddleocr import PaddleOCR
-from core.contracts import EngineError, OcrResult
+from core.contracts import EngineError, OcrResult, OcrSpan
 
 
 class SimplePaddleOCR:
@@ -40,12 +40,29 @@ class SimplePaddleOCR:
             if not result or not result[0]:
                 return OcrResult()
 
-            all_text = [line[1][0] for line in result[0] if len(line) >= 2]
+            all_text, spans = [], []
+            for line in result[0]:
+                try:
+                    text = line[1][0]
+                    if not isinstance(text, str):
+                        continue
+                    all_text.append(text)
+                except (TypeError, IndexError, KeyError):
+                    continue
+                try:
+                    polygon = np.asarray(line[0], dtype=float)
+                    confidence = float(line[1][1])
+                    if (polygon.shape == (4, 2) and np.isfinite(polygon).all()
+                            and np.isfinite(confidence) and 0 <= confidence <= 1
+                            and np.ptp(polygon[:, 0]) > 0 and np.ptp(polygon[:, 1]) > 0):
+                        spans.append(OcrSpan(text, tuple(tuple(p) for p in polygon), confidence))
+                except (TypeError, ValueError, IndexError, KeyError):
+                    pass
             if not all_text:
                 return OcrResult()
 
             full_text = " ".join(all_text).strip()
-            return OcrResult(text=full_text)
+            return OcrResult(text=full_text, spans=tuple(spans))
 
         except Exception:
             return OcrResult(error=EngineError("ocr", "Không thể nhận diện chữ trong ảnh.", True))
