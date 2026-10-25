@@ -87,6 +87,9 @@ class AiSettingsPage(QScrollArea):
         )
         base_url_layout.addWidget(base_url_label)
         base_url_layout.addWidget(self.base_url_input)
+        endpoint_help = QLabel('Máy chủ từ xa cần HTTPS. HTTP chỉ dùng cho localhost/IP loopback. Nhập endpoint cuối, không chuyển hướng.')
+        endpoint_help.setWordWrap(True)
+        base_url_layout.addWidget(endpoint_help)
         prov_card.layout.addWidget(self.base_url_container)
         layout.addWidget(prov_card)
 
@@ -169,6 +172,10 @@ class AiSettingsPage(QScrollArea):
             self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
 
     def render(self, state: AiPageState, *, changed_field='initial'):
+        if changed_field == 'base_url':
+            blocker = QSignalBlocker(self.base_url_input)
+            self.base_url_input.setText(state.base_url)
+            del blocker
         if changed_field in ('initial', 'provider', 'rollback', 'api_key_import', 'api_key_deleted'):
             blockers = [QSignalBlocker(widget) for widget in (
                 self.provider_combo, self.model_combo, self.api_key_input, self.base_url_input,
