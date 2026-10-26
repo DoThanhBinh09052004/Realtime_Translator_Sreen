@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "paddleocr_version": "2.10.0",
+  "ocr_version": "PP-OCRv4",
+  "languages": [
+    "en",
+    "japan"
+  ],
+  "files": {
+    "det/en/inference.pdmodel": "c4bfb1b05d9d1d5a760801eaf6d20180ef7e47bcc675fb17d1f3a89da5fef427",
+    "det/en/inference.pdiparams": "83676ec730627ab4502f401410a4b6a3ce1c0bb98fa249b71db055b6bddae051",
+    "det/en/inference.pdiparams.info": "2fe414d9eadf914bf44e3f9ba212988a6f26f364e4f87c6d0af57438ffffc0c4",
+    "det/ml/inference.pdmodel": "c49f664c75549678deedcaff8d11f8f2b9f1303ef6c72deccdb98a5ea2104381",
+    "det/ml/inference.pdiparams": "a6119e639cade15873ac32eb4bee121b63c811c4d007d9f618baf680aef8b857",
+    "det/ml/inference.pdiparams.info": "2fe414d9eadf914bf44e3f9ba212988a6f26f364e4f87c6d0af57438ffffc0c4",
+    "rec/en/inference.pdmodel": "85b952f05f709af259cfe4254012aa7208bef0998f71f57a15495446f25ccd43",
+    "rec/en/inference.pdiparams": "75f64a1ffb70c56b7a25655963ca16f5bf3286202e3f52ac972bee05cdee2f56",
+    "rec/en/inference.pdiparams.info": "710d9f3d7c503067ae708f4bc3adc6973c0d6391adb7a1470c36eb70da6b5b83",
+    "rec/japan/inference.pdmodel": "d3339a79fa88863f639a00cd57e973cc278fa46c3eb369b88cb24bb06c96b89d",
+    "rec/japan/inference.pdiparams": "e6e9b7395bb8476e85a15776aa09445c483778c06a512921cbc9ba81c6a2719a",
+    "rec/japan/inference.pdiparams.info": "710d9f3d7c503067ae708f4bc3adc6973c0d6391adb7a1470c36eb70da6b5b83",
+    "cls/inference.pdmodel": "3c4337ec61722a20b1dca2e5bfaffc313c0592bc89ad6e0d45168224186f6683",
+    "cls/inference.pdiparams": "d1efda1b80e174b4fcb168a035ac96c1af4938892bd86a55f300a6027105d08c",
+    "cls/inference.pdiparams.info": "ee0c2eaa4c09814802bf520c01dfdbc1345dc2879dc9e67424d32c7b0ee88e59",
+    "dict/en_dict.txt": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3",
+    "dict/japan_dict.txt": "1dcfcb41eec90576a945b3084f22ade11ced506e24f14879245b071698f308e8",
+    "NOTICE.paddleocr.txt": "ff6311c56c1b22c9209c96cc8afc16da91c24ee55a15e14ebc46fe1960dbd856"
+  },
+  "provenance": {
+    "det/en": "whl/det/en/en_PP-OCRv3_det_infer",
+    "det/ml": "whl/det/ml/Multilingual_PP-OCRv3_det_infer",
+    "rec/en": "whl/rec/en/en_PP-OCRv4_rec_infer",
+    "rec/japan": "whl/rec/japan/japan_PP-OCRv4_rec_infer",
+    "cls": "whl/cls/ch_ppocr_mobile_v2.0_cls_infer",
+    "dictionaries": "paddleocr 2.10.0 ppocr/utils",
+    "notice": "paddleocr 2.10.0 LICENSE"
+  }
+}

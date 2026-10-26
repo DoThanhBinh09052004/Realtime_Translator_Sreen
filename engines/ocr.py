@@ -9,17 +9,25 @@ import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 from core.contracts import EngineError, OcrResult, OcrSpan
+from core.ocr_models import OcrModelError, resolve_ocr_models
 
 
 class SimplePaddleOCR:
     """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh với cấu hình RAM tối thiểu"""
     def __init__(self, lang='en'):
+        models = resolve_ocr_models(lang)
+        model_options = {}
+        if models is not None:
+            model_options = dict(det_model_dir=str(models.det), rec_model_dir=str(models.rec),
+                                 cls_model_dir=str(models.cls), rec_char_dict_path=str(models.dictionary),
+                                 ocr_version="PP-OCRv4")
         self.ocr = PaddleOCR(
             lang=lang,
             use_angle_cls=False,
             show_log=False,
             enable_mkldnn=False,
-            cpu_threads=2
+            cpu_threads=2,
+            **model_options
         )
 
     def extract_text(self, img) -> OcrResult:
@@ -107,5 +115,7 @@ def ocr_image(img, lang='en') -> OcrResult:
         return OcrResult(error=EngineError("invalid_input", "Ảnh nhận diện không hợp lệ.", False))
     try:
         return get_ocr_engine(lang=lang).extract_text(img)
+    except OcrModelError as exc:
+        return OcrResult(error=EngineError("ocr_model_missing", str(exc), False))
     except Exception:
         return OcrResult(error=EngineError("ocr", "Không thể khởi tạo bộ nhận diện chữ.", True))

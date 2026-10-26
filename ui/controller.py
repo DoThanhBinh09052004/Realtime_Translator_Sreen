@@ -103,6 +103,8 @@ class ControllerWindow(QWidget):
         self.console_page.start_requested.connect(self.start_ocr)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.worker.log_updated.connect(self.console_page.append_log)
+        self.worker.error_occurred.connect(self.show_worker_error)
+        self.worker.finished.connect(self._on_worker_finished)
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
@@ -216,6 +218,23 @@ class ControllerWindow(QWidget):
         self.status.setText(error.user_message)
         self.console_page.set_run_status(error.user_message)
 
+    def show_worker_error(self, error):
+        advice = {
+            'capture': 'Chọn lại vùng quét trên màn hình đang kết nối; bấm Bắt đầu nếu tiến trình đã dừng.',
+            'ocr': 'Kiểm tra ngôn ngữ nguồn và vùng quét; nếu lỗi tiếp diễn, bấm Dừng rồi Bắt đầu để thử lại.',
+        }.get(error.code, '')
+        message = f'[{time.strftime("%H:%M:%S")}] Lỗi [{error.code}]: {error.user_message}'
+        if advice:
+            message += f' Hướng xử lý: {advice}'
+        self.console_page.append_log(message)
+
+    def _on_worker_finished(self):
+        # A queued finish can belong to the previous run. The backend may also
+        # still be draining for an explicit Start or an internal mode restart.
+        if self.worker.is_running() is True or self.worker.restart_pending is True:
+            return
+        self._show_stopped_status()
+
     def clear_translation_status(self):
         self.console_page.clear_translation_status()
 
@@ -288,6 +307,11 @@ class ControllerWindow(QWidget):
         self.clear_translation_status()
         if self.worker:
             self.worker.stop_worker()
+        self._show_stopped_status()
+
+    def _show_stopped_status(self):
+        self._retry_pending = False
+        self.clear_translation_status()
         if self.overlay is not None:
             self.overlay.clear()
         self.status.setText("Đã dừng")

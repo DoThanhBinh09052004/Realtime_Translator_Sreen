@@ -230,6 +230,11 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             return self._is_running
 
+    @property
+    def restart_pending(self) -> bool:
+        """GUI-owned start intent while the previous threads drain."""
+        return self._restart_pending
+
     def start_worker(self, *, preserve_translation_session=False):
         """Khởi động worker thread nếu chưa chạy"""
         if self._restart_pending:

@@ -1,7 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
+from pathlib import Path
+import os
+import sys
+project_root = Path(SPECPATH).resolve()
+sys.path.insert(0, str(project_root))
+from tools.bundle_layout import bundle_data
 
-datas = [('C:\\Users\\Windows\\.paddleocr', '.paddleocr')]
+datas = bundle_data(project_root, Path(os.environ.get('TRANSLATEHUD_OCR_MODELS_DIR', project_root / 'assets/ocr')))
 binaries = []
 hiddenimports = ['Cython', 'Cython.Compiler', 'Cython.Compiler.Code', 'Cython.Utility', 'setuptools', 'setuptools.command', 'setuptools.command.build_ext', 'paddle', 'paddle.fluid', 'paddleocr', 'paddleocr.ppocr', 'paddleocr.ppocr.ocr', 'paddleocr.tools', 'paddleocr.tools.infer']
 tmp_ret = collect_all('paddle')
@@ -26,9 +32,13 @@ tmp_ret = collect_all('lmdb')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
+# collect_all can race Python's transient bytecode files during package imports.
+datas = [(source, destination) for source, destination in datas
+         if '__pycache__' not in Path(source).parts and not source.endswith(('.pyc', '.pyo'))]
+
 a = Analysis(
-    ['main.py'],
-    pathex=[],
+    [str(project_root / 'main.py')],
+    pathex=[str(project_root)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -50,7 +60,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -63,7 +73,7 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name='main',
 )
