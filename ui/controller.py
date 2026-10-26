@@ -2,7 +2,7 @@
 import os
 import time
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog, QMessageBox
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
 from ui.pages.console_page import ConsolePage
@@ -18,17 +18,23 @@ from ui.styles import CYBER_PALETTE, get_app_stylesheet
 class ControllerWindow(QWidget):
     """Compose the four views around one settings coordinator."""
 
+    starting_translation = pyqtSignal()
+
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
         event.ignore()
+        if hasattr(self, "_game_controls") and self._game_controls is not None and getattr(self._game_controls, "tray_icon", None) is not None:
+            self.hide()
+            return
         self.on_quit_cb()
 
-    def __init__(self, worker, state, on_select_region, on_quit, overlay=None):
+    def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None):
         super().__init__()
 
         self.worker = worker
         self.state = state
         self._overlay = None
+        self._game_controls = game_controls
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
@@ -278,7 +284,10 @@ class ControllerWindow(QWidget):
         self.subtitle_page.set_preset_display(preset)
 
 
-    def start_ocr(self):
+    def set_game_controls(self, game_controls):
+        self._game_controls = game_controls
+
+    def start_ocr(self, preserve_translation_session=False):
         if self.worker is not None and self.worker.is_running() is True:
             return
         ai = self.settings_coordinator.snapshot().ai
@@ -294,8 +303,13 @@ class ControllerWindow(QWidget):
             self.ai_page.highlight_missing_key()
             return
 
+        self.starting_translation.emit()
+
         if self.worker:
-            self.worker.start_worker()
+            if preserve_translation_session:
+                self.worker.start_worker(preserve_translation_session=True)
+            else:
+                self.worker.start_worker()
         
         self.status.setText("Đang hoạt động")
         self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
