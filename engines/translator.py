@@ -8,6 +8,8 @@ from time import perf_counter
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from core.contracts import EngineError, ProviderSettings, RuntimeSettings, TranslationResult
+from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from engines.custom_api_http import build_custom_api_http_client
 from engines.google_translate import GoogleTranslateClient, GOOGLE_ADAPTER_VERSION
 
 PROMPT_VERSION = 1
@@ -20,7 +22,7 @@ _MESSAGES = {
     "timeout": "Yêu cầu dịch quá thời gian chờ.",
     "network": "Không thể kết nối tới dịch vụ dịch.",
     "invalid_model": "Model không tồn tại hoặc không khả dụng.",
-    "invalid_endpoint": "Custom API chưa có Base URL hợp lệ.",
+    "invalid_endpoint": "Custom API cần endpoint cuối dùng HTTPS hoặc HTTP loopback, không chuyển hướng.",
     "invalid_input": "Nội dung dịch không hợp lệ hoặc vượt quá 2000 ký tự.",
     "internal": "Không thể xử lý kết quả từ dịch vụ dịch.",
 }
@@ -36,6 +38,8 @@ def _request_timeout(provider: ProviderSettings) -> float:
 
 def _provider_error(exc: Exception) -> TranslationResult:
     # Inspect SDK types and machine codes, never the free-form exception message.
+    if isinstance(exc, EndpointPolicyError) or isinstance(exc.__cause__, EndpointPolicyError):
+        return _error('invalid_endpoint')
     if isinstance(exc, APITimeoutError):
         return _error("timeout", True)
     if isinstance(exc, APIConnectionError):
@@ -136,7 +140,16 @@ class TranslationService:
             }
             if provider.base_url:
                 kwargs["base_url"] = provider.base_url
-            self._client = OpenAI(**kwargs)
+            http_client = None
+            if provider.name == 'Custom API':
+                http_client = build_custom_api_http_client(provider.base_url, timeout_s=_request_timeout(provider))
+                kwargs['http_client'] = http_client
+            try:
+                self._client = OpenAI(**kwargs)
+            except Exception:
+                if http_client is not None:
+                    http_client.close()
+                raise
         self._provider = provider
 
     def translate(self, text: str, settings: RuntimeSettings) -> TranslationResult:
@@ -146,6 +159,12 @@ class TranslationService:
         if not text:
             return TranslationResult()
         provider = settings.provider
+        if provider.name == 'Custom API':
+            try:
+                provider = replace(provider, base_url=normalize_custom_api_endpoint(provider.base_url))
+            except EndpointPolicyError:
+                self.close()
+                return _error('invalid_endpoint')
         if provider.name == 'Google Translate':
             if self._provider is not None and self._provider != provider:
                 self.close()

@@ -190,7 +190,7 @@ class ControllerWindow(QWidget):
     def _render_snapshot(self, snapshot, changed_field):
         if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback'):
             self.clear_translation_status()
-        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'rollback'):
+        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
             self.ocr_page.render(snapshot.ocr)
