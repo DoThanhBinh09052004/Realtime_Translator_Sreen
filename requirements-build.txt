@@ -1,0 +1,4 @@
+-r requirements.txt
+pyinstaller==6.22.3
+# The working PaddleOCR environment uses this augmentation version; newer albucore requires Torch at import.
+albumentations==1.3.1

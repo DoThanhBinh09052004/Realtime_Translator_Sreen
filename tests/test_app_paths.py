@@ -28,3 +28,12 @@ def test_migrate_settings_once_without_touching_legacy(tmp_path, monkeypatch):
     legacy.write_text('{"font_size": 15}')
     config.initialize_user_storage(legacy_config=legacy)
     assert config.load_config()['font_size'] == 29
+
+
+def test_language_pack_root_is_durable_and_does_not_touch_legacy_cache(tmp_path,monkeypatch):
+    from core import paths
+    monkeypatch.setattr(paths.QStandardPaths,'writableLocation',lambda kind:str(tmp_path/str(kind)))
+    result=paths.get_app_paths()
+    assert paths.get_language_pack_root()==result.config_dir/'models'
+    assert paths.get_language_pack_root()!=result.models_dir
+    assert not paths.get_language_pack_root().exists()

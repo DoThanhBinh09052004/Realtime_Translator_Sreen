@@ -6,11 +6,12 @@ import tempfile
 import threading
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 from core.paths import get_app_paths
 from core.secrets import SecretStore, SecretStoreError
+from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from core.languages import source_languages, target_languages
 
 _config_lock = threading.RLock()
 
@@ -43,14 +44,8 @@ def initialize_user_storage(*, legacy_config=None):
         raw = {}
     _atomic_write(CONFIG_PATH, json.dumps(normalize_config(raw), ensure_ascii=False, indent=2))
 
-SUPPORTED_LANGUAGES = {
-    "English": "en",
-    "Japanese": "japan",
-    "Chinese": "ch",
-    "Korean": "korean",
-}
-
-SUPPORTED_TARGETS = ["Vietnamese", "English"]
+SUPPORTED_LANGUAGES = {language.config_name: language.ocr_code for language in source_languages()}
+SUPPORTED_TARGETS = [language.config_name for language in target_languages()]
 
 DEFAULT_REGION = {
     "top": 0,
@@ -411,15 +406,10 @@ def save_provider_model_id(provider: str, model_id: str):
 
 
 def _normalize_custom_api_base_url(value: str, *, allow_empty: bool = False) -> str:
-    if not isinstance(value, str):
-        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
-    value = value.strip().rstrip("/")
-    if not value and allow_empty:
-        return ""
-    parsed = urlsplit(value)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ConfigError("Base URL phải bắt đầu bằng http:// hoặc https://.")
-    return value
+    try:
+        return normalize_custom_api_endpoint(value, allow_empty=allow_empty)
+    except EndpointPolicyError as error:
+        raise ConfigError(str(error)) from None
 
 
 def load_custom_api_base_url() -> str:

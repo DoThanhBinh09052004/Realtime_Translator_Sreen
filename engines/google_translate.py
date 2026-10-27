@@ -7,12 +7,12 @@ from datetime import timezone
 from email.utils import parsedate_to_datetime
 import httpx
 from core.contracts import EngineError, TranslationResult
+from core.languages import language_by_config_name
 
 GOOGLE_ADAPTER_VERSION = 2
 _URL = 'https://translate.googleapis.com/translate_a/single'
 _BATCH_URL = 'https://translate.google.com/_/TranslateWebserverUi/data/batchexecute'
 _CLIENTS5_URL = 'https://clients5.google.com/translate_a/t'
-_LANGUAGES = {'English':'en', 'Japanese':'ja', 'Chinese':'zh-CN', 'Korean':'ko', 'Vietnamese':'vi'}
 _MESSAGES = {
     'invalid_input': 'Nội dung hoặc ngôn ngữ dịch không hợp lệ (tối đa 2000 ký tự).',
     'timeout': 'Yêu cầu Google Translate quá thời gian chờ.',
@@ -129,7 +129,10 @@ class GoogleTranslateClient:
             return _error('invalid_input')
         if not text.strip():
             return TranslationResult()
-        if source_lang not in _LANGUAGES or target_lang not in _LANGUAGES:
+        try:
+            language_by_config_name(source_lang)
+            language_by_config_name(target_lang)
+        except ValueError:
             return _error('invalid_input')
         result = self._translate(text, source_lang, target_lang)
         if result.error is not None and result.error.retryable:
@@ -142,7 +145,8 @@ class GoogleTranslateClient:
         try:
             if self._client is None:
                 self._client = self._factory()
-            source, target = _LANGUAGES[source_lang], _LANGUAGES[target_lang]
+            source = language_by_config_name(source_lang).google_code
+            target = language_by_config_name(target_lang).google_code
             if self._route == 0:
                 argument = json.dumps([[text, source, target, True], [None]], ensure_ascii=False)
                 request = json.dumps([[['MkEWBc', argument, None, 'generic']]], ensure_ascii=False)

@@ -22,7 +22,7 @@ def test_custom_api_rejects_non_http_endpoint():
     try:
         config.save_custom_api_base_url("file:///tmp/openai")
     except config.ConfigError as exc:
-        assert str(exc) == "Base URL phải bắt đầu bằng http:// hoặc https://."
+        assert 'HTTPS' in str(exc) and 'loopback' in str(exc)
     else:
         raise AssertionError("An unsafe Custom API endpoint was accepted")
 

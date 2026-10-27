@@ -27,6 +27,8 @@ def test_boundary_detector_resolves_absolute_and_relative_imports(source, expect
 
 
 def test_view_and_coordinator_dependency_boundaries():
+    assert not forbidden_imports(Path('ui/language_packs_dialog.py').read_text(encoding='utf-8-sig'), 'ui',
+                                 {'core', 'engines', 'httpx', 'requests', 'urllib', 'socket', 'ui.controller'})
     for folder in ('pages', 'widgets'):
         for path in Path('ui', folder).glob('*.py'):
             assert not forbidden_imports(path.read_text(encoding='utf-8-sig'), f'ui.{folder}',
@@ -50,3 +52,4 @@ def test_importing_views_never_initializes_runtime(monkeypatch):
         for path in Path('ui', folder).glob('*.py'):
             if path.stem != '__init__':
                 importlib.reload(importlib.import_module(f'ui.{folder}.{path.stem}'))
+    importlib.reload(importlib.import_module('ui.language_packs_dialog'))

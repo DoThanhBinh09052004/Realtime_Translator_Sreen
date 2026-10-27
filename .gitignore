@@ -40,3 +40,8 @@ docs/*
 !docs/testing/**
 !docs/release/
 !docs/release/**
+
+.venv-build/
+assets/ocr/**
+!assets/ocr/manifest.json
+!assets/ocr/language-packs.json

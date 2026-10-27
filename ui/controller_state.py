@@ -17,11 +17,42 @@ class AiPageState:
 
 
 @dataclass(frozen=True)
+class LanguageChoice:
+    id: str
+    config_name: str
+    label: str
+
+
+@dataclass(frozen=True)
 class OcrPageState:
     source: str
     target: str
     interval_ms: int
     region: tuple[int, int, int, int] | None
+    source_choices: tuple[LanguageChoice, ...] | None = None
+    source_notice: str = ''
+
+
+@dataclass(frozen=True)
+class PackageRowState:
+    language_id: str
+    title: str
+    phase: str
+    status_text: str
+    detail_text: str
+    downloaded_bytes: int
+    total_bytes: int
+    reclaimable_bytes: int
+    action: str | None
+    action_enabled: bool
+    action_reason: str = ''
+
+
+@dataclass(frozen=True)
+class LanguagePacksState:
+    rows: tuple[PackageRowState, ...]
+    busy: bool
+    message: str = ''
 
 
 @dataclass(frozen=True)

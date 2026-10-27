@@ -1,5 +1,6 @@
 import sys
 import os
+from pathlib import Path
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QPalette, QColor, QIcon
 
@@ -9,10 +10,36 @@ from ui.overlay import Overlay
 from ui.controller import ControllerWindow
 from ui.selector import RegionSelector
 from ui.screen_geometry import ScreenGeometryProvider
+from ui.game_controls import GameControls
+from ui.region_selection import RegionSelectionLifecycle
 from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
 
 
 from ui.styles import CYBER_PALETTE
+
+
+class ShutdownBarrier:
+    """Quit only after both owners have asynchronously drained their threads."""
+    def __init__(self, on_ready):
+        self._on_ready = on_ready
+        self._requested = False
+        self._finished = set()
+        self._emitted = False
+
+    def begin(self):
+        if self._requested:
+            return False
+        self._requested = True
+        self._finished.clear()
+        return True
+
+    def finish(self, participant):
+        if not self._requested or self._emitted:
+            return
+        self._finished.add(participant)
+        if {'translation', 'language_packs'} <= self._finished:
+            self._emitted = True
+            self._on_ready()
 
 
 def setup_dark_theme(app: QApplication):
@@ -52,6 +79,15 @@ def main():
     # ===== 1. Cấu hình & Trạng thái =====
     state = State()
     region = load_region()
+    from core.language_pack_catalog import load_pack_catalog
+    from core.language_pack_store import PackStore
+    from core.language_pack_manager import LanguagePackManager
+    from core.paths import get_language_pack_root
+    from engines.ocr import ocr_image
+    resource_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent)) / 'assets' / 'ocr'
+    pack_store = PackStore(user_root=get_language_pack_root(), bundled_root=resource_root,
+                           catalog=load_pack_catalog(resource_root / 'language-packs.json'))
+    pack_manager = LanguagePackManager(pack_store, parent=app)
 
     # ===== 2. Khởi tạo Overlay (Phụ đề nổi) =====
     overlay = Overlay(
@@ -66,7 +102,8 @@ def main():
         overlay.apply_preset(state.overlay_preset)
 
     # ===== 3. Khởi tạo Background Worker =====
-    worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"])
+    worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"],
+                               ocr_reader=lambda image, lang: ocr_image(image, lang=lang, store=pack_store))
     geometry_provider = ScreenGeometryProvider(app)
     capture_geometry = None
 
@@ -94,69 +131,67 @@ def main():
     worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
-    # ===== 4. Controller & Selector =====
+    # ===== 4. Controller & GameControls Lifecycle =====
     controller = None
-    selector = None
-
-    def on_select_region():
-        nonlocal selector
-
-        # Tạm dừng worker trong lúc người dùng đang chọn vùng
-        was_running = worker.is_running()
-        if was_running:
-            worker.stop_worker(preserve_translation_session=True)
-
-        controller.hide()
-        overlay.hide()
-
-        # Tạo và giữ reference của RegionSelector
-        selector = RegionSelector(geometry_provider=geometry_provider)
-        selector.show()
-        selector.raise_()
-        selector.activateWindow()
-
-        def restore_ui():
-            controller.show()
-            overlay.show()
-            if was_running:
-                worker.start_worker(preserve_translation_session=True)
-
-        def on_region_selected(new_region):
-            nonlocal selector
-            if apply_selected_region(controller, worker, new_region):
-                sync_geometry()
-            restore_ui()
-
-        selector.region_selected.connect(on_region_selected)
-        selector.cancelled.connect(restore_ui)
-
+    game_controls = None
+    region_lifecycle = None
 
     quitting = False
     app.setQuitOnLastWindowClosed(False)
 
-    def on_shutdown_finished():
-        if quitting:
-            overlay.close()
-            app.quit()
+    def finish_quit():
+        overlay.close()
+        app.quit()
 
-    worker.shutdown_finished.connect(on_shutdown_finished)
+    shutdown = ShutdownBarrier(finish_quit)
+    worker.shutdown_finished.connect(lambda: shutdown.finish('translation'))
+    pack_manager.shutdown_finished.connect(lambda: shutdown.finish('language_packs'))
 
     def on_quit():
         nonlocal quitting
         if quitting:
             return
         quitting = True
-        controller.hide()
+        shutdown.begin()
+        if region_lifecycle is not None:
+            region_lifecycle.close()
+        if game_controls is not None:
+            game_controls.shutdown()
+        if controller is not None:
+            controller.hide()
         overlay.clear()
         worker.stop_worker()
+        pack_manager.shutdown()
 
     controller = ControllerWindow(
         worker=worker,
         state=state,
-        on_select_region=on_select_region,
+        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
         on_quit=on_quit,
-        overlay=overlay
+        overlay=overlay,
+        pack_manager=pack_manager
     )
+
+    game_controls = GameControls(
+        controller=controller,
+        worker=worker,
+        app=app,
+        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_quit=on_quit
+    )
+    controller.set_game_controls(game_controls)
+
+    region_lifecycle = RegionSelectionLifecycle(
+        controller=controller,
+        worker=worker,
+        overlay=overlay,
+        geometry_provider=geometry_provider,
+        game_controls=game_controls,
+        on_sync_geometry=sync_geometry
+    )
+
+    # Show toolbar floating HUD without auto-starting translation
+    game_controls.toolbar.show()
     def on_overlay_error(error):
         worker.stop_worker()
         overlay.clear()
@@ -168,6 +203,7 @@ def main():
     worker.error_occurred.connect(lambda error: on_overlay_error(error) if error.code == 'capture_geometry' else None)
     controller.settings_coordinator.settings_changed.connect(lambda snapshot, field: sync_geometry() if field == 'region' else None)
     controller.show()
+    pack_manager.refresh()
 
     sys.exit(app.exec_())
 

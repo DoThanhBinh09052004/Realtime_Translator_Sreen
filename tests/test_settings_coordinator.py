@@ -99,4 +99,4 @@ def test_invalid_custom_api_url_reports_validation_error(coordinator):
     coordinator.save_failed.connect(errors.append)
 
     assert not coordinator.set_custom_base_url('ftp://llm.example.test/v1')
-    assert errors == ['Base URL phải bắt đầu bằng http:// hoặc https://.']
+    assert len(errors) == 1 and 'HTTPS' in errors[0] and 'loopback' in errors[0]
