@@ -9,6 +9,8 @@ from ui.overlay import Overlay
 from ui.controller import ControllerWindow
 from ui.selector import RegionSelector
 from ui.screen_geometry import ScreenGeometryProvider
+from ui.game_controls import GameControls
+from ui.region_selection import RegionSelectionLifecycle
 from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
 
 
@@ -94,42 +96,10 @@ def main():
     worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
 
-    # ===== 4. Controller & Selector =====
+    # ===== 4. Controller & GameControls Lifecycle =====
     controller = None
-    selector = None
-
-    def on_select_region():
-        nonlocal selector
-
-        # Tạm dừng worker trong lúc người dùng đang chọn vùng
-        was_running = worker.is_running()
-        if was_running:
-            worker.stop_worker(preserve_translation_session=True)
-
-        controller.hide()
-        overlay.hide()
-
-        # Tạo và giữ reference của RegionSelector
-        selector = RegionSelector(geometry_provider=geometry_provider)
-        selector.show()
-        selector.raise_()
-        selector.activateWindow()
-
-        def restore_ui():
-            controller.show()
-            overlay.show()
-            if was_running:
-                worker.start_worker(preserve_translation_session=True)
-
-        def on_region_selected(new_region):
-            nonlocal selector
-            if apply_selected_region(controller, worker, new_region):
-                sync_geometry()
-            restore_ui()
-
-        selector.region_selected.connect(on_region_selected)
-        selector.cancelled.connect(restore_ui)
-
+    game_controls = None
+    region_lifecycle = None
 
     quitting = False
     app.setQuitOnLastWindowClosed(False)
@@ -146,17 +116,43 @@ def main():
         if quitting:
             return
         quitting = True
-        controller.hide()
+        if region_lifecycle is not None:
+            region_lifecycle.close()
+        if game_controls is not None:
+            game_controls.shutdown()
+        if controller is not None:
+            controller.hide()
         overlay.clear()
         worker.stop_worker()
 
     controller = ControllerWindow(
         worker=worker,
         state=state,
-        on_select_region=on_select_region,
+        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
         on_quit=on_quit,
         overlay=overlay
     )
+
+    game_controls = GameControls(
+        controller=controller,
+        worker=worker,
+        app=app,
+        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_quit=on_quit
+    )
+    controller.set_game_controls(game_controls)
+
+    region_lifecycle = RegionSelectionLifecycle(
+        controller=controller,
+        worker=worker,
+        overlay=overlay,
+        geometry_provider=geometry_provider,
+        game_controls=game_controls,
+        on_sync_geometry=sync_geometry
+    )
+
+    # Show toolbar floating HUD without auto-starting translation
+    game_controls.toolbar.show()
     def on_overlay_error(error):
         worker.stop_worker()
         overlay.clear()

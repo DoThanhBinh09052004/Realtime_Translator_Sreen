@@ -2,7 +2,7 @@
 import os
 import time
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog, QMessageBox
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
 from ui.pages.console_page import ConsolePage
@@ -18,17 +18,23 @@ from ui.styles import CYBER_PALETTE, get_app_stylesheet
 class ControllerWindow(QWidget):
     """Compose the four views around one settings coordinator."""
 
+    starting_translation = pyqtSignal()
+
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
         event.ignore()
+        if hasattr(self, "_game_controls") and self._game_controls is not None and getattr(self._game_controls, "tray_icon", None) is not None:
+            self.hide()
+            return
         self.on_quit_cb()
 
-    def __init__(self, worker, state, on_select_region, on_quit, overlay=None):
+    def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None):
         super().__init__()
 
         self.worker = worker
         self.state = state
         self._overlay = None
+        self._game_controls = game_controls
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
@@ -103,6 +109,8 @@ class ControllerWindow(QWidget):
         self.console_page.start_requested.connect(self.start_ocr)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.worker.log_updated.connect(self.console_page.append_log)
+        self.worker.error_occurred.connect(self.show_worker_error)
+        self.worker.finished.connect(self._on_worker_finished)
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
@@ -216,6 +224,23 @@ class ControllerWindow(QWidget):
         self.status.setText(error.user_message)
         self.console_page.set_run_status(error.user_message)
 
+    def show_worker_error(self, error):
+        advice = {
+            'capture': 'Chọn lại vùng quét trên màn hình đang kết nối; bấm Bắt đầu nếu tiến trình đã dừng.',
+            'ocr': 'Kiểm tra ngôn ngữ nguồn và vùng quét; nếu lỗi tiếp diễn, bấm Dừng rồi Bắt đầu để thử lại.',
+        }.get(error.code, '')
+        message = f'[{time.strftime("%H:%M:%S")}] Lỗi [{error.code}]: {error.user_message}'
+        if advice:
+            message += f' Hướng xử lý: {advice}'
+        self.console_page.append_log(message)
+
+    def _on_worker_finished(self):
+        # A queued finish can belong to the previous run. The backend may also
+        # still be draining for an explicit Start or an internal mode restart.
+        if self.worker.is_running() is True or self.worker.restart_pending is True:
+            return
+        self._show_stopped_status()
+
     def clear_translation_status(self):
         self.console_page.clear_translation_status()
 
@@ -259,7 +284,10 @@ class ControllerWindow(QWidget):
         self.subtitle_page.set_preset_display(preset)
 
 
-    def start_ocr(self):
+    def set_game_controls(self, game_controls):
+        self._game_controls = game_controls
+
+    def start_ocr(self, preserve_translation_session=False):
         if self.worker is not None and self.worker.is_running() is True:
             return
         ai = self.settings_coordinator.snapshot().ai
@@ -275,8 +303,13 @@ class ControllerWindow(QWidget):
             self.ai_page.highlight_missing_key()
             return
 
+        self.starting_translation.emit()
+
         if self.worker:
-            self.worker.start_worker()
+            if preserve_translation_session:
+                self.worker.start_worker(preserve_translation_session=True)
+            else:
+                self.worker.start_worker()
         
         self.status.setText("Đang hoạt động")
         self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
@@ -288,6 +321,11 @@ class ControllerWindow(QWidget):
         self.clear_translation_status()
         if self.worker:
             self.worker.stop_worker()
+        self._show_stopped_status()
+
+    def _show_stopped_status(self):
+        self._retry_pending = False
+        self.clear_translation_status()
         if self.overlay is not None:
             self.overlay.clear()
         self.status.setText("Đã dừng")

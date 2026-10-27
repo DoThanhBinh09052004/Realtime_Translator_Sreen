@@ -1,7 +1,8 @@
-from PyQt5.QtWidgets import QLabel, QGraphicsDropShadowEffect
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import QApplication, QLabel, QGraphicsDropShadowEffect
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint
+from PyQt5.QtGui import QColor, QGuiApplication
 from ui.block_overlay import BlockOverlay
+from ui.subtitle_geometry import clamp_position, preset_position
 
 
 class Overlay(QLabel):
@@ -69,8 +70,8 @@ class Overlay(QLabel):
         self.setWordWrap(True)
 
         # Cài đặt kích thước tối đa 75% màn hình
-        screen_geo = self.screen().availableGeometry()
-        self.setMaximumWidth(int(screen_geo.width() * 0.75))
+        screen_geo = self._available_geometry()
+        self.setMaximumWidth(max(1, int(screen_geo.width() * 0.75)))
 
         self.apply_style(bg_hex, opacity_pct, text_hex, font_size)
 
@@ -87,6 +88,7 @@ class Overlay(QLabel):
         self.fade_anim.finished.connect(self._on_fade_finished)
 
         # ===== 5. Khởi tạo vị trí =====
+        self.setTextFormat(Qt.PlainText)
         self.setText("Subtitle Ready")
         self.adjustSize()
         self.apply_preset("bottom_center")
@@ -132,26 +134,25 @@ class Overlay(QLabel):
             }}
         """)
 
+    def _available_geometry(self):
+        """Select the current monitor before layout, in Qt logical coordinates."""
+        screen = QGuiApplication.screenAt(self.frameGeometry().center())
+        if screen is None:
+            widget_screen = self.screen()
+            screen = widget_screen if widget_screen in QApplication.screens() else None
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        return screen.availableGeometry()
+
     def apply_preset(self, preset: str):
-        """Định vị phụ đề theo các vị trí preset phổ biến"""
-        screen = self.screen().availableGeometry()
-        w = max(self.width(), 200)
-        h = max(self.height(), 40)
-
-        if preset == "top_center":
-            x = (screen.width() - w) // 2
-            y = screen.top() + 60
-        elif preset == "bottom_left":
-            x = screen.left() + 60
-            y = screen.height() - h - 80
-        elif preset == "bottom_center":
-            x = (screen.width() - w) // 2
-            y = screen.height() - h - 80
-        else:
+        """Position subtitles within the selected monitor's work area."""
+        area = self._available_geometry()
+        self.setMaximumWidth(max(1, int(area.width() * 0.75)))
+        position = preset_position(area, self.size(), preset)
+        if position is None:
             return
-
         self.current_preset = preset
-        self.move(x, y)
+        self.move(clamp_position(area, self.size(), position))
 
     def set_drag_mode(self, enabled: bool):
         """Bật/tắt chế độ kéo thả định vị phụ đề trên màn hình"""
@@ -159,12 +160,16 @@ class Overlay(QLabel):
             return
         self.is_drag_mode = enabled
         if enabled:
+            area = self._available_geometry()
+            self.setMaximumWidth(max(1, int(area.width() * 0.75)))
             self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
             self.setCursor(Qt.SizeAllCursor)
             self._last_normal_text = self.text()
             self.setText("✥ Giữ chuột để kéo phụ đề đến vị trí mong muốn")
             self.adjustSize()
             self.apply_style()
+            self.adjustSize()
+            self.move(clamp_position(area, self.size(), self.pos()))
             self.fade_anim.stop()
             self.setWindowOpacity(1.0)
             self.show()
@@ -223,20 +228,18 @@ class Overlay(QLabel):
             self._last_normal_text = text
             return
 
+        area = self._available_geometry()
         center_x = self.x() + self.width() // 2
         bottom_y = self.y() + self.height()
 
+        self.setMaximumWidth(max(1, int(area.width() * 0.75)))
         self.setText(text)
         self.adjustSize()
 
         new_x = center_x - self.width() // 2
         new_y = bottom_y - self.height()
 
-        # Giữ phụ đề trong phạm vi màn hình
-        screen = self.screen().availableGeometry()
-        new_x = max(10, min(new_x, screen.width() - self.width() - 10))
-        new_y = max(10, min(new_y, screen.height() - self.height() - 10))
-        self.move(new_x, new_y)
+        self.move(clamp_position(area, self.size(), QPoint(new_x, new_y)))
 
         self._show_with_timer()
 
