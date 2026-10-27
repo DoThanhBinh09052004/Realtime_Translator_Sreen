@@ -9,7 +9,7 @@ import numpy as np
 import mss
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, QMutex, QMutexLocker, Qt
 
-from engines.ocr import ocr_image
+from engines.ocr import ocr_image, release_ocr_engine
 from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
 from core.contracts import EngineError, RuntimeSettings, TranslationStatus, SubtitleFrame
@@ -59,9 +59,10 @@ class TranslationWorker(QThread):
     log_updated = pyqtSignal(str)
     observation_ready = pyqtSignal(object)
 
-    def __init__(self, state, region, interval_ms=500):
+    def __init__(self, state, region, interval_ms=500, *, ocr_reader=None):
         super().__init__()
         self.state = state
+        self._ocr_reader = ocr_reader
         self._region = region.copy()
         self._settings = load_runtime_settings(state, interval_ms)
         self._revision = 0
@@ -436,7 +437,7 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):force=self._needs_dialogue_scan
         scan=changed or force or now-self._dialogue_last_ocr>=max(1000,settings.interval_ms)/1000
         if not scan or now<self._dialogue_due or self._dialogue_exhausted:return True
-        result=ocr_image(img_gray,lang=SUPPORTED_LANGUAGES.get(settings.source_lang,'en'))
+        result=self._read_ocr(img_gray, settings.source_lang)
         completed=time.monotonic()
         if not self._is_current(revision):return False
         self._dialogue_last_ocr=now
@@ -465,7 +466,7 @@ class TranslationWorker(QThread):
             if self._prev_text:
                 self._emit_current(revision, self.text_unchanged)
             return True
-        result = ocr_image(img_gray, lang=SUPPORTED_LANGUAGES.get(settings.source_lang, "en"))
+        result = self._read_ocr(img_gray, settings.source_lang)
         if not self._is_current(revision):
             return False
         if result.error is not None:
@@ -505,6 +506,13 @@ class TranslationWorker(QThread):
             self._emit_current(revision, self.text_translated, translated.text)
             self._emit_current(revision, self.subtitle_updated, SubtitleFrame(revision, 0, text, translated.text))
         return False
+
+    def _read_ocr(self, image, source_name):
+        lang = SUPPORTED_LANGUAGES.get(source_name)
+        if lang is None:
+            from core.contracts import OcrResult
+            return OcrResult(error=EngineError('ocr_model_missing', 'Ngôn ngữ nguồn không được hỗ trợ.', False))
+        return (self._ocr_reader or ocr_image)(image, lang=lang)
 
     def run(self):
         # Construction, use and cleanup all happen on this thread. UI only publishes settings.
@@ -562,6 +570,7 @@ class TranslationWorker(QThread):
         finally:
             self._block_translator.request_stop()
             self._stabilizer.reset()
+            release_ocr_engine()
             with QMutexLocker(self._mutex):
                 self._is_running = False
             compact_memory()

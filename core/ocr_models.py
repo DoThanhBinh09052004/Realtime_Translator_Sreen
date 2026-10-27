@@ -4,6 +4,10 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.language_pack_store import PackStore
 
 MODEL_SOURCES = {
     'det/en': 'whl/det/en/en_PP-OCRv3_det_infer',
@@ -55,7 +59,10 @@ def validate_ocr_assets(root: Path) -> dict:
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise OcrModelError(MESSAGE) from exc
 
-def resolve_ocr_models(lang: str, *, root: Path | None = None) -> OcrModelPaths | None:
+def resolve_ocr_models(lang: str, *, root: Path | None = None, store: 'PackStore | None' = None) -> OcrModelPaths | None:
+    if store is not None and root is None:
+        from core.languages import language_by_ocr_code
+        return store.resolve(language_by_ocr_code(lang).id)
     explicit = root is not None
     frozen = bool(getattr(sys, 'frozen', False))
     if root is None:

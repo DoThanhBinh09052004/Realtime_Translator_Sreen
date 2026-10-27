@@ -43,6 +43,25 @@ CYBER_PALETTE = {
 }
 
 
+PACK_ACTION_STYLE = f"""
+    QPushButton:focus {{ border: 2px solid {CYBER_PALETTE['border_focus']}; }}
+    QPushButton:disabled {{ color: {CYBER_PALETTE['text_muted']}; background: {CYBER_PALETTE['bg_input']}; }}
+    QPushButton[destructive="true"]:enabled {{ color: {CYBER_PALETTE['neon_rose']}; }}
+"""
+
+LANGUAGE_PACKS_STYLE = f"""
+    QDialog#languagePacksDialog {{ background: {CYBER_PALETTE['bg_main']}; }}
+    QLabel#packDialogTitle {{ color: {CYBER_PALETTE['text_primary']}; font-size: 16px; font-weight: 700; }}
+    QLabel#packTitle, QLabel#packGroupTitle {{ color: {CYBER_PALETTE['text_primary']}; font-size: 13px; font-weight: 600; }}
+    QLabel#packStatus {{ color: {CYBER_PALETTE['text_secondary']}; font-size: 12px; }}
+    QLabel#packDetail {{ color: {CYBER_PALETTE['text_muted']}; font-size: 12px; }}
+    QLabel#packReason {{ color: {CYBER_PALETTE['neon_amber']}; font-size: 12px; }}
+    QProgressBar#packProgress {{ border: 1px solid {CYBER_PALETTE['border_light']}; border-radius: 4px;
+        background: {CYBER_PALETTE['bg_input']}; color: {CYBER_PALETTE['text_primary']}; text-align: center; }}
+    QProgressBar#packProgress::chunk {{ background: {CYBER_PALETTE['neon_indigo']}; border-radius: 3px; }}
+"""
+
+
 def get_app_stylesheet() -> str:
     """Trả về CSS toàn cục phong cách Linear / Raycast Pro"""
     p = CYBER_PALETTE
