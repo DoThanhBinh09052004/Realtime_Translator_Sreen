@@ -22,3 +22,8 @@ def get_app_paths() -> AppPaths:
     data = location(QStandardPaths.GenericDataLocation)
     cache = location(QStandardPaths.GenericCacheLocation)
     return AppPaths(data, cache, data / 'logs', cache / 'models')
+
+
+def get_language_pack_root() -> Path:
+    """Durable managed models; leave the legacy cache untouched."""
+    return get_app_paths().config_dir / 'models'

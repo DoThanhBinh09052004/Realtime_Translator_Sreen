@@ -28,14 +28,16 @@ class ControllerWindow(QWidget):
             return
         self.on_quit_cb()
 
-    def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None):
+    def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None, *, pack_manager=None):
         super().__init__()
 
         self.worker = worker
         self.state = state
         self._overlay = None
         self._game_controls = game_controls
-        self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self)
+        self.pack_manager = pack_manager
+        self._language_packs_dialog = None
+        self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self, pack_manager=pack_manager)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
         self._retry_pending = False
@@ -140,6 +142,7 @@ class ControllerWindow(QWidget):
         self.ocr_page.target_changed.connect(self.settings_coordinator.set_target)
         self.ocr_page.interval_changed.connect(self.settings_coordinator.set_interval)
         self.ocr_page.select_region_requested.connect(self._on_select_region_clicked)
+        self.ocr_page.manage_packs_requested.connect(self.open_language_packs)
         self.page_ocr = self.ocr_page
         self.subtitle_page = SubtitleSettingsPage(self.settings_coordinator.snapshot().subtitle, self)
         self.bg_color_btn = self.subtitle_page.bg_color_btn
@@ -178,6 +181,7 @@ class ControllerWindow(QWidget):
         self.settings_coordinator.settings_changed.connect(self._render_snapshot)
         self.settings_coordinator.save_failed.connect(self._show_save_error)
         self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
+        self.settings_coordinator.pack_state_changed.connect(self._render_language_packs)
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -196,11 +200,11 @@ class ControllerWindow(QWidget):
 
 
     def _render_snapshot(self, snapshot, changed_field):
-        if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback'):
+        if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback', 'language_packs'):
             self.clear_translation_status()
         if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
-        if changed_field in ('source', 'target', 'interval', 'region', 'rollback'):
+        if changed_field in ('source', 'target', 'interval', 'region', 'rollback', 'language_packs'):
             self.ocr_page.render(snapshot.ocr)
         if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'overlay_mode', 'rollback'):
             self.subtitle_page.render(snapshot.subtitle)
@@ -225,6 +229,8 @@ class ControllerWindow(QWidget):
         self.console_page.set_run_status(error.user_message)
 
     def show_worker_error(self, error):
+        if error.code == 'ocr_model_missing' and self.pack_manager is not None:
+            self.pack_manager.refresh()
         advice = {
             'capture': 'Chọn lại vùng quét trên màn hình đang kết nối; bấm Bắt đầu nếu tiến trình đã dừng.',
             'ocr': 'Kiểm tra ngôn ngữ nguồn và vùng quét; nếu lỗi tiếp diễn, bấm Dừng rồi Bắt đầu để thử lại.',
@@ -289,6 +295,11 @@ class ControllerWindow(QWidget):
 
     def start_ocr(self, preserve_translation_session=False):
         if self.worker is not None and self.worker.is_running() is True:
+            return
+        if not self.settings_coordinator.source_ready():
+            self._show_save_error(self.settings_coordinator.snapshot().ocr.source_notice)
+            self._switch_to_page(2)
+            self.open_language_packs()
             return
         ai = self.settings_coordinator.snapshot().ai
         provider = ai.provider
@@ -359,3 +370,26 @@ class ControllerWindow(QWidget):
         if callable(self.on_select_region_cb):
             self.on_select_region_cb()
         self.refresh_region()
+
+    def open_language_packs(self):
+        if self._language_packs_dialog is None:
+            from ui.language_packs_dialog import LanguagePacksDialog
+            dialog = LanguagePacksDialog(self.settings_coordinator.pack_dialog_state(), self)
+            self._language_packs_dialog = dialog
+            if self.pack_manager is not None:
+                dialog.install_requested.connect(self.pack_manager.request_install)
+                dialog.cancel_requested.connect(self.pack_manager.cancel)
+                dialog.remove_requested.connect(self.pack_manager.request_remove)
+            dialog.finished.connect(self._restore_source_focus)
+        self._language_packs_dialog.render(self.settings_coordinator.pack_dialog_state())
+        if not self._language_packs_dialog.isVisible():
+            self._language_packs_dialog.open()
+        self._language_packs_dialog.raise_()
+        self._language_packs_dialog.activateWindow()
+
+    def _render_language_packs(self, state):
+        if self._language_packs_dialog is not None:
+            self._language_packs_dialog.render(state)
+
+    def _restore_source_focus(self):
+        self.src_combo.setFocus()
