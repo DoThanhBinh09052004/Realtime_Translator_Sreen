@@ -45,14 +45,15 @@ class MetricCard(QFrame):
     """Thẻ tóm tắt thông số với vector Lucide Icon"""
     def __init__(self, title: str, value: str = "--", icon_name: str = "activity", icon_color: str = "#8c90a4"):
         super().__init__()
+        self.setObjectName("metricCard")
         self.setStyleSheet(f"""
-            QFrame {{
+            QFrame#metricCard {{
                 background-color: {CYBER_PALETTE['bg_input']};
                 border: 1px solid {CYBER_PALETTE['border']};
                 border-radius: 7px;
                 padding: 4px;
             }}
-            QFrame:hover {{
+            QFrame#metricCard:hover {{
                 border: 1px solid {CYBER_PALETTE['border_light']};
             }}
         """)

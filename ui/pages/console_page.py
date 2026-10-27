@@ -1,6 +1,6 @@
 import math
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QPlainTextEdit
+from PyQt5.QtWidgets import QWidget, QScrollArea, QLayout, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QPlainTextEdit
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.styles import CYBER_PALETTE, HERO_START_STYLE, HERO_STOP_STYLE, SECONDARY_BUTTON_STYLE
@@ -8,7 +8,7 @@ from ui.icons import get_lucide_icon
 from ui.controller_state import ControllerSnapshot
 
 
-class ConsolePage(QWidget):
+class ConsolePage(QScrollArea):
     start_requested = pyqtSignal()
     stop_requested = pyqtSignal()
     select_region_requested = pyqtSignal()
@@ -17,12 +17,17 @@ class ConsolePage(QWidget):
 
     def __init__(self, snapshot: ControllerSnapshot, parent=None):
         super().__init__(parent)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.metric_cards = {}
         self._translation_status = None
         self._countdown = QTimer(self)
         self._countdown.setInterval(500)
         self._countdown.timeout.connect(self._refresh_countdown)
-        layout = QVBoxLayout(self)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        # Let content determine its minimum size and scroll when it cannot fit.
+        layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
 
@@ -137,6 +142,7 @@ class ConsolePage(QWidget):
         self.select_region_btn = quick_select_btn
         self.subtitle_settings_btn = quick_sub_btn
         self.render_summary(snapshot)
+        self.setWidget(content)
 
     def render_summary(self, snapshot: ControllerSnapshot):
         model = f'\n{snapshot.ai.model_id}' if snapshot.ai.supports_models else ''
