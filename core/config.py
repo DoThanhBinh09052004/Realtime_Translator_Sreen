@@ -11,6 +11,7 @@ from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabiliti
 from core.paths import get_app_paths
 from core.secrets import SecretStore, SecretStoreError
 from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from core.languages import source_languages, target_languages
 
 _config_lock = threading.RLock()
 
@@ -43,14 +44,8 @@ def initialize_user_storage(*, legacy_config=None):
         raw = {}
     _atomic_write(CONFIG_PATH, json.dumps(normalize_config(raw), ensure_ascii=False, indent=2))
 
-SUPPORTED_LANGUAGES = {
-    "English": "en",
-    "Japanese": "japan",
-    "Chinese": "ch",
-    "Korean": "korean",
-}
-
-SUPPORTED_TARGETS = ["Vietnamese", "English"]
+SUPPORTED_LANGUAGES = {language.config_name: language.ocr_code for language in source_languages()}
+SUPPORTED_TARGETS = [language.config_name for language in target_languages()]
 
 DEFAULT_REGION = {
     "top": 0,

@@ -14,21 +14,42 @@ from core.ocr_models import OcrModelError, resolve_ocr_models
 
 class SimplePaddleOCR:
     """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh với cấu hình RAM tối thiểu"""
-    def __init__(self, lang='en'):
-        models = resolve_ocr_models(lang)
+    def __init__(self, lang='en', *, store=None):
+        self._lease = None
+        self.ocr = None
+        if store is None:
+            models = resolve_ocr_models(lang)
+        else:
+            from core.languages import language_by_ocr_code
+            language = language_by_ocr_code(lang)
+            self._lease = store.lease(language.id)
+            models = self._lease.__enter__()
         model_options = {}
         if models is not None:
             model_options = dict(det_model_dir=str(models.det), rec_model_dir=str(models.rec),
                                  cls_model_dir=str(models.cls), rec_char_dict_path=str(models.dictionary),
                                  ocr_version="PP-OCRv4")
-        self.ocr = PaddleOCR(
-            lang=lang,
-            use_angle_cls=False,
-            show_log=False,
-            enable_mkldnn=False,
-            cpu_threads=2,
-            **model_options
-        )
+        try:
+            self.ocr = PaddleOCR(
+                lang=lang,
+                use_angle_cls=False,
+                show_log=False,
+                enable_mkldnn=False,
+                cpu_threads=2,
+                **model_options
+            )
+        except Exception:
+            self.close()
+            if store is not None:
+                raise OcrModelError('Không thể nạp bộ nhận diện. Mở Quản lý gói ngôn ngữ để cài lại.') from None
+            raise
+
+    def close(self):
+        """Release native objects and then the pack lease on the owner thread."""
+        self.ocr = None
+        lease, self._lease = self._lease, None
+        if lease is not None:
+            lease.__exit__(None, None, None)
 
     def extract_text(self, img) -> OcrResult:
         try:
@@ -79,43 +100,53 @@ class SimplePaddleOCR:
 # Single active engine cache: chỉ giữ 1 model đang sử dụng, giải phóng model cũ khi đổi ngôn ngữ
 _current_engine = None
 _current_lang = None
+_current_identity = None
 
 
 def release_ocr_engine():
     """Giải phóng engine OCR hiện tại khỏi RAM và thu dọn rác"""
-    global _current_engine, _current_lang
-    if _current_engine is not None:
-        try:
-            del _current_engine
-        except Exception:
-            pass
-        _current_engine = None
-        _current_lang = None
+    global _current_engine, _current_lang, _current_identity
+    engine, _current_engine = _current_engine, None
+    _current_lang = _current_identity = None
+    if engine is not None:
+        close = getattr(engine, 'close', None)
+        if close is not None:
+            close()
+        del engine
         gc.collect()
 
 
-def get_ocr_engine(lang='en'):
+def get_ocr_engine(lang='en', *, store=None):
     """Lấy OCR engine cho ngôn ngữ chỉ định; tự động giải phóng ngôn ngữ trước đó để tiết kiệm RAM"""
-    global _current_engine, _current_lang
-    if _current_engine is not None and _current_lang == lang:
+    global _current_engine, _current_lang, _current_identity
+    if store is None:
+        identity = (None, lang)
+    else:
+        from core.languages import language_by_ocr_code
+        identity = (id(store), *store.identity(language_by_ocr_code(lang).id))
+    if _current_engine is not None and _current_identity == identity:
         return _current_engine
 
-    if _current_engine is not None and _current_lang != lang:
+    if _current_engine is not None:
         release_ocr_engine()
 
-    _current_engine = SimplePaddleOCR(lang=lang)
+    _current_engine = SimplePaddleOCR(lang=lang) if store is None else SimplePaddleOCR(lang=lang, store=store)
     _current_lang = lang
+    _current_identity = identity
 
     return _current_engine
 
 
-def ocr_image(img, lang='en') -> OcrResult:
+def ocr_image(img, lang='en', *, store=None) -> OcrResult:
     """Hàm giao tiếp chính để nhận diện chữ trong ảnh"""
     if img is None:
         return OcrResult(error=EngineError("invalid_input", "Ảnh nhận diện không hợp lệ.", False))
     try:
-        return get_ocr_engine(lang=lang).extract_text(img)
+        engine = get_ocr_engine(lang=lang) if store is None else get_ocr_engine(lang=lang, store=store)
+        return engine.extract_text(img)
     except OcrModelError as exc:
         return OcrResult(error=EngineError("ocr_model_missing", str(exc), False))
     except Exception:
+        if store is not None:
+            return OcrResult(error=EngineError('ocr_model_missing', 'Bộ nhận diện chưa sẵn sàng. Mở Quản lý gói ngôn ngữ để kiểm tra hoặc cài lại.', False))
         return OcrResult(error=EngineError("ocr", "Không thể khởi tạo bộ nhận diện chữ.", True))

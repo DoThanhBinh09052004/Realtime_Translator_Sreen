@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, QSize, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
 from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE
 from ui.icons import get_lucide_icon
-from ui.controller_state import OcrPageState
+from ui.controller_state import LanguageChoice, OcrPageState
 
 
 class OcrSettingsPage(QScrollArea):
@@ -11,6 +11,7 @@ class OcrSettingsPage(QScrollArea):
     target_changed = pyqtSignal(str)
     interval_changed = pyqtSignal(int)
     select_region_requested = pyqtSignal()
+    manage_packs_requested = pyqtSignal()
 
     def __init__(self, state: OcrPageState, source_languages: tuple[str, ...], target_languages: tuple[str, ...], parent=None):
         super().__init__(parent)
@@ -32,9 +33,10 @@ class OcrSettingsPage(QScrollArea):
         src_lbl = QLabel("Ngôn ngữ nguồn (Source)")
         src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.src_combo = QComboBox()
-        self.src_combo.addItems(source_languages)
-        self.src_combo.setCurrentText(state.source if state.source in source_languages else "English")
-        self.src_combo.currentTextChanged.connect(self.source_changed.emit)
+        self.src_combo.setPlaceholderText('Chọn ngôn ngữ đã cài')
+        self._source_choices = tuple(LanguageChoice(name, name, name) for name in source_languages)
+        self.update_source_choices(state.source_choices if state.source_choices is not None else self._source_choices, state.source)
+        self.src_combo.currentIndexChanged.connect(self._source_index_changed)
         src_col.addWidget(src_lbl)
         src_col.addWidget(self.src_combo)
         lang_row.addLayout(src_col)
@@ -57,6 +59,11 @@ class OcrSettingsPage(QScrollArea):
         lang_row.addLayout(tgt_col)
 
         lang_card.layout.addLayout(lang_row)
+        self.source_notice_label = QLabel(state.source_notice)
+        self.source_notice_label.setWordWrap(True)
+        self.source_notice_label.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px;")
+        self.source_notice_label.setVisible(bool(state.source_notice))
+        lang_card.layout.addWidget(self.source_notice_label)
         layout.addWidget(lang_card)
 
         # Card 2: OCR Timing & Interval
@@ -120,8 +127,38 @@ class OcrSettingsPage(QScrollArea):
 
     def render(self, state: OcrPageState):
         blockers = [QSignalBlocker(widget) for widget in (self.src_combo, self.tgt_combo, self.interval_spin)]
-        self.src_combo.setCurrentText(state.source)
+        self.update_source_choices(state.source_choices if state.source_choices is not None else self._source_choices, state.source)
+        self.source_notice_label.setText(state.source_notice)
+        self.source_notice_label.setVisible(bool(state.source_notice))
         self.tgt_combo.setCurrentText(state.target)
         self.interval_spin.setValue(state.interval_ms)
         self._render_region(state)
         del blockers
+
+    def update_source_choices(self, choices: tuple[LanguageChoice, ...], selected_config_name: str) -> None:
+        blocker = QSignalBlocker(self.src_combo)
+        self._source_choices = choices
+        self.src_combo.clear()
+        index = -1
+        for choice in choices:
+            self.src_combo.addItem(choice.label, choice.id)
+            if choice.config_name == selected_config_name:
+                index = self.src_combo.count() - 1
+        self.src_combo.insertSeparator(self.src_combo.count())
+        self.src_combo.addItem('Quản lý gói ngôn ngữ…', '__manage_language_packs__')
+        self.src_combo.setCurrentIndex(index)
+        self._source_index = index
+        del blocker
+
+    def _source_index_changed(self, index: int) -> None:
+        token = self.src_combo.itemData(index)
+        if token == '__manage_language_packs__':
+            blocker = QSignalBlocker(self.src_combo)
+            self.src_combo.setCurrentIndex(self._source_index)
+            del blocker
+            self.manage_packs_requested.emit()
+            return
+        choice = next((choice for choice in self._source_choices if choice.id == token), None)
+        if choice is not None:
+            self._source_index = index
+            self.source_changed.emit(choice.config_name)

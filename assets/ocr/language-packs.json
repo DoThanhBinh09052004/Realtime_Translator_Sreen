@@ -1,0 +1,254 @@
+{
+  "schema": 1,
+  "paddleocr_version": "2.10.0",
+  "ocr_version": "PP-OCRv4",
+  "components": {
+    "det-en": {
+      "id": "det-en",
+      "revision": "paddleocr210-e740eb522521827c",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv3/english/en_PP-OCRv3_det_infer.tar",
+      "archive_size_bytes": 4003840,
+      "archive_sha256": "e740eb522521827cc83da3ba33e1c70ccfd9b3cf7d9a24a420ce4ca5ebb8794f",
+      "archive_root": "en_PP-OCRv3_det_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 26392,
+          "sha256": "2fe414d9eadf914bf44e3f9ba212988a6f26f364e4f87c6d0af57438ffffc0c4"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 2377917,
+          "sha256": "83676ec730627ab4502f401410a4b6a3ce1c0bb98fa249b71db055b6bddae051"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 1590133,
+          "sha256": "c4bfb1b05d9d1d5a760801eaf6d20180ef7e47bcc675fb17d1f3a89da5fef427"
+        }
+      ]
+    },
+    "det-ml": {
+      "id": "det-ml",
+      "revision": "paddleocr210-8186de0bfaad9d69",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv3/multilingual/Multilingual_PP-OCRv3_det_infer.tar",
+      "archive_size_bytes": 3852288,
+      "archive_sha256": "8186de0bfaad9d694a3955d60485156f39acb2c537656fd35ab3d252c6b1d02c",
+      "archive_root": "Multilingual_PP-OCRv3_det_infer",
+      "files": [
+        {
+          "path": "._inference.pdiparams.info",
+          "size_bytes": 212,
+          "sha256": "90012f2e0d2d9df6c5d8733083db19149cb00ad63685f0d27f9e83a98447ac21"
+        },
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 26392,
+          "sha256": "2fe414d9eadf914bf44e3f9ba212988a6f26f364e4f87c6d0af57438ffffc0c4"
+        },
+        {
+          "path": "._inference.pdmodel",
+          "size_bytes": 212,
+          "sha256": "90012f2e0d2d9df6c5d8733083db19149cb00ad63685f0d27f9e83a98447ac21"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 1441206,
+          "sha256": "c49f664c75549678deedcaff8d11f8f2b9f1303ef6c72deccdb98a5ea2104381"
+        },
+        {
+          "path": "._inference.pdiparams",
+          "size_bytes": 212,
+          "sha256": "90012f2e0d2d9df6c5d8733083db19149cb00ad63685f0d27f9e83a98447ac21"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 2377917,
+          "sha256": "a6119e639cade15873ac32eb4bee121b63c811c4d007d9f618baf680aef8b857"
+        }
+      ]
+    },
+    "det-ch": {
+      "id": "det-ch",
+      "revision": "paddleocr210-5f7217e0a89612e2",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_det_infer.tar",
+      "archive_size_bytes": 4894720,
+      "archive_sha256": "5f7217e0a89612e2f80d62f3c99a8bf5f7ae9cdc1ffd706be7dde07765627edf",
+      "archive_root": "ch_PP-OCRv4_det_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 23580,
+          "sha256": "4e0f29e5fa476126f9efe0dc69f7ca7be960705ad549385d30c9604193463e69"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 4692937,
+          "sha256": "49ee815e30cff43cb1057d33bf0d94193e4d4f1ae28451cad15b40be830df915"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 166367,
+          "sha256": "2ad68ed2768fe6c41166a5bc64680cc9f445390acb6528da449a4db2f7b90e14"
+        }
+      ]
+    },
+    "rec-en": {
+      "id": "rec-en",
+      "revision": "paddleocr210-d5ae153a6fbdacd5",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/english/en_PP-OCRv4_rec_infer.tar",
+      "archive_size_bytes": 10240000,
+      "archive_sha256": "d5ae153a6fbdacd5776543d3194c4258154ed6f83467d55de1cc345f7dd20322",
+      "archive_root": "en_PP-OCRv4_rec_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 102540,
+          "sha256": "710d9f3d7c503067ae708f4bc3adc6973c0d6391adb7a1470c36eb70da6b5b83"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 2517366,
+          "sha256": "85b952f05f709af259cfe4254012aa7208bef0998f71f57a15495446f25ccd43"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 7607269,
+          "sha256": "75f64a1ffb70c56b7a25655963ca16f5bf3286202e3f52ac972bee05cdee2f56"
+        }
+      ]
+    },
+    "rec-ja": {
+      "id": "rec-ja",
+      "revision": "paddleocr210-b8696d8307cf3b90",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/multilingual/japan_PP-OCRv4_rec_infer.tar",
+      "archive_size_bytes": 9973760,
+      "archive_sha256": "b8696d8307cf3b9094f582e4b1d2030053e9c8419b51d7c325faddd4d78c5a8a",
+      "archive_root": "japan_PP-OCRv4_rec_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 9690407,
+          "sha256": "e6e9b7395bb8476e85a15776aa09445c483778c06a512921cbc9ba81c6a2719a"
+        },
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 102540,
+          "sha256": "710d9f3d7c503067ae708f4bc3adc6973c0d6391adb7a1470c36eb70da6b5b83"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 169634,
+          "sha256": "d3339a79fa88863f639a00cd57e973cc278fa46c3eb369b88cb24bb06c96b89d"
+        }
+      ]
+    },
+    "rec-ch": {
+      "id": "rec-ch",
+      "revision": "paddleocr210-830ea228e20c2b30",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/chinese/ch_PP-OCRv4_rec_infer.tar",
+      "archive_size_bytes": 10977280,
+      "archive_sha256": "830ea228e20c2b30c4db9666066c48512f67a63f5b1a32d0d33dc9170040ce7d",
+      "archive_root": "ch_PP-OCRv4_rec_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 30643,
+          "sha256": "0706cc669bdce382f582c139906076b170b112c51bf32573fe43438025777f12"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 10766823,
+          "sha256": "a6dbfa63e7ee161688523c954e9e293f77dc24044db81e836ff9c7f103fd191a"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 169485,
+          "sha256": "bf78f3898a004615e69c676259d8171bd7ae99000653b41fd72aaa36ae8bd304"
+        }
+      ]
+    },
+    "rec-ko": {
+      "id": "rec-ko",
+      "revision": "paddleocr210-431eaa7844c87b49",
+      "url": "https://paddleocr.bj.bcebos.com/PP-OCRv4/multilingual/korean_PP-OCRv4_rec_infer.tar",
+      "archive_size_bytes": 24381440,
+      "archive_sha256": "431eaa7844c87b49fc5eb3dcd00b6dbbaa8c74a70556be28b4e86ab6417abd33",
+      "archive_root": "korean_PP-OCRv4_rec_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 23920621,
+          "sha256": "ea4f4762582336e9b85653b016c5b1091223c947fafd282161fa3145ecb72d1d"
+        },
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 95688,
+          "sha256": "533380ead7fe161fc32ac0bdc966e65c18c0d9d1a16088736c4aa3c628701374"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 353760,
+          "sha256": "992eed58af98ed6125065027e52fbc69b570e6c2e74610ec240e8a2436151ada"
+        }
+      ]
+    },
+    "cls": {
+      "id": "cls",
+      "revision": "paddleocr210-507352585040d035",
+      "url": "https://paddleocr.bj.bcebos.com/dygraph_v2.0/ch/ch_ppocr_mobile_v2.0_cls_infer.tar",
+      "archive_size_bytes": 2188800,
+      "archive_sha256": "507352585040d035da3b1e6374694ad679a850acb0a36a8d0d47984176357717",
+      "archive_root": "ch_ppocr_mobile_v2.0_cls_infer",
+      "files": [
+        {
+          "path": "inference.pdiparams.info",
+          "size_bytes": 18545,
+          "sha256": "ee0c2eaa4c09814802bf520c01dfdbc1345dc2879dc9e67424d32c7b0ee88e59"
+        },
+        {
+          "path": "._inference.pdmodel",
+          "size_bytes": 176,
+          "sha256": "d86f5afbfb8cd933a1d0dbbfd8ff2b93ca3eacc6c45f4590a4a2ee107047f6d2"
+        },
+        {
+          "path": "inference.pdmodel",
+          "size_bytes": 1624487,
+          "sha256": "3c4337ec61722a20b1dca2e5bfaffc313c0592bc89ad6e0d45168224186f6683"
+        },
+        {
+          "path": "inference.pdiparams",
+          "size_bytes": 539978,
+          "sha256": "d1efda1b80e174b4fcb168a035ac96c1af4938892bd86a55f300a6027105d08c"
+        }
+      ]
+    }
+  },
+  "resources": {
+    "dict-en": {
+      "path": "dict/en_dict.txt",
+      "size_bytes": 190,
+      "sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3"
+    },
+    "dict-ja": {
+      "path": "dict/japan_dict.txt",
+      "size_bytes": 17332,
+      "sha256": "1dcfcb41eec90576a945b3084f22ade11ced506e24f14879245b071698f308e8"
+    },
+    "dict-ch": {
+      "path": "pack_resources/ch_dict.txt",
+      "size_bytes": 26250,
+      "sha256": "a1c84d9bdb9ab29043c58896224d32941783eb821629618416dcb08f12886492"
+    },
+    "dict-ko": {
+      "path": "pack_resources/korean_dict.txt",
+      "size_bytes": 14480,
+      "sha256": "aa1fdc8ae8f7cd40a0ec4edb472eb0421e11427e6ccfee9915440742c18b0a20"
+    },
+    "notice": {
+      "path": "NOTICE.paddleocr.txt",
+      "size_bytes": 11438,
+      "sha256": "ff6311c56c1b22c9209c96cc8afc16da91c24ee55a15e14ebc46fe1960dbd856"
+    }
+  }
+}
