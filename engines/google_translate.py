@@ -122,7 +122,7 @@ class GoogleTranslateClient:
         self._factory = client_factory or (lambda: httpx.Client(transport=httpx.HTTPTransport(retries=0), follow_redirects=False))
         self._clock = wall_clock
         self._client = None
-        self._route = 0
+        self._route = 0  # clients5 -> WebRPC -> single
 
     def translate(self, text, source_lang, target_lang):
         if not isinstance(text, str) or len(text) > 2000:
@@ -147,7 +147,7 @@ class GoogleTranslateClient:
                 self._client = self._factory()
             source = language_by_config_name(source_lang).google_code
             target = language_by_config_name(target_lang).google_code
-            if self._route == 0:
+            if self._route == 1:
                 argument = json.dumps([[text, source, target, True], [None]], ensure_ascii=False)
                 request = json.dumps([[['MkEWBc', argument, None, 'generic']]], ensure_ascii=False)
                 response = self._client.post(_BATCH_URL, params={'rpcids': 'MkEWBc', 'rt': 'c'},
@@ -155,7 +155,7 @@ class GoogleTranslateClient:
                         'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
                         'origin': 'https://translate.google.com', 'referer': 'https://translate.google.com/'},
                     timeout=8.0, follow_redirects=False)
-            elif self._route == 1:
+            elif self._route == 0:
                 response = self._client.get(_CLIENTS5_URL,
                     params=dict(client='dict-chrome-ex', sl=source, tl=target, q=text),
                     timeout=8.0, follow_redirects=False)
@@ -173,9 +173,9 @@ class GoogleTranslateClient:
                 return _error('invalid_input')
             if status != 200:
                 return _error('service_unavailable')
-            if self._route == 0:
+            if self._route == 1:
                 text = parse_batch_response(response.text)
-            elif self._route == 1:
+            elif self._route == 0:
                 text = parse_clients5_response(response.json())
             else:
                 text = parse_google_response(response.json())

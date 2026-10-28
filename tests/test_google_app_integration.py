@@ -12,7 +12,7 @@ from core.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
-def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monkeypatch,capture_geometry,span_factory,mode,google_batch_response):
+def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monkeypatch,capture_geometry,span_factory,mode):
     import core.worker as module
     import ui.block_overlay as block_module
     from engines.google_translate import GoogleTranslateClient
@@ -31,7 +31,7 @@ def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monk
         if fail[0]: return httpx.Response(503)
         translated = 'Bản dịch ' + original
         if request.method == 'POST':
-            return httpx.Response(200, text=google_batch_response(translated))
+            return httpx.Response(200, json=[translated])
         if request.url.host == 'clients5.google.com':
             return httpx.Response(200, json=[translated])
         return httpx.Response(200, json=[[[translated]]])

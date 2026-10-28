@@ -68,20 +68,20 @@ def request_route(request):
             'translate.googleapis.com': 'gtx'}[request.url.host]
 
 
-def test_adapter_priority_and_sticky_success():
+def test_adapter_priority_and_sticky_success(google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     calls = []
     def respond(request):
         route = request_route(request)
         calls.append(route)
-        return httpx.Response(503) if route == 'batch' else httpx.Response(200, json=['Xin chào'])
+        return httpx.Response(503) if route == 'clients5' else httpx.Response(200, text=google_batch_response('Xin chào'))
     adapter = GoogleTranslateClient(client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond)))
     try:
         assert adapter.translate('Hello', 'English', 'Vietnamese').error.code == 'network'
         result = adapter.translate('Hello', 'English', 'Vietnamese')
         assert result.text == 'Xin chào' and result.input_tokens is result.output_tokens is None
         assert adapter.translate('New text', 'English', 'Vietnamese').text == 'Xin chào'
-        assert calls == ['batch', 'clients5', 'clients5']
+        assert calls == ['clients5', 'batch', 'batch']
     finally:
         adapter.close()
 
@@ -96,7 +96,7 @@ def test_retries_progress_to_gtx_without_looping():
     try:
         for _ in range(4):
             assert adapter.translate('Hello', 'English', 'Vietnamese').error.code == 'network'
-        assert calls == ['batch', 'clients5', 'gtx', 'gtx']
+        assert calls == ['clients5', 'batch', 'gtx', 'gtx']
     finally:
         adapter.close()
 
@@ -113,8 +113,8 @@ def test_gtx_success_is_sticky_and_get_routes_keep_language_and_text():
         for _ in range(2): adapter.translate('原文 日本語', 'Japanese', 'Vietnamese')
         assert adapter.translate('原文 日本語', 'Japanese', 'Vietnamese').text == 'Xin chào. 世界\nDòng 2'
         assert adapter.translate('New source', 'English', 'Korean').text == 'Xin chào. 世界\nDòng 2'
-        assert [request_route(r) for r in calls] == ['batch', 'clients5', 'gtx', 'gtx']
-        assert dict(calls[1].url.params) == dict(client='dict-chrome-ex', sl='ja', tl='vi', q='原文 日本語')
+        assert [request_route(r) for r in calls] == ['clients5', 'batch', 'gtx', 'gtx']
+        assert dict(calls[0].url.params) == dict(client='dict-chrome-ex', sl='ja', tl='vi', q='原文 日本語')
         assert dict(calls[2].url.params) == dict(client='gtx', sl='ja', tl='vi', dt='t', q='原文 日本語')
         assert dict(calls[3].url.params) == dict(client='gtx', sl='en', tl='ko', dt='t', q='New source')
     finally:
@@ -122,7 +122,7 @@ def test_gtx_success_is_sticky_and_get_routes_keep_language_and_text():
 
 
 @pytest.mark.parametrize('failure', ['timeout', 'network', 408, 429, 503])
-def test_retryable_failures_prepare_next_route_without_hidden_request(failure):
+def test_retryable_failures_prepare_next_route_without_hidden_request(failure, google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     calls = []
     def respond(request):
@@ -131,15 +131,15 @@ def test_retryable_failures_prepare_next_route_without_hidden_request(failure):
             if failure == 'timeout': raise httpx.ReadTimeout('private', request=request)
             if failure == 'network': raise httpx.ConnectError('private', request=request)
             return httpx.Response(failure, headers={'retry-after': '90'})
-        return httpx.Response(200, json=['ok'])
+        return httpx.Response(200, text=google_batch_response('ok'))
     adapter = GoogleTranslateClient(client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond)))
     try:
         result = adapter.translate('Hello', 'English', 'Vietnamese')
-        assert result.error.retryable and calls == ['batch']
+        assert result.error.retryable and calls == ['clients5']
         if failure == 429:
             assert result.error.retry_after_s == 90
         assert adapter.translate('Current source', 'English', 'Vietnamese').text == 'ok'
-        assert calls == ['batch', 'clients5']
+        assert calls == ['clients5', 'batch']
     finally:
         adapter.close()
 
@@ -156,36 +156,36 @@ def test_nonretry_errors_do_not_advance_route(status, body):
     try:
         for _ in range(2):
             assert not adapter.translate('Hello', 'English', 'Vietnamese').error.retryable
-        assert calls == ['batch', 'batch']
+        assert calls == ['clients5', 'clients5']
     finally:
         adapter.close()
 
 
-def test_invalid_input_does_not_reset_prepared_fallback():
+def test_invalid_input_does_not_reset_prepared_fallback(google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     calls = []
     def respond(request):
         calls.append(request_route(request))
-        return httpx.Response(503) if len(calls) == 1 else httpx.Response(200, json=['ok'])
+        return httpx.Response(503) if len(calls) == 1 else httpx.Response(200, text=google_batch_response('ok'))
     adapter = GoogleTranslateClient(client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond)))
     try:
         adapter.translate('Hello', 'English', 'Vietnamese')
         assert adapter.translate('x'*2001, 'English', 'Vietnamese').error.code == 'invalid_input'
         assert not adapter.translate('', 'English', 'Vietnamese').text
-        assert calls == ['batch']
+        assert calls == ['clients5']
         assert adapter.translate('Current', 'English', 'Vietnamese').text == 'ok'
-        assert calls == ['batch', 'clients5']
+        assert calls == ['clients5', 'batch']
     finally:
         adapter.close()
 
 
-def test_closed_client_restarts_with_batch():
+def test_closed_client_restarts_with_clients5(google_batch_response):
     from engines.google_translate import GoogleTranslateClient
     calls, clients = [], []
     def respond(request):
         route = request_route(request)
         calls.append(route)
-        return httpx.Response(503) if route == 'batch' else httpx.Response(200, json=['ok'])
+        return httpx.Response(503) if route == 'clients5' else httpx.Response(200, text=google_batch_response('ok'))
     def factory():
         client = httpx.Client(transport=httpx.MockTransport(respond))
         clients.append(client)
@@ -197,7 +197,7 @@ def test_closed_client_restarts_with_batch():
         adapter.close()
         assert clients[0].is_closed
         adapter.translate('Hello', 'English', 'Vietnamese')
-        assert calls == ['batch', 'clients5', 'batch']
+        assert calls == ['clients5', 'batch', 'clients5']
     finally:
         adapter.close()
 
@@ -214,9 +214,9 @@ def test_logs_redact_all_get_queries_and_never_log_batch_source(caplog):
     adapter = GoogleTranslateClient(client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond)))
     try:
         for _ in range(3): adapter.translate('private source', 'English', 'Vietnamese')
-        assert [route for route, _ in calls] == ['batch', 'clients5', 'gtx']
-        assert b'private' in calls[0][1].content
-        assert calls[1][1].url.params['q'] == calls[2][1].url.params['q'] == 'private source'
+        assert [route for route, _ in calls] == ['clients5', 'batch', 'gtx']
+        assert b'private' in calls[1][1].content
+        assert calls[0][1].url.params['q'] == calls[2][1].url.params['q'] == 'private source'
         assert 'private' not in caplog.text and 'q=' not in caplog.text
     finally:
         adapter.close()
@@ -268,14 +268,14 @@ def test_real_adapter_queue_respects_429_after_stale_source_and_pauses_after_fou
         assert not worker.drain_results()  # Stale result discarded, service failure retained.
         now[0] = 11.999
         wait_for_queue_ticks()
-        assert calls == [('batch', 'Old scene')]
+        assert calls == [('clients5', 'Old scene')]
         for count, at, due in ((2, 12., 14.), (3, 14., 18.)):
             now[0] = at
             qtbot.waitUntil(lambda: len(calls) == count)
             qtbot.waitUntil(lambda: gate.snapshot(now_s=at).not_before_s == due)
         now[0] = 18.
         qtbot.waitUntil(lambda: gate.snapshot(now_s=18).phase == 'paused')
-        assert calls == [('batch', 'Old scene'), ('clients5', 'Current scene'),
+        assert calls == [('clients5', 'Old scene'), ('batch', 'Current scene'),
                          ('gtx', 'Current scene'), ('gtx', 'Current scene')]
         now[0] = 10000.
         submit(3, 'New paused scene')
@@ -295,8 +295,8 @@ def test_facade_cache_hit_keeps_fallback_route_and_service_failure_budget(google
     def respond(request):
         calls.append(request_route(request))
         if len(calls) == 2: return httpx.Response(503)
-        if request.method == 'POST': return httpx.Response(200, text=google_batch_response('cached'))
-        return httpx.Response(200, json=['fresh'])
+        if request.method == 'POST': return httpx.Response(200, text=google_batch_response('fresh'))
+        return httpx.Response(200, json=['cached'])
     service = TranslationService(google_factory=lambda: GoogleTranslateClient(
         client_factory=lambda: httpx.Client(transport=httpx.MockTransport(respond))))
     settings = replace(runtime_settings, provider=replace(runtime_settings.provider,
@@ -312,7 +312,7 @@ def test_facade_cache_hit_keeps_fallback_route_and_service_failure_budget(google
         gate.record_result(cached, generation=generation, now_s=1)
         assert gate.snapshot(now_s=1).retries_issued == 1
         fresh = service.translate('Current source', settings)
-        assert fresh.text == 'fresh' and calls == ['batch', 'batch', 'clients5']
+        assert fresh.text == 'fresh' and calls == ['clients5', 'clients5', 'batch']
         gate.record_result(fresh, generation=generation, now_s=1)
         assert gate.snapshot(now_s=1).retries_issued == 0
     finally:

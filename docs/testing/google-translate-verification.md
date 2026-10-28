@@ -1,11 +1,11 @@
 # Google Translate — kiểm chứng 2026-10-23
 
-## Cập nhật: batchexecute → clients5 → GTX
+## Cập nhật 2026-10-28: clients5 → batchexecute → GTX
 
 - Thiết kế/kế hoạch mới: docs/superpowers/specs/2026-10-23-google-web-priority-design.md và docs/superpowers/plans/2026-10-23-google-web-priority.md; người dùng duyệt Native.
 - Sau thay adapter và sửa lỗi review: **385 passed in 12.66s, exit 0**, không skip/xfail Google. `git diff --check` exit 0.
-- Adapter mới bắt đầu bằng batchexecute, lỗi retry được mới chuẩn bị clients5 rồi GTX; mỗi lượt translate tối đa một HTTP request. Đường thành công được giữ đến khi client đóng. Không quay vòng khi đã đến GTX.
-- HTTP429 vẫn chờ Retry-After hoặc mặc định30 giây, dù request kế tiếp dùng đường khác. Bốn lỗi liên tiếp trên batch/clients5/GTX/GTX vẫn làm gate pause. Lỗi input/nonretry không chuyển đường.
+- Adapter bắt đầu bằng clients5, lỗi retry được mới chuẩn bị batchexecute rồi GTX; mỗi lượt translate tối đa một HTTP request. Đường thành công được giữ đến khi client đóng. Không quay vòng khi đã đến GTX.
+- HTTP429 vẫn chờ Retry-After hoặc mặc định30 giây, dù request kế tiếp dùng đường khác. Bốn lỗi liên tiếp trên clients5/batch/GTX/GTX vẫn làm gate pause. Lỗi input/nonretry không chuyển đường.
 - Integration fake HTTP + queue thật xác nhận lỗi429 của scene cũ vẫn tính ngân sách/deadline; scene hiện tại chỉ gửi sau12 giây; không có request thứ5 dù clock10000 hoặc scene mới. Cache hit không đổi route hoặc chữa budget.
 - Parser giữ toàn bộ segment/Unicode, gồm U+2028/U+2029; không coi ký tự phân dòng Unicode là framing HTTP. Query clients5/GTX và body batch không lọt log HTTPX INFO.
 - Vẫn dùng checkout feature hiện có và PowerShell harness trên Windows; đánh đổi là thay đổi cùng nhánh cũ và không sinh review package bằng Bash. Không sửa config.json/.env/MORT/video hoặc thêm dependency.
