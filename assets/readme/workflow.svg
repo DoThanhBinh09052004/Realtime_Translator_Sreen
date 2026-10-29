@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="208" viewBox="0 0 1280 208" role="img" aria-labelledby="title desc">
+  <title id="title">Luồng hoạt động của Translate HUD</title>
+  <desc id="desc">Chọn vùng màn hình, nhận diện chữ bằng PaddleOCR trên máy, gửi văn bản tới công cụ dịch qua mạng, hiển thị bản dịch bằng overlay.</desc>
+  <rect width="1280" height="208" rx="16" fill="#0e0f12"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <g fill="#191a21" stroke="#323544">
+      <rect x="24" y="24" width="280" height="160" rx="12"/>
+      <rect x="341" y="24" width="280" height="160" rx="12"/>
+      <rect x="658" y="24" width="280" height="160" rx="12"/>
+      <rect x="975" y="24" width="280" height="160" rx="12"/>
+    </g>
+    <g font-size="13" fill="#a5a7ff" font-weight="700">
+      <text x="46" y="57">01 / CAPTURE</text>
+      <text x="363" y="57">02 / RECOGNIZE</text>
+      <text x="680" y="57">03 / TRANSLATE</text>
+      <text x="997" y="57">04 / OVERLAY</text>
+    </g>
+    <g font-size="23" fill="#f4f4f7" font-weight="600">
+      <text x="46" y="101">Chọn vùng chữ</text>
+      <text x="363" y="101">OCR trên máy</text>
+      <text x="680" y="101">Dịch qua mạng</text>
+      <text x="997" y="101">Đọc bản dịch</text>
+    </g>
+    <g font-size="15" fill="#c5c8d8">
+      <text x="46" y="140">Chụp vùng chọn bằng mss</text>
+      <text x="363" y="140">PaddleOCR + gói ngôn ngữ</text>
+      <text x="680" y="140">Google Translate hoặc AI</text>
+      <text x="997" y="140">Phụ đề / Theo vị trí chữ</text>
+    </g>
+    <g stroke="#8c90a4" stroke-width="2" fill="none">
+      <path d="M312 104h19m-5-5 5 5-5 5"/>
+      <path d="M629 104h19m-5-5 5 5-5 5"/>
+      <path d="M946 104h19m-5-5 5 5-5 5"/>
+    </g>
+  </g>
+</svg>
