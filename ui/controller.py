@@ -146,6 +146,9 @@ class ControllerWindow(QWidget):
         self.ocr_page.source_changed.connect(self.settings_coordinator.set_source)
         self.ocr_page.target_changed.connect(self.settings_coordinator.set_target)
         self.ocr_page.interval_changed.connect(self.settings_coordinator.set_interval)
+        self.ocr_page.performance_mode_changed.connect(self.settings_coordinator.set_ocr_performance_mode)
+        self.ocr_page.auto_threads_changed.connect(self.settings_coordinator.set_ocr_auto_threads)
+        self.ocr_page.threads_changed.connect(self.settings_coordinator.set_ocr_threads)
         self.ocr_page.select_region_requested.connect(self._on_select_region_clicked)
         self.ocr_page.manage_packs_requested.connect(self.open_language_packs)
         self.page_ocr = self.ocr_page

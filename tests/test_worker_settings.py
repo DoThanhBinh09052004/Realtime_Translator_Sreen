@@ -309,3 +309,23 @@ def test_ui_configures_worker_only_after_successful_save(qtbot, monkeypatch, wid
     if widget == 'api_key_input':
         window.ai_page.save_key_btn.click()
     worker.configure.assert_not_called()
+
+
+def test_worker_forwards_ocr_performance_settings():
+    calls = []
+    def dummy_ocr(image, lang, **kwargs):
+        calls.append((lang, kwargs))
+        from core.contracts import OcrResult
+        return OcrResult(text="test")
+
+    state = config.State()
+    state.update(ocr_performance_mode="eco", ocr_auto_threads=False, ocr_threads=2)
+    worker = TranslationWorker(state, config.DEFAULT_REGION, ocr_reader=dummy_ocr)
+    worker._read_ocr(np.zeros((10, 10), dtype=np.uint8), "English")
+
+    assert len(calls) == 1
+    lang, kwargs = calls[0]
+    assert lang == "en"
+    assert kwargs.get("enable_mkldnn") is False
+    assert kwargs.get("cpu_threads") == 2
+

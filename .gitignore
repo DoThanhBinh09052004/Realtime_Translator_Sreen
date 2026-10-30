@@ -46,6 +46,12 @@ assets/ocr/**
 !assets/ocr/manifest.json
 !assets/ocr/language-packs.json
 
+# Video test files
+tests/*.mp4
+
+# Codegraph
+.codegraph/
+
 # Local planning documents (keep on disk, never publish)
 /docs/plans/
 /docs/superpowers/

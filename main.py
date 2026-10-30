@@ -131,7 +131,7 @@ def main():
 
     # ===== 3. Khởi tạo Background Worker =====
     worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"],
-                               ocr_reader=lambda image, lang: ocr_image(image, lang=lang, store=pack_store))
+                               ocr_reader=lambda image, lang, **kwargs: ocr_image(image, lang=lang, store=pack_store, **kwargs))
     geometry_provider = ScreenGeometryProvider(app)
     capture_geometry = None
 

@@ -50,7 +50,10 @@ class SettingsCoordinator(QObject):
                         provider_key_storage(provider)),
             OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
                          tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None,
-                         self._source_choices(), self._source_notice()),
+                         self._source_choices(), self._source_notice(),
+                         getattr(self.state, 'ocr_performance_mode', 'high'),
+                         getattr(self.state, 'ocr_auto_threads', True),
+                         getattr(self.state, 'ocr_threads', 4)),
             SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
                               self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y,
                               self.state.overlay_mode))
@@ -226,6 +229,17 @@ class SettingsCoordinator(QObject):
 
     def set_target(self, language: str) -> bool:
         return self._commit(lambda: self.state.update(target=language), field='target', after_commit=self._configure_worker)
+
+    def set_ocr_performance_mode(self, mode: str) -> bool:
+        if mode not in ('high', 'eco'):
+            return False
+        return self._commit(lambda: self.state.update(ocr_performance_mode=mode), field='ocr_performance_mode', after_commit=self._configure_worker)
+
+    def set_ocr_auto_threads(self, auto: bool) -> bool:
+        return self._commit(lambda: self.state.update(ocr_auto_threads=bool(auto)), field='ocr_auto_threads', after_commit=self._configure_worker)
+
+    def set_ocr_threads(self, threads: int) -> bool:
+        return self._commit(lambda: self.state.update(ocr_threads=int(threads)), field='ocr_threads', after_commit=self._configure_worker)
 
     def set_interval(self, interval_ms: int) -> bool:
         return self._commit(lambda: save_config('interval_ms', interval_ms), field='interval', after_commit=self._configure_worker)

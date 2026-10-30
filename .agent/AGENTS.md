@@ -9,8 +9,9 @@ This profile adapts Superpowers workflows for Antigravity with strict single-flo
 1. Prefer local skills in `.agent/skills/<skill-name>/SKILL.md`.
 2. Execute one core task at a time with `task_boundary`.
 3. Use `browser_subagent` only for browser automation tasks.
-4. Track checklist progress in `<project-root>/docs/plans/task.md` (table-only live tracker).
+4. Track checklist progress in `<project-root>/docs/plans/task.md` (table-only live tracker) for complex tasks; skip for small tasks where Ponytail is primary.
 5. Keep changes scoped to the requested task and verify before completion claims.
+6. Follow the Development Workflow Routing (see root `AGENTS.md`): use Ponytail for small tasks (minimal changes, no unnecessary planning overhead) and Superpowers for complex tasks.
 
 ## Tool Translation Contract
 

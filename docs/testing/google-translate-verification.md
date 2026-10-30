@@ -2,7 +2,7 @@
 
 ## Cập nhật 2026-10-28: clients5 → batchexecute → GTX
 
-- Thiết kế/kế hoạch mới: docs/superpowers/specs/2026-10-23-google-web-priority-design.md và docs/superpowers/plans/2026-10-23-google-web-priority.md; người dùng duyệt Native.
+- Thiết kế/kế hoạch mới: docs/plans/2026-10-23-google-web-priority-design.md và docs/plans/2026-10-23-google-web-priority.md; người dùng duyệt Native.
 - Sau thay adapter và sửa lỗi review: **385 passed in 12.66s, exit 0**, không skip/xfail Google. `git diff --check` exit 0.
 - Adapter bắt đầu bằng clients5, lỗi retry được mới chuẩn bị batchexecute rồi GTX; mỗi lượt translate tối đa một HTTP request. Đường thành công được giữ đến khi client đóng. Không quay vòng khi đã đến GTX.
 - HTTP429 vẫn chờ Retry-After hoặc mặc định30 giây, dù request kế tiếp dùng đường khác. Bốn lỗi liên tiếp trên clients5/batch/GTX/GTX vẫn làm gate pause. Lỗi input/nonretry không chuyển đường.
@@ -32,7 +32,7 @@ Quyết định công cụ: dùng reviewer gpt-6.1-sol high sẵn có sau khi As
 
 ## Kết quả triển khai
 
-- Plan: docs/superpowers/plans/2026-10-23-google-translate.md.
+- Plan: docs/plans/2026-10-23-google-translate.md.
 - Native execution, baseline cũ 286 test PASS khi bỏ test Google nháp chưa triển khai.
 - Sau T1–T8 và sửa lỗi review cuối: **347 passed in 12.49s, exit 0**, toàn bộ test, không skip/xfail Google.
 - Pytest dùng Qt offscreen, fake OCR/capture và HTTP MockTransport; không dùng key hoặc nội dung màn hình thật.

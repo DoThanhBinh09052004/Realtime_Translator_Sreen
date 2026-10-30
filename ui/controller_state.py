@@ -31,6 +31,9 @@ class OcrPageState:
     region: tuple[int, int, int, int] | None
     source_choices: tuple[LanguageChoice, ...] | None = None
     source_notice: str = ''
+    performance_mode: str = 'high'
+    auto_threads: bool = True
+    threads: int = 4
 
 
 @dataclass(frozen=True)

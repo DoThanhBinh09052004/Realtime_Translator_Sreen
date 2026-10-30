@@ -575,12 +575,25 @@ class TranslationWorker(QThread):
             self._emit_current(revision, self.subtitle_updated, SubtitleFrame(revision, 0, text, translated.text))
         return False
 
-    def _read_ocr(self, image, source_name):
-        lang = SUPPORTED_LANGUAGES.get(source_name)
+    def _read_ocr(self, image, source_name, settings=None):
+        lang = SUPPORTED_LANGUAGES.get(source_name) or (source_name if source_name in SUPPORTED_LANGUAGES.values() else None)
         if lang is None:
             from core.contracts import OcrResult
             return OcrResult(error=EngineError('ocr_model_missing', 'Ngôn ngữ nguồn không được hỗ trợ.', False))
-        return (self._ocr_reader or ocr_image)(image, lang=lang)
+        if settings is None:
+            with QMutexLocker(self._mutex):
+                settings = self._settings
+        from core.config import resolve_ocr_threads
+        perf_mode = getattr(settings, 'ocr_performance_mode', 'high')
+        auto_threads = getattr(settings, 'ocr_auto_threads', True)
+        custom_threads = getattr(settings, 'ocr_threads', 4)
+        enable_mkldnn = (perf_mode == 'high')
+        threads = resolve_ocr_threads(auto_threads, custom_threads)
+        reader = self._ocr_reader or ocr_image
+        try:
+            return reader(image, lang=lang, enable_mkldnn=enable_mkldnn, cpu_threads=threads)
+        except TypeError:
+            return reader(image, lang=lang)
 
     def run(self):
         # Construction, use and cleanup all happen on this thread. UI only publishes settings.
@@ -674,7 +687,7 @@ class TranslationWorker(QThread):
                     source_key = key
                     last_status = None
                 if scanner_revision != revision:
-                    scanner = RegionScanner(profile, ocr_reader=self._ocr_reader or ocr_image, clock=time.monotonic)
+                    scanner = RegionScanner(profile, ocr_reader=lambda img, lang: self._read_ocr(img, lang, settings=settings), clock=time.monotonic)
                     scanner_revision = revision
                 frame = source.read_latest(now_s=started)
                 status = source.status()

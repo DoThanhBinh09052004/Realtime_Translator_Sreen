@@ -59,6 +59,17 @@ DEFAULT_REGION = {
     "height": 600
 }
 
+DEFAULT_OCR_PERFORMANCE_MODE = "high"
+DEFAULT_OCR_AUTO_THREADS = True
+DEFAULT_OCR_THREADS = 4
+
+
+def resolve_ocr_threads(auto: bool, custom_threads: int) -> int:
+    total_cores = max(1, os.cpu_count() or 4)
+    if not auto:
+        return _bounded_int(custom_threads, DEFAULT_OCR_THREADS, 1, total_cores)
+    return max(2, min(6, total_cores // 2))
+
 
 def _read_config(strict: bool = False, *, changes: dict | None = None) -> dict:
     try:
@@ -161,9 +172,14 @@ def normalize_config(raw: object) -> dict:
         ("current_provider", PROVIDERS, DEFAULT_PROVIDER),
         ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
         ("overlay_mode", ("subtitle", "blocks"), "subtitle"),
+        ("ocr_performance_mode", ("high", "eco"), DEFAULT_OCR_PERFORMANCE_MODE),
     ):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and value in choices else default
+    auto_threads = cfg.get("ocr_auto_threads")
+    cfg["ocr_auto_threads"] = auto_threads if isinstance(auto_threads, bool) else DEFAULT_OCR_AUTO_THREADS
+    max_cores = max(1, os.cpu_count() or 4)
+    cfg["ocr_threads"] = _bounded_int(cfg.get("ocr_threads"), DEFAULT_OCR_THREADS, 1, max_cores)
     for field, default in (("bg_color", DEFAULT_BG_COLOR), ("text_color", DEFAULT_TEXT_COLOR)):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value) else default
@@ -210,12 +226,16 @@ class State:
         self.overlay_x = cfg.get("overlay_x", None)
         self.overlay_y = cfg.get("overlay_y", None)
         self.overlay_mode = cfg.get("overlay_mode", "subtitle")
+        self.ocr_performance_mode = cfg.get("ocr_performance_mode", DEFAULT_OCR_PERFORMANCE_MODE)
+        self.ocr_auto_threads = cfg.get("ocr_auto_threads", DEFAULT_OCR_AUTO_THREADS)
+        self.ocr_threads = int(cfg.get("ocr_threads", DEFAULT_OCR_THREADS))
 
     def update(self, **kwargs) -> None:
         names = {"source": "source_lang", "target": "target_lang"}
         names.update({k: k for k in (
             "bg_color", "bg_opacity", "text_color", "font_size",
             "overlay_preset", "overlay_x", "overlay_y", "overlay_mode",
+            "ocr_performance_mode", "ocr_auto_threads", "ocr_threads",
         )})
         if any(k not in names for k in kwargs):
             raise ConfigError("Trường thiết lập không hợp lệ.")
@@ -465,6 +485,9 @@ def load_runtime_settings(state: State, interval_ms: int) -> RuntimeSettings:
             provider=load_provider_settings(),
             interval_ms=_bounded_int(interval_ms, 500, 100, 3000),
             overlay_mode=state.overlay_mode,
+            ocr_performance_mode=getattr(state, 'ocr_performance_mode', DEFAULT_OCR_PERFORMANCE_MODE),
+            ocr_auto_threads=getattr(state, 'ocr_auto_threads', DEFAULT_OCR_AUTO_THREADS),
+            ocr_threads=getattr(state, 'ocr_threads', DEFAULT_OCR_THREADS),
         )
 
 

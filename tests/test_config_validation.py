@@ -72,3 +72,44 @@ def test_loading_invalid_json_does_not_rewrite_file(content):
 def test_missing_config_is_not_created_on_load():
     assert config.load_config()["interval_ms"] == 500
     assert not Path(config.CONFIG_PATH).exists()
+
+
+def test_ocr_performance_config_defaults_and_normalization():
+    cfg = config.normalize_config({})
+    assert cfg["ocr_performance_mode"] == "high"
+    assert cfg["ocr_auto_threads"] is True
+    assert cfg["ocr_threads"] == 4
+
+    # Valid values
+    custom = config.normalize_config({
+        "ocr_performance_mode": "eco",
+        "ocr_auto_threads": False,
+        "ocr_threads": 2,
+    })
+    assert custom["ocr_performance_mode"] == "eco"
+    assert custom["ocr_auto_threads"] is False
+    assert custom["ocr_threads"] == 2
+
+    # Invalid values fallback to defaults or bounds
+    invalid = config.normalize_config({
+        "ocr_performance_mode": "invalid_mode",
+        "ocr_auto_threads": "not_bool",
+        "ocr_threads": -5,
+    })
+    assert invalid["ocr_performance_mode"] == "high"
+    assert invalid["ocr_auto_threads"] is True
+    assert invalid["ocr_threads"] == 1
+
+
+def test_resolve_ocr_threads():
+    import os
+    total_cores = os.cpu_count() or 4
+    # Auto mode: allocates ~50% cores, bounded between 2 and 6
+    expected_auto = max(2, min(6, total_cores // 2))
+    assert config.resolve_ocr_threads(auto=True, custom_threads=8) == expected_auto
+
+    # Manual mode: bounds within [1, total_cores]
+    assert config.resolve_ocr_threads(auto=False, custom_threads=1) == 1
+    assert config.resolve_ocr_threads(auto=False, custom_threads=999) == total_cores
+    assert config.resolve_ocr_threads(auto=False, custom_threads=-2) == 1
+

@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton
 from PyQt5.QtCore import Qt, QSize, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
+from ui.widgets.ocr_performance_card import OcrPerformanceCard
 from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE
 from ui.icons import get_lucide_icon
 from ui.controller_state import LanguageChoice, OcrPageState
@@ -10,6 +11,9 @@ class OcrSettingsPage(QScrollArea):
     source_changed = pyqtSignal(str)
     target_changed = pyqtSignal(str)
     interval_changed = pyqtSignal(int)
+    performance_mode_changed = pyqtSignal(str)
+    auto_threads_changed = pyqtSignal(bool)
+    threads_changed = pyqtSignal(int)
     select_region_requested = pyqtSignal()
     manage_packs_requested = pyqtSignal()
 
@@ -91,6 +95,18 @@ class OcrSettingsPage(QScrollArea):
         ocr_timing_card.layout.addLayout(timing_row)
         layout.addWidget(ocr_timing_card)
 
+        # Card: OCR Performance & CPU/RAM Allocation
+        self.performance_card = OcrPerformanceCard(
+            performance_mode=state.performance_mode,
+            auto_threads=state.auto_threads,
+            threads=state.threads,
+            parent=self
+        )
+        self.performance_card.mode_changed.connect(self.performance_mode_changed.emit)
+        self.performance_card.auto_threads_changed.connect(self.auto_threads_changed.emit)
+        self.performance_card.threads_changed.connect(self.threads_changed.emit)
+        layout.addWidget(self.performance_card)
+
         # Card 3: Region Inspector
         reg_card = ModernCard("Vùng màn hình theo dõi", "Tọa độ và kích thước khung hình camera OCR quét phụ đề")
         
@@ -136,6 +152,7 @@ class OcrSettingsPage(QScrollArea):
         self.tgt_combo.setCurrentText(state.target)
         self.interval_spin.setValue(state.interval_ms)
         self._render_region(state)
+        self.performance_card.set_state(state.performance_mode, state.auto_threads, state.threads)
         del blockers
 
     def update_source_choices(self, choices: tuple[LanguageChoice, ...], selected_config_name: str) -> None:

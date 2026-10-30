@@ -25,6 +25,9 @@ class RuntimeSettings:
     provider: ProviderSettings
     interval_ms: int
     overlay_mode: Literal['subtitle', 'blocks'] = 'subtitle'
+    ocr_performance_mode: str = 'high'
+    ocr_auto_threads: bool = True
+    ocr_threads: int = 4
 
 
 @dataclass(frozen=True)
