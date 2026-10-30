@@ -45,3 +45,7 @@ docs/*
 assets/ocr/**
 !assets/ocr/manifest.json
 !assets/ocr/language-packs.json
+
+# Local planning documents (keep on disk, never publish)
+/docs/plans/
+/docs/superpowers/
