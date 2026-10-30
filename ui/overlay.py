@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QLabel, QGraphicsDropShadowEffect
-from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal, QPoint
-from PyQt5.QtGui import QColor, QGuiApplication
+from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSignal, QRectF, QPoint
+from PyQt5.QtGui import QColor, QPainter, QGuiApplication
 from ui.block_overlay import BlockOverlay
 from ui.subtitle_geometry import clamp_position, preset_position
 
@@ -117,14 +117,15 @@ class Overlay(QLabel):
             text_col = QColor("#ffffff")
 
         alpha = max(0.0, min(1.0, self.opacity_pct / 100.0))
-        r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
+        bg_col.setAlpha(round(255 * alpha))
+        self._background_color = bg_col
 
         border_css = "2px dashed #6366f1" if self.is_drag_mode else "1px solid rgba(255, 255, 255, 0.18)"
 
         self.setStyleSheet(f"""
             QLabel {{
                 color: {text_col.name()};
-                background-color: rgba({r}, {g}, {b}, {alpha:.2f});
+                background-color: transparent;
                 font-size: {self.font_size}px;
                 font-weight: 600;
                 padding: 10px 22px;
@@ -133,6 +134,18 @@ class Overlay(QLabel):
                 font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
             }}
         """)
+        self.update()
+
+    def paintEvent(self, event):
+        # Translucent top-level QLabels do not reliably paint QSS backgrounds.
+        # Paint the background independently so opacity never affects the text.
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(self._background_color)
+        painter.drawRoundedRect(QRectF(self.rect()), 12, 12)
+        painter.end()
+        super().paintEvent(event)
 
     def _available_geometry(self):
         """Select the current monitor before layout, in Qt logical coordinates."""

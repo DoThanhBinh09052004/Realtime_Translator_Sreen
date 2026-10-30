@@ -755,3 +755,253 @@ class TestScreenPositionRecovery:
         assert tb.pos().y() < 90000
 
         gc.shutdown()
+
+
+class TestToolbarWindowVisibilityRules:
+    """Visibility rules connecting main application window state with the game toolbar."""
+
+    def test_app_visible_not_minimized_hides_toolbar(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        assert not tb.isVisible()
+        gc.shutdown()
+
+    def test_app_minimized_or_hidden_shows_toolbar(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        assert not tb.isVisible()
+
+        # Hide to tray
+        controller_widget.hide()
+        assert tb.isVisible()
+
+        # Show again
+        controller_widget.show()
+        assert not tb.isVisible()
+
+        # Minimize
+        controller_widget.showMinimized()
+        assert tb.isVisible()
+
+        # Restore
+        controller_widget.showNormal()
+        assert not tb.isVisible()
+
+        gc.shutdown()
+
+    def test_visibility_change_does_not_trigger_start_stop_worker(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        worker = MockWorker(running=False)
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            worker=worker,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        # Minimize, restore, hide multiple times
+        controller_widget.showMinimized()
+        controller_widget.showNormal()
+        controller_widget.hide()
+        controller_widget.show()
+
+        assert not worker.is_running()
+        gc.shutdown()
+
+    def test_worker_stop_or_error_when_app_open_does_not_resurrect_toolbar(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        worker = MockWorker(running=True)
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            worker=worker,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        assert not tb.isVisible()
+
+        # Worker stops or encounters error
+        worker.set_running(False)
+        gc.sync_state()
+
+        # Toolbar must remain hidden because app is open
+        assert not tb.isVisible()
+        gc.shutdown()
+
+    def test_region_selection_finish_or_cancel_obeys_restored_controller_state(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        # Start selection
+        gc.set_selection_active(True)
+        assert not tb.isVisible()
+
+        # Finish selection while controller is visible
+        gc.set_selection_active(False)
+        assert not tb.isVisible()
+
+        # If controller was hidden/tray when selection finished
+        controller_widget.hide()
+        gc.set_selection_active(True)
+        gc.set_selection_active(False)
+        assert tb.isVisible()
+
+        gc.shutdown()
+
+    def test_tray_single_click_does_not_show_toolbar_over_open_app(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+            tray_available=True,
+        )
+
+        assert not tb.isVisible()
+
+        # Tray single click
+        gc._on_tray_activated(QSystemTrayIcon.Trigger)
+        assert not tb.isVisible()
+
+        # But if controller is hidden, tray single click reveals toolbar
+        controller_widget.hide()
+        gc._on_tray_activated(QSystemTrayIcon.Trigger)
+        assert tb.isVisible()
+
+        gc.shutdown()
+
+    def test_capture_exclusion_failure_keeps_toolbar_hidden_when_running_even_if_minimized(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        worker = MockWorker(running=True)
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.hide()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        # capture_excluder fails
+        gc = GameControls(
+            controller=controller_widget,
+            worker=worker,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: EngineError("capture", "failed"),
+            tray_available=True,
+        )
+
+        # Even though controller is hidden, capture exclusion failed and worker is running -> toolbar MUST be hidden
+        assert not tb.isVisible()
+
+        # Tray single click also cannot reveal it
+        gc._on_tray_activated(QSystemTrayIcon.Trigger)
+        assert not tb.isVisible()
+
+        # Worker stops -> toolbar can now be shown
+        worker.set_running(False)
+        gc.sync_state()
+        assert tb.isVisible()
+
+        gc.shutdown()
+
+    def test_shutdown_detaches_event_filter_and_prevents_resurrection(self, qtbot):
+        from PyQt5.QtWidgets import QWidget
+        from ui.game_controls import GameControls
+
+        controller_widget = QWidget()
+        qtbot.addWidget(controller_widget)
+        controller_widget.show()
+
+        tb = GameToolbar()
+        qtbot.addWidget(tb)
+
+        gc = GameControls(
+            controller=controller_widget,
+            toolbar=tb,
+            hotkeys=GlobalHotkeys(native_api=FakeNativeApi(), platform="win32"),
+            capture_excluder=lambda hwnd, exc=True: None,
+        )
+
+        gc.shutdown()
+        assert not tb.isVisible()
+
+        # Subsequent controller hide/minimize should not resurrect toolbar
+        controller_widget.hide()
+        controller_widget.showMinimized()
+        assert not tb.isVisible()

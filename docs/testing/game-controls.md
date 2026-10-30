@@ -15,6 +15,8 @@ Shortcut conflicts must be reported and must not prevent use through the toolbar
 
 If Windows cannot exclude floating controls from capture, the bar stays hidden during an active translation session. Use the tray menu or Ctrl+Alt+F8 to stop; it becomes available again afterward.
 
+Toolbar visibility tracks main application window state: when the main window is open (visible and not minimized), the floating toolbar is automatically hidden. When the main window is minimized or hidden to the system tray, the toolbar is restored according to existing running/stopped state. Higher-priority safety conditions override visibility: during active selection, app exit/shutdown, or unexcluded capture, the toolbar remains hidden.
+
 Closing the full window hides it when the tray is available. Exit from the toolbar/tray/sidebar ends the application after safely stopping workers. Without a tray, closing the full window retains safe exit behavior.
 
 Selection preserves the prior running/stopped intent and main-window visibility. Escape keeps the previous capture region. Duplicate selection requests must not create multiple selectors; quitting while selecting must not restart translation.

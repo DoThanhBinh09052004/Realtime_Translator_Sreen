@@ -8,6 +8,7 @@ from core.config import (
     load_runtime_settings, load_custom_api_base_url, save_custom_api_base_url,
     get_provider_capabilities,
     provider_key_storage, import_legacy_provider_key, remove_legacy_provider_key,
+    save_capture_profile,
 )
 from core.languages import language_by_config_name, language_by_id
 from ui.controller_state import (AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot,
@@ -271,3 +272,14 @@ class SettingsCoordinator(QObject):
                 if self.overlay is not None:
                     self.overlay.set_mode(self.state.overlay_mode, revision)
         return self._commit(lambda: save_region(region), field='region', after_commit=apply)
+
+    def apply_capture_profile(self, profile) -> bool:
+        context = self.worker.capture_context if self.worker is not None else None
+        if context is None or context.source_kind != profile.source_kind:
+            self.save_failed.emit('Hãy chọn nguồn chụp trước khi áp dụng vùng OCR.')
+            return False
+        def apply():
+            revision = self.worker.configure_capture(profile, context)
+            if self.overlay is not None:
+                self.overlay.set_mode(self.state.overlay_mode, revision)
+        return self._commit(lambda: save_capture_profile(profile), field='capture_profile', after_commit=apply)

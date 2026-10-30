@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Callable
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
+from core.capture.models import CaptureProfile
 from ui.selector import RegionSelector
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class RegionSelectionLifecycle(QObject):
     """Manages the region selection workflow, preserving running intent and UI state."""
+    shutdown_finished = pyqtSignal()
 
     def __init__(
         self,
@@ -27,6 +29,8 @@ class RegionSelectionLifecycle(QObject):
         on_sync_geometry: Callable[[], None] | None = None,
         selector_factory: Callable[..., Any] | None = None,
         parent: QObject | None = None,
+        preview_factory=None,
+        editor_factory=None,
     ) -> None:
         super().__init__(parent)
         self.controller = controller
@@ -44,6 +48,22 @@ class RegionSelectionLifecycle(QObject):
         self._is_active = False
         self._is_closed = False
         self._session_generation = 0
+        from ui.capture_preview import CapturePreviewWorker
+        from ui.capture_regions_dialog import CaptureRegionsDialog
+        self.preview_factory = preview_factory or CapturePreviewWorker
+        self.editor_factory = editor_factory or CaptureRegionsDialog
+        self.preview_worker = None
+        self.current_editor = None
+        self._preview_result = None
+        self._latest_capture_context = None
+        self._capture_phase = None
+        self._shutdown_requested = False
+        self._shutdown_emitted = False
+        self._terminal_epoch = None
+        self._drain_started = None
+        self._poll = QTimer(self); self._poll.setInterval(30); self._poll.timeout.connect(self._advance_capture)
+        if isinstance(worker, QObject) and hasattr(worker, 'shutdown_finished'):
+            worker.shutdown_finished.connect(self._advance_capture)
 
     @property
     def is_active(self) -> bool:
@@ -63,6 +83,10 @@ class RegionSelectionLifecycle(QObject):
         preserves controller and overlay visibility, hides UI, and instantiates the selector.
         """
         if self._is_closed or self._is_active:
+            return
+
+        if isinstance(getattr(self.worker, 'capture_profile', None), CaptureProfile):
+            self._start_capture_selection()
             return
 
         self._is_active = True
@@ -190,7 +214,10 @@ class RegionSelectionLifecycle(QObject):
 
         # Finding 1: Resume through controller.start_ocr(preserve_translation_session=True)
         # to ensure controller status, starting_translation hook, and worker agree.
-        if self._was_running:
+        should_resume = self._was_running
+        if isinstance(getattr(self.worker, 'capture_profile', None), CaptureProfile):
+            should_resume = should_resume and getattr(self.controller, 'capture_run_requested', False) is True
+        if should_resume:
             if self.controller is not None and hasattr(self.controller, "start_ocr"):
                 self.controller.start_ocr(preserve_translation_session=True)
             elif self.worker is not None and hasattr(self.worker, "start_worker"):
@@ -229,3 +256,105 @@ class RegionSelectionLifecycle(QObject):
 
         if self.game_controls is not None and hasattr(self.game_controls, "set_selection_active"):
             self.game_controls.set_selection_active(False)
+
+    def _runtime_drained(self):
+        drained = getattr(self.worker, 'is_drained', None)
+        return drained if type(drained) is bool else not self.worker.is_running()
+
+    def _start_capture_selection(self):
+        self._is_active = True
+        self._latest_capture_context = self.worker.capture_context
+        self._session_generation += 1
+        self._was_running = (getattr(self.controller, 'capture_run_requested', False) is True
+                             or self.worker.is_running() or self.worker.restart_pending)
+        self._was_controller_visible = self.controller.isVisible()
+        self._was_overlay_visible = self.overlay.isVisible()
+        self.overlay.hide()
+        if self.game_controls is not None: self.game_controls.set_selection_active(True)
+        self._capture_phase = 'runtime_drain'
+        self.worker.stop_worker(preserve_translation_session=True)
+        self._poll.start(); self._advance_capture()
+
+    @pyqtSlot()
+    def _advance_capture(self):
+        preview_drained = self.preview_worker is None or not self.preview_worker.isRunning()
+        if self._shutdown_requested:
+            if self._runtime_drained() and preview_drained and not self._shutdown_emitted:
+                self._shutdown_emitted = True; self._poll.stop(); self.shutdown_finished.emit()
+            return
+        if self._is_closed: return
+        if self._capture_phase == 'runtime_drain' and self._runtime_drained():
+            self._capture_phase = 'preview'
+            self._preview_result = None
+            generation = self._session_generation
+            self.preview_worker = self.preview_factory(self.worker.capture_profile, self.worker.capture_context)
+            self.preview_worker.preview_ready.connect(lambda image, context: self._receive_preview(image, context, generation))
+            self.preview_worker.error_occurred.connect(lambda error: self._log_message(error.user_message))
+            self.preview_worker.shutdown_finished.connect(self._advance_capture)
+            self.preview_worker.start()
+            return
+        if self._capture_phase == 'preview' and preview_drained:
+            self.preview_worker = None
+            if self._preview_result is None:
+                self._capture_phase = None; self._poll.stop(); self._cleanup_selection_and_restore(); return
+            image, context = self._preview_result
+            self._capture_phase = 'editor'; self._poll.stop()
+            self.current_editor = self.editor_factory(self.worker.capture_profile, image, context)
+            if self._latest_capture_context is not None:
+                self.current_editor.update_context(self._latest_capture_context)
+            generation = self._session_generation
+            self.current_editor.profile_selected.connect(lambda profile: self._apply_profile(profile, generation))
+            self.current_editor.cancelled.connect(lambda: self._cancel_capture(generation))
+            self.current_editor.refresh_requested.connect(self._refresh_preview)
+            self.current_editor.show()
+
+    def _receive_preview(self, image, context, generation):
+        if not self._is_closed and generation == self._session_generation:
+            self._preview_result = image, context
+
+    def _apply_profile(self, profile, generation):
+        if self._is_closed or generation != self._session_generation: return
+        if not self.controller.settings_coordinator.apply_capture_profile(profile):
+            self.current_editor.error_label.setText('Lưu thất bại; giữ nguyên cấu hình. Hãy thử lại hoặc Hủy.')
+            return
+        editor, self.current_editor = self.current_editor, None
+        editor.accept(); self._capture_phase = None
+        self._cleanup_selection_and_restore()
+
+    def _cancel_capture(self, generation):
+        if self._is_closed or generation != self._session_generation: return
+        self.current_editor = None; self._capture_phase = None
+        self._cleanup_selection_and_restore()
+
+    def _refresh_preview(self):
+        if self.current_editor is not None:
+            editor, self.current_editor = self.current_editor, None
+            editor.accept()
+        self._capture_phase = 'runtime_drain'; self._poll.start(); self._advance_capture()
+
+    def update_capture_context(self, context):
+        self._latest_capture_context = context
+        if self.current_editor is not None: self.current_editor.update_context(context)
+
+    @pyqtSlot(object)
+    def on_capture_terminal(self, status):
+        context = getattr(self.worker, 'capture_context', None)
+        if (context is None or status.binding_epoch != context.binding_epoch
+                or self._terminal_epoch == status.binding_epoch or self._is_closed): return
+        self._terminal_epoch = status.binding_epoch
+        self.worker.stop_worker(preserve_translation_session=True)
+        self.overlay.clear()
+        if status.error is not None: self._log_message(status.error.user_message)
+        if hasattr(self.controller, 'show_capture_waiting'): self.controller.show_capture_waiting(status.error)
+        if self.game_controls is not None: self.game_controls.sync_state()
+
+    def request_shutdown(self):
+        if self._shutdown_requested: return
+        self._shutdown_requested = True
+        if hasattr(self.controller, 'capture_run_requested'): self.controller.capture_run_requested = False
+        self.close()
+        if self.current_editor is not None:
+            self.current_editor.accept(); self.current_editor = None
+        if self.preview_worker is not None: self.preview_worker.request_stop()
+        self.worker.stop_worker()
+        self._poll.start(); self._advance_capture()

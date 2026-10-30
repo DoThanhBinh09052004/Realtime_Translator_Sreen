@@ -32,7 +32,10 @@ def _anchor_delta(a, b):
 
 
 class BlockSession:
-    def __init__(self, *, policy=DEFAULT_DIALOGUE_POLICY):
+    def __init__(self, *, policy=DEFAULT_DIALOGUE_POLICY, max_tracks=32):
+        if type(max_tracks) is not int or not 1 <= max_tracks <= 32:
+            raise ValueError('Track quota must be between 1 and 32')
+        self.max_tracks=max_tracks
         self.policy=policy
         self.reset()
 
@@ -62,7 +65,7 @@ class BlockSession:
             self.reset();self._revision=revision
         self._now,self._settings=now_s,settings
         blocks=tuple(sorted((b for b in blocks if b.source_text.strip()),
-                            key=lambda b:(b.source_rect.y,b.source_rect.x,b.source_text)))[:32]
+                            key=lambda b:(b.source_rect.y,b.source_rect.x,b.source_text)))[:self.max_tracks]
         matches,used={},set()
         for phase in ('exact','progressive','spatial'):
             pairs=[]
@@ -92,7 +95,7 @@ class BlockSession:
         retained={}
         for key,t in self._tracks.items():
             if key not in used and not t.state.miss(now_s=now_s): retained[key]=t
-        remaining=32-len(retained)-len(used)
+        remaining=self.max_tracks-len(retained)-len(used)
         for i,b in enumerate(blocks):
             key=matches.get(i)
             t=self._tracks.get(key)

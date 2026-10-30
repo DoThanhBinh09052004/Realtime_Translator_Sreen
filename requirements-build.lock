@@ -895,6 +895,7 @@ numpy==2.2.6 \
     #   scipy
     #   shapely
     #   tifffile
+    #   windows-capture
 openai==2.20.0 \
     --hash=sha256:2654a689208cd0bf1098bb9462e8d722af5cbe961e6bba54e6f19fb843d88db1 \
     --hash=sha256:38d989c4b1075cd1f76abc68364059d822327cf1a932531d429795f4fc18be99
@@ -922,6 +923,7 @@ opencv-python==4.13.0.92 \
     # via
     #   -r requirements.txt
     #   paddleocr
+    #   windows-capture
 opencv-python-headless==5.0.0.93 \
     --hash=sha256:030ca5e0837a2963ab36ef896baa9767eb8d2b83353fb28af5a521e40dd8756f \
     --hash=sha256:09a872a157c1376ab922a69bbf22f9a95bcc7b658a9d8b436a60212b02b2eeb4 \
@@ -1849,3 +1851,7 @@ urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
     # via requests
+windows-capture==2.0.1 \
+    --hash=sha256:209c2318e2168802b9afd1005e99499639e8835e71a1e188a3ddc77c7ccc3f04 \
+    --hash=sha256:2c2b394f4587b067cf520456f7f64c11b00380851b077a4d061fe5356a9a7645
+    # via -r requirements.txt

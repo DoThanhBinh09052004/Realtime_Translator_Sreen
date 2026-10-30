@@ -97,8 +97,11 @@ class OcrSettingsPage(QScrollArea):
         self.reg_info_lbl = QLabel()
         self._render_region(state)
         reg_card.layout.addWidget(self.reg_info_lbl)
+        from ui.capture_settings import CaptureSettings
+        self.capture_settings = CaptureSettings(parent=self)
+        reg_card.layout.addWidget(self.capture_settings)
 
-        reg_btn = QPushButton("  Chọn lại vùng quét (Kéo chuột)")
+        reg_btn = QPushButton("  Quản lý vùng quét")
         reg_btn.setFixedHeight(34)
         reg_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=15))
         reg_btn.setIconSize(QSize(15, 15))

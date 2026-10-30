@@ -1,6 +1,6 @@
 # Kiểm chứng overlay hội thoại game
 
-Ngày triển khai: 2026-10-24. Spec và plan tương ứng ở `docs/superpowers/`.
+Ngày triển khai: 2026-10-24. Spec và plan tương ứng ở `docs/plans/`.
 
 ## Hành vi và kiến trúc
 

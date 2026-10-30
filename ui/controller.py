@@ -19,6 +19,7 @@ class ControllerWindow(QWidget):
     """Compose the four views around one settings coordinator."""
 
     starting_translation = pyqtSignal()
+    capture_stop_requested = pyqtSignal()
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
@@ -41,6 +42,10 @@ class ControllerWindow(QWidget):
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
         self._retry_pending = False
+        self.capture_run_requested = False
+        self._capture_profile = None
+        self._capture_bound = True
+        self.ensure_capture_ready = None
 
         # Window and navigation shell
         self.setWindowTitle("Translate HUD - Realtime Screen Translator")
@@ -294,6 +299,12 @@ class ControllerWindow(QWidget):
         self._game_controls = game_controls
 
     def start_ocr(self, preserve_translation_session=False):
+        if not self._capture_bound:
+            self._show_save_error('Hãy chọn lại nguồn cửa sổ trước khi Bắt đầu.')
+            self._switch_to_page(2)
+            return
+        if callable(self.ensure_capture_ready) and not self.ensure_capture_ready():
+            return
         if self.worker is not None and self.worker.is_running() is True:
             return
         if not self.settings_coordinator.source_ready():
@@ -314,6 +325,7 @@ class ControllerWindow(QWidget):
             self.ai_page.highlight_missing_key()
             return
 
+        self.capture_run_requested = True
         self.starting_translation.emit()
 
         if self.worker:
@@ -328,11 +340,23 @@ class ControllerWindow(QWidget):
 
 
     def stop_ocr(self):
+        self.capture_run_requested = False
+        self.capture_stop_requested.emit()
         self._retry_pending = False
         self.clear_translation_status()
         if self.worker:
             self.worker.stop_worker()
         self._show_stopped_status()
+
+    def set_capture_profile_state(self, profile, *, bound):
+        self._capture_profile, self._capture_bound = profile, bound
+        self.ocr_page.capture_settings.set_profile(profile, bound=bound)
+
+    def show_capture_waiting(self, error=None):
+        message = error.user_message if error is not None else 'Đang chờ nguồn chụp. Chọn nguồn hoặc thử lại.'
+        self.status.setText(message)
+        self.console_page.set_run_status(message)
+        self.ocr_page.capture_settings.status_label.setText(message)
 
     def _show_stopped_status(self):
         self._retry_pending = False

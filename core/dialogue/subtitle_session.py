@@ -4,13 +4,14 @@ from core.dialogue.policy import DEFAULT_DIALOGUE_POLICY
 
 
 class SubtitleDialogueSession:
-    def __init__(self, *, policy=DEFAULT_DIALOGUE_POLICY):
+    def __init__(self, *, policy=DEFAULT_DIALOGUE_POLICY, track_id=0):
         self.policy = policy
+        self.track_id = track_id
         self._revision = None
 
     def reset(self, revision, settings):
         self._revision, self._settings = revision, settings
-        self.track = DialogueTrack(0,policy=self.policy)
+        self.track = DialogueTrack(self.track_id,policy=self.policy)
         self._now = self._last_success = float('-inf')
         self._end_until = None
         self._oversized = None

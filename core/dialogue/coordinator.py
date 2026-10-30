@@ -8,11 +8,14 @@ from core.blocks.session import BlockSession
 from core.contracts import EngineError
 from core.dialogue.policy import DEFAULT_DIALOGUE_POLICY
 from core.dialogue.subtitle_session import SubtitleDialogueSession
+from core.capture.sessions import RegionDialogueSession
+from core.capture.models import CaptureObservation, RegionOcrObservation
 
 
 class DialogueCoordinator(QObject):
     jobs_changed = pyqtSignal(object,object,int)
     scan_policy_changed = pyqtSignal(int,bool)
+    capture_scan_policy_changed = pyqtSignal(int,object)
     subtitle_updated = pyqtSignal(object)
     blocks_updated = pyqtSignal(object)
     error_occurred = pyqtSignal(object)
@@ -33,6 +36,7 @@ class DialogueCoordinator(QObject):
         self._scan_id=-1
         self._completed_at=float('-inf')
         self._sequence=0
+        self._capture=False
         self._last_frame=self._last_jobs=self._last_scan_policy=None
         if settings.overlay_mode=='blocks':
             self.session=BlockSession(policy=self.policy)
@@ -46,7 +50,7 @@ class DialogueCoordinator(QObject):
 
     @pyqtSlot(object)
     def observe(self, observation):
-        if (not self._running or observation.revision!=self.revision
+        if (not self._running or self._capture or observation.revision!=self.revision
                 or observation.settings!=self.settings or observation.scan_id<=self._scan_id
                 or not math.isfinite(observation.completed_at_s)
                 or observation.completed_at_s<self._completed_at
@@ -64,6 +68,39 @@ class DialogueCoordinator(QObject):
                                  settings=self.settings,revision=self.revision,frame_id=observation.scan_id,
                                  geometry=observation.geometry,now_s=observation.completed_at_s)
         else:self.session.observe(observation.ocr.text,now_s=observation.completed_at_s)
+        self.tick()
+
+    @pyqtSlot(object,object)
+    def configure_capture(self, profile, context):
+        if self._capture:
+            if profile!=self.session.profile:
+                raise ValueError('Capture profile changes require a new revision')
+            self.update_capture_geometry(context)
+            return
+        session=RegionDialogueSession(profile,policy=self.policy)
+        session.reset(self.revision,self.settings)
+        if not session.set_geometry(context):return
+        self.session=session
+        self._capture=True
+        self._last_frame=self._last_jobs=self._last_scan_policy=None
+        self.tick()
+
+    @pyqtSlot(object)
+    def observe_capture(self, batch):
+        if not self._running or not self._capture or not isinstance(batch,CaptureObservation):return
+        now=self._clock()
+        # Rejected ROI timestamps must not poison other ROI observations.
+        regions=tuple(item for item in batch.regions
+                      if isinstance(item,RegionOcrObservation)
+                      and type(item.completed_at_s) in (int,float)
+                      and math.isfinite(item.completed_at_s) and item.completed_at_s <= now+.001)
+        self.session.observe(replace(batch,regions=regions))
+        self.tick()
+
+    @pyqtSlot(object)
+    def update_capture_geometry(self, context):
+        if not self._capture:return
+        self.session.set_geometry(context)
         self.tick()
 
     @pyqtSlot(object)
@@ -112,8 +149,9 @@ class DialogueCoordinator(QObject):
         if state!=self._last_jobs:
             self._last_jobs=state
             self.jobs_changed.emit(*state)
-        scan=(self.revision,bool(self.session.needs_scan))
+        scan=(self.revision,self.session.needs_scan_regions if self._capture else bool(self.session.needs_scan))
         if scan!=self._last_scan_policy:
             self._last_scan_policy=scan
-            self.scan_policy_changed.emit(*scan)
+            if self._capture:self.capture_scan_policy_changed.emit(*scan)
+            else:self.scan_policy_changed.emit(*scan)
         for error in self.session.drain_errors():self.error_occurred.emit(error)

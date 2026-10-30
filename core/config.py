@@ -6,6 +6,11 @@ import tempfile
 import threading
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.blocks.models import ScreenMapping
+    from core.capture.models import CaptureProfile
 
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 from core.paths import get_app_paths
@@ -55,7 +60,7 @@ DEFAULT_REGION = {
 }
 
 
-def _read_config(strict: bool = False) -> dict:
+def _read_config(strict: bool = False, *, changes: dict | None = None) -> dict:
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             raw = json.load(f)
@@ -65,6 +70,9 @@ def _read_config(strict: bool = False) -> dict:
         if strict:
             raise ConfigError("Không thể đọc cấu hình để lưu thiết lập.") from None
         raw = {}
+    if changes is not None:
+        raw = dict(raw) if isinstance(raw, dict) else {}
+        raw.update(changes)
     return normalize_config(raw)
 
 
@@ -101,8 +109,8 @@ def _atomic_write(path: str, content: str) -> None:
 def save_config_values(changes: dict) -> None:
     """Serialize a read/modify/write transaction, including multi-field updates."""
     with _config_lock:
-        data = _read_config(strict=True)
-        data.update(changes)
+        # An explicit replacement can repair a malformed existing field.
+        data = _read_config(strict=True, changes=changes)
         try:
             content = json.dumps(normalize_config(data), ensure_ascii=False, indent=2, allow_nan=False)
         except (ValueError, TypeError):
@@ -182,6 +190,9 @@ def normalize_config(raw: object) -> dict:
         )
     except ConfigError:
         cfg["custom_api_base_url"] = ""
+    if 'capture_profile' in cfg:
+        from core.capture.profile import parse_capture_profile, serialize_capture_profile
+        cfg['capture_profile'] = serialize_capture_profile(parse_capture_profile(cfg['capture_profile']))
     return cfg
 
 
@@ -223,6 +234,21 @@ def load_region() -> dict:
 def save_region(region: dict):
     """Lưu tọa độ vùng chụp vào file config.json"""
     save_config("region", region)
+
+
+def load_capture_profile(screens: tuple['ScreenMapping', ...]) -> 'CaptureProfile | None':
+    """Load a validated profile or resolve legacy pixels without persisting migration."""
+    from core.capture.profile import migrate_legacy_region, parse_capture_profile
+    data = load_config()
+    if 'capture_profile' in data:
+        return parse_capture_profile(data['capture_profile'])
+    return migrate_legacy_region(data['region'], screens)
+
+
+def save_capture_profile(profile: 'CaptureProfile') -> None:
+    """Commit the profile once, preserving legacy region and protected credentials."""
+    from core.capture.profile import serialize_capture_profile
+    save_config_values({'capture_profile': serialize_capture_profile(profile)})
 
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -461,3 +487,16 @@ def load_model_id() -> str:
 def save_model_id(model_id: str):
     """[Alias] Lưu model ID cho active provider"""
     save_provider_model_id(load_active_provider(), model_id)
+
+def recover_legacy_capture_profile() -> None:
+    """Explicit user recovery only: atomically remove the invalid nested profile."""
+    with _config_lock:
+        try:
+            raw = json.loads(Path(CONFIG_PATH).read_text(encoding='utf-8'))
+            if not isinstance(raw, dict):
+                raise ValueError('Expected configuration object')
+            raw.pop('capture_profile', None)
+            data = normalize_config(raw)
+        except (OSError, ValueError, UnicodeError):
+            raise ConfigError('Không thể khôi phục cấu hình nguồn chụp.') from None
+        _atomic_write(CONFIG_PATH, json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False))
