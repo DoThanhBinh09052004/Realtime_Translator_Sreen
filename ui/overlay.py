@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtSigna
 from PyQt5.QtGui import QColor, QPainter, QGuiApplication
 from ui.block_overlay import BlockOverlay
 from ui.subtitle_geometry import clamp_position, preset_position
+from ui.controller_state import PresentedPair, PresentedTranslation
 
 
 class Overlay(QLabel):
@@ -15,6 +16,7 @@ class Overlay(QLabel):
     position_changed = pyqtSignal(int, int)
     capture_geometry_changed = pyqtSignal(object)
     block_error = pyqtSignal(object)
+    translation_presented = pyqtSignal(object)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -39,9 +41,11 @@ class Overlay(QLabel):
         self._block_frame_id = -1
         self._last_subtitle_candidate_id = -1
         self._subtitle_render_sequence = 0
+        self._presentation_sequence = 0
         self._managed_subtitle = False
         self.block_overlay = BlockOverlay(self)
         self.block_overlay.block_error.connect(self.block_error.emit)
+        self.block_overlay.frame_presented.connect(self._on_block_frame_presented)
 
         # ===== 1. Cấu hình Window Flag =====
         self.setWindowFlags(
@@ -269,6 +273,13 @@ class Overlay(QLabel):
         self.block_overlay.clear()
         self.hide_timer.stop()
         self.fade_out()
+        self._presentation_sequence += 1
+        self.translation_presented.emit(PresentedTranslation(
+            revision=self._mode_revision,
+            mode=self._mode,
+            sequence=self._presentation_sequence,
+            pairs=(),
+        ))
 
     # ===== Fade Animations =====
     def _show_with_timer(self):
@@ -324,6 +335,13 @@ class Overlay(QLabel):
         self.apply_style()
         self.hide()
         self.capture_geometry_changed.emit(None)
+        self._presentation_sequence += 1
+        self.translation_presented.emit(PresentedTranslation(
+            revision=self._mode_revision,
+            mode=self._mode,
+            sequence=self._presentation_sequence,
+            pairs=(),
+        ))
 
     def update_blocks(self, frame):
         if (self._mode != 'blocks' or frame.revision != self._mode_revision
@@ -331,6 +349,53 @@ class Overlay(QLabel):
             return
         self._block_frame_id = frame.frame_id
         self.block_overlay.set_frame(frame)
+
+    def _on_block_frame_presented(self, frame):
+        if self._mode != 'blocks' or frame is None or frame.revision != self._mode_revision:
+            return
+        if not frame.blocks or not self.block_overlay.placed_blocks:
+            self._presentation_sequence += 1
+            self.translation_presented.emit(PresentedTranslation(
+                revision=self._mode_revision,
+                mode='blocks',
+                sequence=self._presentation_sequence,
+                pairs=(),
+            ))
+            return
+
+        placed_ids = {pb.block_id for pb in self.block_overlay.placed_blocks}
+        placed_blocks_in_frame = [b for b in frame.blocks if b.block_id in placed_ids]
+
+        region_order = []
+        for b in placed_blocks_in_frame:
+            rid = getattr(b, 'region_id', None)
+            if rid not in region_order:
+                region_order.append(rid)
+
+        sorted_blocks = sorted(
+            placed_blocks_in_frame,
+            key=lambda b: (
+                region_order.index(getattr(b, 'region_id', None)),
+                b.source_rect.y,
+                b.source_rect.x,
+                b.block_id,
+            )
+        )
+        pairs = tuple(
+            PresentedPair(
+                source_text=b.source_text,
+                translated_text=b.translated_text,
+                region_id=getattr(b, 'region_id', None),
+            )
+            for b in sorted_blocks
+        )
+        self._presentation_sequence += 1
+        self.translation_presented.emit(PresentedTranslation(
+            revision=self._mode_revision,
+            mode='blocks',
+            sequence=self._presentation_sequence,
+            pairs=pairs,
+        ))
 
     def update_subtitle(self, frame):
         if self._mode != 'subtitle' or frame.revision != self._mode_revision:
@@ -345,8 +410,23 @@ class Overlay(QLabel):
         self._last_subtitle_candidate_id = frame.candidate_id
         if frame.text:
             self.update_text(frame.text)
+            self._presentation_sequence += 1
+            pairs = (PresentedPair(source_text=getattr(frame, 'source_text', ''), translated_text=frame.text),)
+            self.translation_presented.emit(PresentedTranslation(
+                revision=self._mode_revision,
+                mode='subtitle',
+                sequence=self._presentation_sequence,
+                pairs=pairs,
+            ))
         else:
             self.hide_timer.stop()
             self.fade_anim.stop()
             self.setText('')
             self.hide()
+            self._presentation_sequence += 1
+            self.translation_presented.emit(PresentedTranslation(
+                revision=self._mode_revision,
+                mode='subtitle',
+                sequence=self._presentation_sequence,
+                pairs=(),
+            ))

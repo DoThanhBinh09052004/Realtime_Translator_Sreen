@@ -84,6 +84,7 @@ class OverlayBlock:
     source_text: str
     translated_text: str
     source_rect: Rect
+    region_id: str | None = None
 
 
 @dataclass(frozen=True)

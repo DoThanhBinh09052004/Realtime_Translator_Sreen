@@ -208,7 +208,7 @@ class RegionDialogueSession:
             if self._context is None:
                 return None
             self._sync_routes()
-            blocks = tuple(replace(block, block_id=self._routes[region_id, block.block_id])
+            blocks = tuple(replace(block, block_id=self._routes[region_id, block.block_id], region_id=region_id)
                            for region_id, child in self._sessions.items()
                            if (frame := child.current_frame()) is not None for block in frame.blocks
                            if (region_id, block.block_id) in self._routes)
