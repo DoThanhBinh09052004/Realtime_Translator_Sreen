@@ -20,6 +20,7 @@ class ControllerWindow(QWidget):
 
     starting_translation = pyqtSignal()
     capture_stop_requested = pyqtSignal()
+    daily_state_changed = pyqtSignal()
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
@@ -221,6 +222,7 @@ class ControllerWindow(QWidget):
 
     def _show_save_error(self, message):
         self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+        self.daily_state_changed.emit()
 
     def _import_legacy_key(self, persist):
         if not self.settings_coordinator.import_legacy_key(persist):
@@ -247,13 +249,16 @@ class ControllerWindow(QWidget):
         if advice:
             message += f' Hướng xử lý: {advice}'
         self.console_page.append_log(message)
+        self.daily_state_changed.emit()
 
     def _on_worker_finished(self):
         # A queued finish can belong to the previous run. The backend may also
         # still be draining for an explicit Start or an internal mode restart.
         if self.worker.is_running() is True or self.worker.restart_pending is True:
+            self.daily_state_changed.emit()
             return
         self._show_stopped_status()
+        self.daily_state_changed.emit()
 
     def clear_translation_status(self):
         self.console_page.clear_translation_status()
@@ -340,6 +345,7 @@ class ControllerWindow(QWidget):
         self.status.setText("Đang hoạt động")
         self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đang hoạt động")
+        self.daily_state_changed.emit()
 
 
     def stop_ocr(self):
@@ -350,16 +356,19 @@ class ControllerWindow(QWidget):
         if self.worker:
             self.worker.stop_worker()
         self._show_stopped_status()
+        self.daily_state_changed.emit()
 
     def set_capture_profile_state(self, profile, *, bound):
         self._capture_profile, self._capture_bound = profile, bound
         self.ocr_page.capture_settings.set_profile(profile, bound=bound)
+        self.daily_state_changed.emit()
 
     def show_capture_waiting(self, error=None):
         message = error.user_message if error is not None else 'Đang chờ nguồn chụp. Chọn nguồn hoặc thử lại.'
         self.status.setText(message)
         self.console_page.set_run_status(message)
         self.ocr_page.capture_settings.status_label.setText(message)
+        self.daily_state_changed.emit()
 
     def _show_stopped_status(self):
         self._retry_pending = False

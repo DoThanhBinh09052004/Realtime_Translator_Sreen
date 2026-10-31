@@ -75,3 +75,33 @@ class ControllerSnapshot:
     ai: AiPageState
     ocr: OcrPageState
     subtitle: SubtitlePageState
+
+
+@dataclass(frozen=True)
+class DailyReadiness:
+    ready: bool
+    reason: str
+    action: str | None = None  # select_source/select_regions/manage_packs/configure_provider
+
+
+@dataclass(frozen=True)
+class DailyRunState:
+    phase: str  # stopped/starting/running/stopping/waiting_source
+    message: str
+    can_toggle: bool
+    preview_enabled: bool
+
+
+@dataclass(frozen=True)
+class PresentedPair:
+    source_text: str
+    translated_text: str
+    region_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PresentedTranslation:
+    revision: int
+    mode: str
+    sequence: int
+    pairs: tuple[PresentedPair, ...] = ()
