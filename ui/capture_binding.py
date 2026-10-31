@@ -61,6 +61,8 @@ class CaptureApplicationBinding(QObject):
         if self.lifecycle.is_active is True:
             self.controller.show_capture_waiting()
             return
+        if hasattr(self.lifecycle, 'cancel_dashboard_preview'):
+            self.lifecycle.cancel_dashboard_preview()
         try:
             config.save_capture_profile(profile)
         except config.ConfigError as error:
@@ -112,6 +114,8 @@ class CaptureApplicationBinding(QObject):
         if old is not None and old.binding_epoch == context.binding_epoch and old.source_kind == context.source_kind and old.window == context.window:
             self.worker.update_capture_geometry(context)
             return
+        if hasattr(self.lifecycle, 'cancel_dashboard_preview'):
+            self.lifecycle.cancel_dashboard_preview()
         self._epoch = max(self._epoch, context.binding_epoch)
         self._pending = context
         if self.worker.is_drained is not True:
@@ -120,7 +124,8 @@ class CaptureApplicationBinding(QObject):
 
     def _apply_pending(self):
         if self._pending is None or self._stopped: self._timer.stop(); return
-        if self.worker.is_drained is not True: return
+        preview_drained = getattr(self.lifecycle, 'preview_is_drained', True)
+        if self.worker.is_drained is not True or not preview_drained: return
         context, self._pending = self._pending, None
         self._timer.stop()
         self.worker.configure_capture(self.profile, context)
@@ -133,6 +138,8 @@ class CaptureApplicationBinding(QObject):
             self.controller.start_ocr(preserve_translation_session=True)
 
     def _unavailable(self, error):
+        if hasattr(self.lifecycle, 'cancel_dashboard_preview'):
+            self.lifecycle.cancel_dashboard_preview()
         self._pending = None
         self._waiting = True
         self._bound = False
@@ -156,6 +163,8 @@ class CaptureApplicationBinding(QObject):
         return not self._waiting and self._pending is None
 
     def stop(self):
+        if hasattr(self.lifecycle, 'cancel_dashboard_preview'):
+            self.lifecycle.cancel_dashboard_preview()
         self._stopped = True
         self._pending = None
         self._bound = False

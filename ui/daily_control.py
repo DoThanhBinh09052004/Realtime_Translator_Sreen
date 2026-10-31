@@ -126,10 +126,16 @@ class DailyControlCoordinator(QObject):
     def toggle_translation(self) -> None:
         current_run = self.run_state()
         if current_run.phase in ("running", "waiting_source", "starting"):
+            if self.lifecycle is not None and hasattr(self.lifecycle, "cancel_dashboard_preview"):
+                self.lifecycle.cancel_dashboard_preview()
             if hasattr(self.controller, "stop_ocr"):
                 self.controller.stop_ocr()
         elif current_run.phase == "stopped":
             if self.readiness().ready:
+                if self.lifecycle is not None and not getattr(self.lifecycle, "preview_is_drained", True):
+                    if hasattr(self.lifecycle, "queue_start_intent"):
+                        self.lifecycle.queue_start_intent()
+                    return
                 if hasattr(self.controller, "start_ocr"):
                     self.controller.start_ocr()
 
