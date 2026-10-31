@@ -66,17 +66,28 @@ def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime
     finally:w.stop_worker()
 
 
-def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatch,runtime_settings):
+def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatch,runtime_settings,qtbot):
     import core.worker as module
     from core.contracts import OcrResult
     monkeypatch.setattr(module,'ocr_image',lambda *a,**kw:OcrResult('Hello'))
     w=TranslationWorker(config.State(),config.DEFAULT_REGION)
-    rev=w.configure(runtime_settings); w._is_running=True
+    w._is_running=True
+    rev=w.configure(runtime_settings)
     frames=[]; w.subtitle_updated.connect(frames.append)
-    class Service:
-        def __init__(self, **kwargs): pass
-        def translate(self,*a): return TranslationResult('Xin chào')
+    from core.blocks.models import BlockTranslationResult
+    now=[0.]
+    monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
     img=np.zeros((40,100),dtype='uint8')
-    w._process_frame(img,runtime_settings,rev,Service())
-    w._process_frame(img,runtime_settings,rev,Service())
+    for t in (0., .25):
+        now[0]=t
+        w._process_dialogue_frame(img,runtime_settings,rev)
+        qtbot.wait(1)
+    now[0]=.5
+    w._coordinator.tick()
+    job,=w._coordinator.session.translation_jobs(now_s=.5)
+    w._coordinator.on_job_started(job)
+    w._coordinator.on_result(BlockTranslationResult(rev,job.block_id,job.source_text,
+        TranslationResult('Xin chào'),job.turn_id,job.text_version))
+    w._coordinator.tick()
     assert frames[-1].revision==rev and frames[-1].text=='Xin chào'
+    w.stop_worker()

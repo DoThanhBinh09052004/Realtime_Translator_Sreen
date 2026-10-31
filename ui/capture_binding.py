@@ -74,7 +74,7 @@ class CaptureApplicationBinding(QObject):
         self._bound = False
         self.binding_state_changed.emit()
         self._epoch = max(self._epoch, getattr(self.worker.capture_context, 'binding_epoch', 0)) + 1
-        self.controller.set_capture_profile_state(profile, bound=profile.source_kind == 'desktop' or identity is not None)
+        self.controller.set_capture_profile_state(profile, bound=False)
         if profile.source_kind == 'window':
             self.windows.set_binding(profile, identity, self._epoch)
         else:
@@ -90,6 +90,33 @@ class CaptureApplicationBinding(QObject):
         self._epoch += 1
         self._context_changed(CaptureContext(self._epoch, 1, 'desktop', None,
             CaptureGeometry(rect, screen, (int(rect.width), int(rect.height)))))
+
+    def apply_screen_selection(self, profile, context):
+        """Commit an explicit fallback only after a region was confirmed."""
+        if (profile.source_kind != 'desktop' or context.source_kind != 'desktop'
+                or self.worker.is_drained is not True
+                or getattr(self.lifecycle, 'preview_is_drained', True) is not True):
+            return False
+        matching = [s for s in self.screens.snapshot() if s.name == profile.monitor_name]
+        if len(matching) != 1 or matching[0] != context.geometry.screen:
+            return False
+        try:
+            config.save_capture_profile(profile, setup_complete=True)
+        except config.ConfigError as error:
+            self.controller._show_save_error(str(error))
+            return False
+        self.windows.clear_binding()
+        self._timer.stop()
+        self._pending = None
+        self.profile, self.identity = profile, None
+        self._epoch = max(self._epoch, context.binding_epoch)
+        self._stopped = self._waiting = False
+        self.worker.configure_capture(profile, context)
+        self._bound = True
+        self.controller.set_capture_profile_state(profile, bound=True)
+        self.context_changed.emit(context)
+        self.binding_state_changed.emit()
+        return True
 
     def _screens_changed(self):
         if self._stopped or self.profile is None or self.profile.source_kind != 'desktop':
@@ -167,7 +194,8 @@ class CaptureApplicationBinding(QObject):
             self.lifecycle.cancel_dashboard_preview()
         self._stopped = True
         self._pending = None
-        self._bound = False
+        # Stopping capture retains the explicitly selected source. ensure_ready
+        # revalidates/rebinds it before starting; source loss still clears _bound.
         self._timer.stop()
         self.windows.clear_binding()
         self.binding_state_changed.emit()

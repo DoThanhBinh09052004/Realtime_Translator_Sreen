@@ -17,6 +17,81 @@ from ui.controller_state import (
 )
 
 
+@pytest.fixture
+def bound_daily_window(qtbot, capture_geometry):
+    """Use production source binding, not the standalone-controller fallback."""
+    from types import SimpleNamespace
+    from test_capture_binding import Screens, Provider
+    from ui.capture_binding import CaptureApplicationBinding
+
+    worker = Mock()
+    worker.interval.return_value = 500
+    worker.is_running.return_value = False
+    worker.isRunning.return_value = False
+    worker.is_drained = True
+    worker.restart_pending = False
+    worker.capture_context = None
+    worker.configure_capture.side_effect = lambda profile, context: setattr(worker, 'capture_context', context)
+    worker.start_worker.side_effect = lambda **kwargs: setattr(worker.is_running, 'return_value', True)
+    worker.stop_worker.side_effect = lambda **kwargs: setattr(worker.is_running, 'return_value', False)
+    window = ControllerWindow(worker, config.State(), Mock(), Mock())
+    qtbot.addWidget(window)
+    region = CaptureRegion(str(uuid4()), 'Vùng 1', NormalizedRect(.1, .1, .5, .5), True)
+    profile = CaptureProfile(1, 'desktop', capture_geometry.screen.name, None, (region,), ())
+    save_capture_profile(profile, setup_complete=True)
+    save_active_provider('Google Translate')
+    lifecycle = SimpleNamespace(is_active=False, preview_is_drained=True,
+                                cancel_dashboard_preview=lambda: None,
+                                update_capture_context=lambda context: None,
+                                on_capture_terminal=lambda status: None)
+    binding = CaptureApplicationBinding(window, worker, Mock(), Screens([capture_geometry.screen]),
+                                        lifecycle, window_provider=Provider())
+    window.daily_coordinator.attach_capture(binding, lifecycle)
+    binding.initialize(profile)
+    yield window, worker, binding
+    binding.stop()
+
+
+@pytest.mark.parametrize('entry', ['direct', 'button', 'game_controls'])
+def test_start_with_production_capture_binding_reaches_worker(bound_daily_window, entry):
+    window, worker, binding = bound_daily_window
+    assert binding.is_bound
+    assert window.console_page.primary_btn.isEnabled()
+    if entry == 'direct':
+        window.start_ocr()
+    elif entry == 'button':
+        window.console_page.primary_btn.click()
+    else:
+        GameControls(window, worker).toggle_translation()
+    worker.start_worker.assert_called_once_with()
+    assert window.capture_run_requested is True
+
+
+def test_restart_revalidates_source_after_stop(bound_daily_window):
+    window, worker, binding = bound_daily_window
+    window.start_ocr()
+    window.stop_ocr()
+    worker.start_worker.reset_mock()
+    binding.screens.mappings = []
+    window.console_page.primary_btn.click()
+    worker.start_worker.assert_not_called()
+    assert binding.is_bound is False
+    assert window.capture_run_requested is False
+
+
+def test_daily_button_can_restart_after_stop_with_capture_binding(bound_daily_window):
+    window, worker, binding = bound_daily_window
+    # Isolate the stop/restart path from first-start validation.
+    window.capture_run_requested = True
+    worker.is_running.return_value = True
+    window.daily_state_changed.emit()
+    window.console_page.primary_btn.click()
+    assert window.capture_run_requested is False
+    assert window.console_page.primary_btn.isEnabled()
+    window.console_page.primary_btn.click()
+    worker.start_worker.assert_called_once_with()
+
+
 def _setup_bound_ready_state(window, tmp_path):
     region_id = str(uuid4())
     region = CaptureRegion(region_id, "Vùng 1", NormalizedRect(0.1, 0.1, 0.5, 0.5), enabled=True)

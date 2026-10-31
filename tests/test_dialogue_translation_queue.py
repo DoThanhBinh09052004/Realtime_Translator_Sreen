@@ -82,3 +82,32 @@ def test_retry_survives_empty_pending_snapshot(qtbot,runtime_settings):
         w.replace_pending((),frozenset({(1,1,1)}),1)
         now[0]=1;qtbot.waitUntil(lambda:len(calls)==2)
     finally:w.request_stop();assert w.wait(2000)
+
+
+@pytest.mark.parametrize('code,retry_after,cooldown', [
+    ('timeout', None, 2.), ('network', None, 2.),
+    ('rate_limit', None, 5.), ('rate_limit', 12., 12.),
+])
+def test_gemini_retry_cooldown_on_production_queue(qtbot, runtime_settings, code, retry_after, cooldown):
+    from core.blocks.translation_worker import BlockTranslationWorker
+    now, calls = [100.], []
+    settings = replace(runtime_settings, provider=replace(runtime_settings.provider, name='Google Gemini'))
+    class Service:
+        def translate(self, *args):
+            calls.append(now[0])
+            return TranslationResult(error=EngineError(code, 'temporary', True, retry_after))
+        def close(self): pass
+    worker = BlockTranslationWorker(clock=lambda: now[0], service_factory=Service)
+    job = BlockJob(1, 1, 'Hello', settings, 1, 1)
+    worker.replace_pending((job,), frozenset({(1, 1, 1)}), 1)
+    worker.start()
+    try:
+        qtbot.waitUntil(lambda: bool(worker.drain_results()))
+        now[0] = 100. + cooldown - .01
+        qtbot.wait(60)
+        assert calls == [100.]
+        now[0] = 100. + cooldown
+        qtbot.waitUntil(lambda: len(calls) == 2)
+    finally:
+        worker.request_stop()
+        assert worker.wait(2000)

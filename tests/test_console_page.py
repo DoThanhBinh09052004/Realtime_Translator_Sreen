@@ -11,12 +11,12 @@ def test_console_summary_is_silent_and_preserves_run_status(qtbot, ui_snapshot):
     page.set_run_status('Running')
     spy = QSignalSpy(page.toggle_requested)
     page.render_summary(ui_snapshot)
-    assert '800 x 600' in page.metric_cards['region'].val_lbl.text()
-    assert page.metric_cards['status'].val_lbl.text() == 'Running'
-    assert page.metric_cards['ai'].val_lbl.text() == 'OpenAI\nfake-model'
+    assert '800 × 600' in page.region_info_lbl.text()
+    assert page.readiness_lbl.text() == 'Running'
+    assert 'OpenAI' in page.provider_summary_lbl.text()
     assert len(spy) == 0
     page.render_summary(replace(ui_snapshot, ocr=replace(ui_snapshot.ocr, region=None)))
-    assert page.metric_cards['region'].val_lbl.text() == 'Chưa chọn vùng'
+    assert 'Chưa chọn vùng' in page.region_info_lbl.text()
 
     for button, signal in [
         (page.primary_btn, page.toggle_requested),

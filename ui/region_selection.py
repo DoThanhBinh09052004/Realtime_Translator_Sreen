@@ -67,6 +67,8 @@ class RegionSelectionLifecycle(QObject):
         self._drain_started = None
         self._preview_purpose = None
         self._start_intent = False
+        self._window_image_selection = False
+        self._screen_fallback_context = None
         self._poll = QTimer(self); self._poll.setInterval(30); self._poll.timeout.connect(self._advance_capture)
         if isinstance(worker, QObject) and hasattr(worker, 'shutdown_finished'):
             worker.shutdown_finished.connect(self._advance_capture)
@@ -85,6 +87,23 @@ class RegionSelectionLifecycle(QObject):
 
     def set_game_controls(self, game_controls: Any) -> None:
         self.game_controls = game_controls
+
+    def start_quick_selection(self) -> None:
+        """Use a source-bounded drag selector; keep start_selection for advanced editing."""
+        if self._is_closed or self._is_active:
+            return
+        profile = getattr(self.worker, 'capture_profile', None)
+        context = getattr(self.worker, 'capture_context', None)
+        if not isinstance(profile, CaptureProfile):
+            self.start_selection()
+            return
+        if context is None or getattr(self.controller, '_capture_bound', True) is False:
+            self._log_message('Hãy chọn nguồn đang hiển thị trước khi khoanh vùng đọc.')
+            return
+        self.cancel_dashboard_preview()
+        self._start_capture_selection(quick=profile.source_kind != 'window',
+                                      window_image=profile.source_kind == 'window')
+
 
     def start_selection(self) -> None:
         """Start region selection process.
@@ -207,6 +226,7 @@ class RegionSelectionLifecycle(QObject):
     def _cleanup_selection_and_restore(self) -> None:
         """Restore previous UI visibility and resume worker if previously running."""
         self._is_active = False
+        self._screen_fallback_context = None
 
         # Restore controller only if it was visible before selection
         if self._was_controller_visible and self.controller is not None:
@@ -325,7 +345,8 @@ class RegionSelectionLifecycle(QObject):
     def _on_dashboard_preview_error(self, error):
         self.dashboard_preview_error.emit(error)
 
-    def _start_capture_selection(self):
+    def _start_capture_selection(self, *, quick=False, window_image=False):
+        self._window_image_selection = window_image
         self._is_active = True
         self._preview_purpose = 'editor'
         self._latest_capture_context = self.worker.capture_context
@@ -336,7 +357,9 @@ class RegionSelectionLifecycle(QObject):
         self._was_overlay_visible = self.overlay.isVisible()
         self.overlay.hide()
         if self.game_controls is not None: self.game_controls.set_selection_active(True)
-        self._capture_phase = 'runtime_drain'
+        self._capture_phase = 'quick_drain' if quick else 'runtime_drain'
+        if quick:
+            self.controller.hide()
         self.activity_changed.emit()
         self.worker.stop_worker(preserve_translation_session=True)
         self._poll.start(); self._advance_capture()
@@ -349,7 +372,25 @@ class RegionSelectionLifecycle(QObject):
                 self._shutdown_emitted = True; self._poll.stop(); self.shutdown_finished.emit()
             return
         if self._is_closed: return
-        if self._capture_phase == 'runtime_drain' and self._runtime_drained():
+        if self._capture_phase == 'quick_drain' and self._runtime_drained() and preview_drained:
+            from ui.direct_region_selector import DirectRegionSelector
+            self.preview_worker = None
+            self._capture_phase = 'editor'
+            self._poll.stop()
+            context = self.worker.capture_context
+            if context is None or context != self._latest_capture_context:
+                self._capture_phase = None
+                self._cleanup_selection_and_restore()
+                return
+            self.current_editor = DirectRegionSelector(self.worker.capture_profile, context)
+            generation = self._session_generation
+            self.current_editor.profile_selected.connect(lambda profile: self._apply_profile(profile, generation))
+            self.current_editor.cancelled.connect(lambda: self._cancel_capture(generation))
+            self.current_editor.show()
+            self.current_editor.raise_()
+            self.current_editor.activateWindow()
+            return
+        if self._capture_phase == 'runtime_drain' and self._runtime_drained() and preview_drained:
             self._capture_phase = 'preview'
             self._preview_result = None
             generation = self._session_generation
@@ -383,11 +424,18 @@ class RegionSelectionLifecycle(QObject):
                         self.controller.start_ocr()
                 return
 
+            if self._preview_result is None and self._window_image_selection:
+                self._preview_result = (None, self.worker.capture_context)
             if self._preview_result is None:
                 self._capture_phase = None; self._poll.stop(); self._cleanup_selection_and_restore(); return
             image, context = self._preview_result
             self._capture_phase = 'editor'; self._poll.stop()
-            self.current_editor = self.editor_factory(self.worker.capture_profile, image, context)
+            if self._window_image_selection:
+                from ui.window_region_picker import WindowRegionPicker
+                self.current_editor = WindowRegionPicker(self.worker.capture_profile, image, context)
+                self.current_editor.screen_fallback_requested.connect(self._start_screen_fallback)
+            else:
+                self.current_editor = self.editor_factory(self.worker.capture_profile, image, context)
             if self._latest_capture_context is not None:
                 self.current_editor.update_context(self._latest_capture_context)
             generation = self._session_generation
@@ -399,6 +447,53 @@ class RegionSelectionLifecycle(QObject):
     def _receive_preview(self, image, context, generation):
         if not self._is_closed and generation == self._session_generation:
             self._preview_result = image, context
+
+    def _start_screen_fallback(self):
+        """Draft a desktop selection; do not mutate the active source on cancel."""
+        if self._is_closed or not self._is_active or not self._runtime_drained() or not self.preview_is_drained:
+            return
+        from core.capture.models import CaptureContext
+        from core.capture.profile import migrate_legacy_region
+        from core.blocks.models import CaptureGeometry
+        from ui.direct_region_selector import DirectRegionSelector
+        old = self.worker.capture_context
+        screens = tuple(self.geometry_provider.snapshot())
+        screen = next((s for s in screens if s.name == old.geometry.screen.name), None)
+        if screen is None:
+            self.current_editor.error_label.setText('Màn hình nguồn không còn kết nối. Hủy và chọn lại nguồn.')
+            return
+        rect = screen.physical_rect
+        profile = migrate_legacy_region(dict(left=int(rect.x), top=int(rect.y),
+            width=int(rect.width), height=int(rect.height)), screens)
+        if profile is None:
+            return
+        binding = self.controller.daily_coordinator.binding
+        epoch = max(old.binding_epoch, getattr(binding, '_epoch', 0)) + 1
+        context = CaptureContext(epoch, 1, 'desktop', None, CaptureGeometry(rect, screen, (int(rect.width), int(rect.height))))
+        previous, self.current_editor = self.current_editor, None
+        previous.accept()
+        self.controller.hide()
+        editor = DirectRegionSelector(profile, context)
+        self._screen_fallback_context = context
+        self.current_editor = editor
+        generation = self._session_generation
+        editor.profile_selected.connect(lambda draft: self._apply_screen_fallback(draft, context, generation))
+        editor.cancelled.connect(lambda: self._cancel_capture(generation))
+        editor.show()
+        editor.raise_()
+        editor.activateWindow()
+
+    def _apply_screen_fallback(self, profile, context, generation):
+        if self._is_closed or generation != self._session_generation:
+            return
+        binding = self.controller.daily_coordinator.binding
+        if not binding.apply_screen_selection(profile, context):
+            self.current_editor.error_label.setText('Chưa lưu được vùng màn hình. Nguồn cũ được giữ; thử lại hoặc Hủy.')
+            return
+        editor, self.current_editor = self.current_editor, None
+        editor.accept()
+        self._capture_phase = None
+        self._cleanup_selection_and_restore()
 
     def _apply_profile(self, profile, generation):
         if self._is_closed or generation != self._session_generation: return
@@ -423,7 +518,8 @@ class RegionSelectionLifecycle(QObject):
     def update_capture_context(self, context):
         old = self._latest_capture_context
         self._latest_capture_context = context
-        if self.current_editor is not None: self.current_editor.update_context(context)
+        if self.current_editor is not None and self._screen_fallback_context is None:
+            self.current_editor.update_context(context)
         if old is not None and (
             old.binding_epoch != context.binding_epoch
             or getattr(old.geometry, 'region_px', None) != getattr(context.geometry, 'region_px', None)
@@ -440,6 +536,9 @@ class RegionSelectionLifecycle(QObject):
         self.cancel_dashboard_preview()
         self.dashboard_preview_invalidated.emit()
         self._terminal_epoch = status.binding_epoch
+        if (self.current_editor is not None and self._screen_fallback_context is None
+                and hasattr(self.current_editor, 'invalidate_source')):
+            self.current_editor.invalidate_source()
         self.worker.stop_worker(preserve_translation_session=True)
         self.overlay.clear()
         if status.error is not None: self._log_message(status.error.user_message)

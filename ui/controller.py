@@ -4,7 +4,7 @@ import time
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QColorDialog, QMessageBox
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
+from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
 from ui.pages.console_page import ConsolePage
 from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.ocr_settings_page import OcrSettingsPage
@@ -23,6 +23,7 @@ class ControllerWindow(QWidget):
     capture_stop_requested = pyqtSignal()
     daily_state_changed = pyqtSignal()
     capture_source_selected = pyqtSignal(object, object)
+    manage_regions_requested = pyqtSignal()
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
@@ -121,13 +122,11 @@ class ControllerWindow(QWidget):
 
         # QStackedWidget chứa 4 trang
         self.pages = QStackedWidget()
-        self.metric_cards = {}
 
         # Khởi tạo 4 trang
         self.console_page = ConsolePage(self.settings_coordinator.snapshot(), self)
         self.start_btn = self.console_page.start_btn
         self.stop_btn = self.console_page.stop_btn
-        self.metric_cards = self.console_page.metric_cards
         self.console_page.start_requested.connect(self.start_ocr)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.worker.log_updated.connect(self.console_page.append_log)
@@ -135,6 +134,7 @@ class ControllerWindow(QWidget):
         self.worker.finished.connect(self._on_worker_finished)
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
+        self.console_page.manage_regions_requested.connect(self.manage_regions_requested.emit)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
         self.console_page.source_changed.connect(self.settings_coordinator.set_source)
         self.console_page.target_changed.connect(self.settings_coordinator.set_target)

@@ -72,13 +72,11 @@ def test_changed_settings_reprocess_static_frame(monkeypatch, fake_translator, c
 
 def test_configure_only_marks_invalidation_without_mutating_worker_cache():
     worker = make_worker()
-    worker._prev_text = "old text"
     old_thumb = np.zeros((40, 100), dtype=np.uint8)
     worker._prev_frame_thumb = old_thumb
     snapshot = config.load_runtime_settings(worker.state, 500)
     first_revision = worker.configure(snapshot)
     assert worker.configure(replace(snapshot, target_lang="English")) > first_revision
-    assert worker._prev_text == "old text"
     assert worker._prev_frame_thumb is old_thumb
 
 
@@ -123,44 +121,6 @@ def test_translation_error_is_never_emitted_as_subtitle(monkeypatch, fake_transl
     assert "fake-secret" not in errors[0].user_message
 
 
-@pytest.mark.parametrize("code,retry_after_s,cooldown_s", [
-    ("timeout", None, 2.0),
-    ("network", None, 2.0),
-    ("rate_limit", None, 5.0),
-    ("rate_limit", 12.0, 12.0),
-])
-def test_gemini_retryable_errors_pause_requests(
-        monkeypatch, code, retry_after_s, cooldown_s):
-    from core import worker as module
-    from core.contracts import EngineError, OcrResult, TranslationResult
-
-    worker = make_worker()
-    settings = config.load_runtime_settings(worker.state, 500)
-    worker._is_running = True
-    now = [100.0]
-    attempts = []
-
-    class FailingService:
-        def translate(self, text, runtime_settings):
-            attempts.append(text)
-            return TranslationResult(error=EngineError(
-                code, "temporary failure", True, retry_after_s))
-
-    monkeypatch.setattr(module.time, "monotonic", lambda: now[0])
-    monkeypatch.setattr(module, "ocr_image", lambda *args, **kwargs: OcrResult(text="Hello"))
-    monkeypatch.setattr(worker, "_is_frame_changed", lambda image: True)
-    image = np.zeros((8, 8), dtype=np.uint8)
-
-    worker._process_frame(image, settings, worker._revision, FailingService())
-    assert attempts == []
-    worker._process_frame(image, settings, worker._revision, FailingService())
-    now[0] = 100.0 + cooldown_s - 0.01
-    worker._process_frame(image, settings, worker._revision, FailingService())
-    assert attempts == ["Hello"]
-
-    now[0] = 100.0 + cooldown_s
-    worker._process_frame(image, settings, worker._revision, FailingService())
-    assert attempts == ["Hello", "Hello"]
 
 
 def test_client_created_used_and_closed_on_worker_thread(monkeypatch, qtbot):

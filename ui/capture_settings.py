@@ -4,6 +4,7 @@ from uuid import uuid4
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, QLabel, QSizePolicy
 from core.capture.models import CaptureProfile, CaptureRegion, NormalizedRect
+from ui.styles import HERO_START_STYLE, SECONDARY_BUTTON_STYLE
 
 
 class CaptureSettings(QWidget):
@@ -15,6 +16,14 @@ class CaptureSettings(QWidget):
         self._screens = screens or (lambda: ())
         self._windows = windows or self._enumerate_windows
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
+        self.summary_label = QLabel(); self.summary_label.setWordWrap(True)
+        self.summary_label.setStyleSheet('color: #36d6b0; font-weight: 600; padding: 6px;')
+        layout.addWidget(self.summary_label)
+        self.change_btn = QPushButton('Đổi nguồn')
+        self.change_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.change_btn.clicked.connect(self._edit_source)
+        layout.addWidget(self.change_btn)
+        self.summary_label.hide(); self.change_btn.hide()
         self.kind_combo = QComboBox(); self.kind_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed); self.kind_combo.addItem('Màn hình', 'desktop'); self.kind_combo.addItem('Cửa sổ', 'window')
         self.kind_combo.setCurrentIndex(1 if profile and profile.source_kind == 'window' else 0)
         layout.addWidget(self.kind_combo)
@@ -22,9 +31,13 @@ class CaptureSettings(QWidget):
         layout.addWidget(self.source_combo)
         row = QHBoxLayout(); self.refresh_btn = QPushButton('Cập nhật danh sách'); self.choose_btn = QPushButton('Chọn nguồn')
         row.addWidget(self.refresh_btn); row.addWidget(self.choose_btn); layout.addLayout(row)
+        self.choose_btn.setStyleSheet(HERO_START_STYLE)
+        self.choose_btn.setMinimumHeight(40)
+        self.refresh_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         self.status_label = QLabel('Chọn nguồn để xem trước và chỉnh vùng OCR.'); self.status_label.setWordWrap(True); layout.addWidget(self.status_label)
         self.refresh_btn.clicked.connect(self.refresh_sources); self.kind_combo.currentIndexChanged.connect(self.refresh_sources)
         self.choose_btn.clicked.connect(self.choose_source)
+        self.source_combo.currentIndexChanged.connect(self._pending_source)
         self.refresh_sources()
 
     @staticmethod
@@ -41,8 +54,36 @@ class CaptureSettings(QWidget):
             self.kind_combo.setCurrentIndex(1 if profile.source_kind == 'window' else 0)
             name = profile.window_hint if profile.source_kind == 'window' else profile.monitor_name
             self.status_label.setText(f'{name or "Cửa sổ"} · {len(profile.regions)} vùng OCR' + ('' if bound else ' · Hãy chọn lại nguồn.'))
+            if bound:
+                kind = 'Cửa sổ' if profile.source_kind == 'window' else 'Màn hình'
+                self.summary_label.setText(f'✓ Nguồn đang dùng: {kind} · {name or "Cửa sổ"}')
+                self.summary_label.show()
+                self.change_btn.show()
+                self._show_picker(False)
+                self.status_label.setText('Nguồn đã sẵn sàng. Bước tiếp theo: Khoanh vùng đọc.')
+                self.status_label.setStyleSheet('color: #36d6b0;')
+            else:
+                self._show_picker(True)
+                self.status_label.setStyleSheet('color: #ffb454;')
+
+    def _show_picker(self, visible):
+        for widget in (self.kind_combo, self.source_combo, self.refresh_btn, self.choose_btn):
+            widget.setVisible(visible)
+
+    def _edit_source(self):
+        self._show_picker(True)
+        self.change_btn.hide()
+        self._pending_source()
+        self.source_combo.setFocus()
+
+    def _pending_source(self, *args):
+        window = self.kind_combo.currentData() == 'window'
+        self.choose_btn.setText('Dùng cửa sổ này' if window else 'Dùng màn hình này')
+        self.status_label.setText('Chưa áp dụng · Bấm nút bên trên để xác nhận nguồn cần dịch.')
+        self.status_label.setStyleSheet('color: #ffb454;')
 
     def refresh_sources(self, *args):
+        self._pending_source()
         self.source_combo.clear()
         try:
             if self.kind_combo.currentData() == 'desktop':

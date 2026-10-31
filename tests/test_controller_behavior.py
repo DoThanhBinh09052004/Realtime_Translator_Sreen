@@ -17,12 +17,12 @@ def test_start_stop_and_callbacks_once(ui_window):
     ui_window.settings_coordinator.set_api_key('fake-test-key')
     ui_window.start_btn.click()
     ui_window.worker.start_worker.assert_called_once_with()
-    assert ui_window.metric_cards['status'].val_lbl.text() == 'Đang hoạt động'
+    assert ui_window.console_page.primary_btn.text() == '■ DỪNG DỊCH'
     ui_window.stop_btn.click()
     ui_window.worker.stop_worker.assert_called_once_with()
-    assert ui_window.metric_cards['status'].val_lbl.text() == 'Đã dừng'
+    assert ui_window.console_page.primary_btn.text() == '▶ BẮT ĐẦU DỊCH'
     buttons = ui_window.findChildren(QPushButton)
-    next(b for b in buttons if b.text().strip() in ('Chọn lại vùng quét', 'Chọn vùng đọc')).click()
+    ui_window.console_page.select_region_btn.click()
     ui_window.on_select_region_cb.assert_called_once_with()
     next(b for b in buttons if b.text().strip() == 'Thoát').click()
     ui_window.on_quit_cb.assert_called_once()

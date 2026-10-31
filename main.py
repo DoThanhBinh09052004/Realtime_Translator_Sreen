@@ -157,7 +157,6 @@ def main():
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
     # Versioned frames prevent queued AI subtitles from resurfacing after a
     # switch to Google (or back); the legacy string signal stays public.
-    worker.text_unchanged.connect(overlay.refresh)
     worker.blocks_updated.connect(overlay.update_blocks)
     worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
@@ -197,7 +196,7 @@ def main():
     controller = ControllerWindow(
         worker=worker,
         state=state,
-        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_select_region=lambda: region_lifecycle.start_quick_selection() if region_lifecycle else None,
         on_quit=on_quit,
         overlay=overlay,
         pack_manager=pack_manager
@@ -207,7 +206,7 @@ def main():
         controller=controller,
         worker=worker,
         app=app,
-        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_select_region=lambda: region_lifecycle.start_quick_selection() if region_lifecycle else None,
         on_quit=on_quit
     )
     controller.set_game_controls(game_controls)
@@ -222,6 +221,7 @@ def main():
     )
 
     from ui.capture_binding import CaptureApplicationBinding
+    controller.manage_regions_requested.connect(region_lifecycle.start_selection)
     capture_binding = CaptureApplicationBinding(controller, worker, overlay, geometry_provider, region_lifecycle, parent=app)
     controller.ocr_page.capture_settings.set_sources(geometry_provider.snapshot)
     controller.console_page.capture_settings.set_sources(geometry_provider.snapshot)

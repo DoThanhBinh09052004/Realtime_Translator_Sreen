@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 
-from ui.widgets.cards import ModernCard, MetricCard
+from ui.widgets.cards import ModernCard
 from ui.widgets.capture_snapshot import CaptureSnapshotWidget
 from ui.widgets.translation_output import TranslationOutputWidget
 from ui.capture_settings import CaptureSettings
@@ -41,6 +41,7 @@ class ConsolePage(QWidget):
     settings_requested = pyqtSignal()
     readiness_action_requested = pyqtSignal(str)
     select_region_requested = pyqtSignal()
+    manage_regions_requested = pyqtSignal()
     subtitle_settings_requested = pyqtSignal()
     retry_translation_requested = pyqtSignal()
 
@@ -54,7 +55,6 @@ class ConsolePage(QWidget):
         self._translation_status = None
         self._current_readiness_action: str | None = None
         self._is_running_phase: bool = False
-        self._metric_status_text: str = "Đã dừng"
 
         self._countdown = QTimer(self)
         self._countdown.setInterval(500)
@@ -150,7 +150,7 @@ class ConsolePage(QWidget):
         reg_header_row.addWidget(self.region_info_lbl)
         reg_header_row.addStretch()
 
-        self.select_region_btn = QPushButton("Chọn vùng đọc")
+        self.select_region_btn = QPushButton("Khoanh vùng đọc")
         self.select_region_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
         self.select_region_btn.setCursor(Qt.PointingHandCursor)
         self.select_region_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=14))
@@ -166,6 +166,11 @@ class ConsolePage(QWidget):
         preview_notice.setStyleSheet(f"font-size: 11.5px; color: {CYBER_PALETTE['text_muted']};")
         preview_footer.addWidget(preview_notice)
         preview_footer.addStretch()
+
+        self.manage_regions_btn = QPushButton('Quản lý vùng nâng cao')
+        self.manage_regions_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.manage_regions_btn.clicked.connect(self.manage_regions_requested.emit)
+        preview_footer.addWidget(self.manage_regions_btn)
 
         self.refresh_preview_btn = QPushButton("Làm mới ảnh")
         self.refresh_preview_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
@@ -238,14 +243,6 @@ class ConsolePage(QWidget):
 
         self.details_container.hide()
         layout.addWidget(self.details_container)
-
-        # Retained compatibility metric_cards dict
-        self.metric_cards = {
-            "status": MetricCard("TRẠNG THÁI", "Đã dừng", icon_name="activity", icon_color=CYBER_PALETTE['neon_rose']),
-            "ai": MetricCard("CÔNG CỤ DỊCH", snapshot.ai.provider, icon_name="cpu", icon_color=CYBER_PALETTE['neon_indigo']),
-            "lang": MetricCard("NGÔN NGỮ", f"{snapshot.ocr.source} -> {snapshot.ocr.target}", icon_name="languages", icon_color=CYBER_PALETTE['text_muted']),
-            "region": MetricCard("VÙNG QUÉT OCR", "Chưa chọn vùng", icon_name="maximize-2", icon_color=CYBER_PALETTE['text_muted'])
-        }
 
         self.render_summary(snapshot)
         layout.addStretch()
@@ -376,35 +373,7 @@ class ConsolePage(QWidget):
         readiness: DailyReadiness,
         run_state: DailyRunState
     ) -> None:
-        # 1. Update languages with signal blocker
-        with QSignalBlocker(self.src_combo):
-            if snapshot.ocr.source_choices:
-                current_choices = [self.src_combo.itemData(i) for i in range(self.src_combo.count())]
-                new_choices = [c.config_name for c in snapshot.ocr.source_choices]
-                if current_choices != new_choices:
-                    self.src_combo.clear()
-                    for choice in snapshot.ocr.source_choices:
-                        label = SOURCE_LANGUAGE_LABELS.get(choice.config_name, choice.label)
-                        self.src_combo.addItem(label, choice.config_name)
-            idx_src = self.src_combo.findData(snapshot.ocr.source)
-            if idx_src >= 0 and self.src_combo.currentIndex() != idx_src:
-                self.src_combo.setCurrentIndex(idx_src)
-
-        with QSignalBlocker(self.tgt_combo):
-            idx_tgt = self.tgt_combo.findData(snapshot.ocr.target)
-            if idx_tgt >= 0 and self.tgt_combo.currentIndex() != idx_tgt:
-                self.tgt_combo.setCurrentIndex(idx_tgt)
-
-        # 2. Update region info label
-        reg = snapshot.ocr.region
-        if reg:
-            self.region_info_lbl.setText(f"Vùng đọc chữ · {reg[2]} × {reg[3]} px")
-        else:
-            self.region_info_lbl.setText("Vùng đọc chữ · Chưa chọn vùng")
-
-        # 3. Update provider / subtitle summary
-        mode_text = "Phụ đề nổi" if snapshot.subtitle.overlay_mode == 'subtitle' else "Khối tại chỗ (Blocks)"
-        self.provider_summary_lbl.setText(f"{snapshot.ai.provider} · {mode_text}")
+        self.render_summary(snapshot)
 
         # 4. Primary Button state
         phase = run_state.phase
@@ -454,8 +423,6 @@ class ConsolePage(QWidget):
         else:
             self.refresh_preview_btn.setToolTip("Chụp lại ảnh tĩnh từ nguồn hiện tại")
 
-        # Keep compatibility state in sync
-        self.render_summary(snapshot)
 
     def render_presented(
         self,
@@ -471,21 +438,38 @@ class ConsolePage(QWidget):
         self.snapshot_widget.clear_snapshot(placeholder_text)
 
     def render_summary(self, snapshot: ControllerSnapshot):
-        model = f"\n{snapshot.ai.model_id}" if snapshot.ai.supports_models else ""
-        if "ai" in self.metric_cards:
-            self.metric_cards["ai"].set_value(snapshot.ai.provider + model)
-        if "lang" in self.metric_cards:
-            self.metric_cards["lang"].set_value(f"{snapshot.ocr.source} -> {snapshot.ocr.target}")
-        region = snapshot.ocr.region
-        if "region" in self.metric_cards:
-            self.metric_cards["region"].set_value(f"{region[2]} x {region[3]} px" if region else "Chưa chọn vùng")
-        if "status" in self.metric_cards:
-            self.metric_cards["status"].set_value(self._metric_status_text)
+        # 1. Update languages with signal blocker
+        with QSignalBlocker(self.src_combo):
+            if snapshot.ocr.source_choices:
+                current_choices = [self.src_combo.itemData(i) for i in range(self.src_combo.count())]
+                new_choices = [c.config_name for c in snapshot.ocr.source_choices]
+                if current_choices != new_choices:
+                    self.src_combo.clear()
+                    for choice in snapshot.ocr.source_choices:
+                        label = SOURCE_LANGUAGE_LABELS.get(choice.config_name, choice.label)
+                        self.src_combo.addItem(label, choice.config_name)
+            idx_src = self.src_combo.findData(snapshot.ocr.source)
+            if idx_src >= 0 and self.src_combo.currentIndex() != idx_src:
+                self.src_combo.setCurrentIndex(idx_src)
+
+        with QSignalBlocker(self.tgt_combo):
+            idx_tgt = self.tgt_combo.findData(snapshot.ocr.target)
+            if idx_tgt >= 0 and self.tgt_combo.currentIndex() != idx_tgt:
+                self.tgt_combo.setCurrentIndex(idx_tgt)
+
+        # 2. Update region info label
+        reg = snapshot.ocr.region
+        if reg:
+            self.region_info_lbl.setText(f"Vùng đọc chữ · {reg[2]} × {reg[3]} px")
+        else:
+            self.region_info_lbl.setText("Vùng đọc chữ · Chưa chọn vùng")
+
+        # 3. Update provider / subtitle summary
+        mode_text = "Phụ đề nổi" if snapshot.subtitle.overlay_mode == 'subtitle' else "Khối tại chỗ (Blocks)"
+        self.provider_summary_lbl.setText(f"{snapshot.ai.provider} · {mode_text}")
 
     def set_run_status(self, text: str):
-        self._metric_status_text = text
-        if "status" in self.metric_cards:
-            self.metric_cards["status"].set_value(text)
+        self.readiness_lbl.setText(text)
 
     def append_log(self, line: str):
         self.log_view.appendPlainText(line)
