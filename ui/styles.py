@@ -252,6 +252,18 @@ HERO_STOP_STYLE = f"""
     }}
 """
 
+HERO_STOPPING_STYLE = f"""
+    QPushButton {{
+        background-color: {CYBER_PALETTE['bg_input']};
+        color: {CYBER_PALETTE['text_muted']};
+        border: 1px solid {CYBER_PALETTE['border_card']};
+        border-radius: 6px;
+        padding: 9px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
+    }}
+"""
+
 SECONDARY_BUTTON_STYLE = f"""
     QPushButton {{
         background-color: {CYBER_PALETTE['bg_input']};
