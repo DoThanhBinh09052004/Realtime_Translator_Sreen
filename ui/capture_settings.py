@@ -48,9 +48,16 @@ class CaptureSettings(QWidget):
             if self.kind_combo.currentData() == 'desktop':
                 for screen in self._screens(): self.source_combo.addItem(screen.name, screen)
             else:
-                for window in self._windows():
-                    if window.available:
-                        self.source_combo.addItem(f'{window.title} · {window.process_name} · HWND {window.identity.hwnd}', window)
+                available_windows = [w for w in self._windows() if getattr(w, 'available', True)]
+                from collections import Counter
+                counts = Counter((w.title, getattr(w, 'process_name', '')) for w in available_windows)
+                seen = Counter()
+                for window in available_windows:
+                    key = (window.title, getattr(window, 'process_name', ''))
+                    seen[key] += 1
+                    proc = f" · {window.process_name}" if getattr(window, 'process_name', '') else ""
+                    idx = f" (#{seen[key]})" if counts[key] > 1 else ""
+                    self.source_combo.addItem(f"{window.title}{proc}{idx}", window)
             self.choose_btn.setEnabled(self.source_combo.count() > 0)
             if not self.source_combo.count(): self.status_label.setText('Không có nguồn phù hợp. Mở cửa sổ rồi cập nhật danh sách.')
         except Exception:

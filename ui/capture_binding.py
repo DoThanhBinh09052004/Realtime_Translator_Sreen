@@ -1,12 +1,15 @@
 """GUI owner wiring source selection, geometry, drain and controller run intent."""
-from PyQt5.QtCore import QObject, QTimer
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from core.capture.models import CaptureContext, SourceStatus
 from core.blocks.models import CaptureGeometry
-from core.config import ConfigError, save_capture_profile
+from core import config
 from ui.window_geometry import WindowGeometryProvider
 
 
 class CaptureApplicationBinding(QObject):
+    binding_state_changed = pyqtSignal()
+    context_changed = pyqtSignal(object)
+
     def __init__(self, controller, worker, overlay, screens, lifecycle, *, window_provider=None, parent=None):
         super().__init__(parent)
         self.controller, self.worker, self.overlay = controller, worker, overlay
@@ -16,39 +19,58 @@ class CaptureApplicationBinding(QObject):
         self._epoch = 0
         self._pending = None
         self._waiting = False
+        self._bound = False
         self._stopped = False
         self._timer = QTimer(self); self._timer.setInterval(30); self._timer.timeout.connect(self._apply_pending)
         self.windows.context_changed.connect(self._context_changed)
         self.windows.source_unavailable.connect(self._unavailable)
         screens.changed.connect(self._screens_changed)
-        controller.ocr_page.capture_settings.source_selected.connect(self.select_source)
+        if hasattr(controller, 'capture_source_selected'):
+            controller.capture_source_selected.connect(self.select_source)
+        elif hasattr(controller, 'ocr_page') and hasattr(controller.ocr_page, 'capture_settings'):
+            controller.ocr_page.capture_settings.source_selected.connect(self.select_source)
         controller.capture_stop_requested.connect(self.stop)
         controller.settings_coordinator.settings_changed.connect(self._settings_changed)
         controller.ensure_capture_ready = self.ensure_ready
 
+    @property
+    def is_bound(self) -> bool:
+        return self._bound
+
+    @property
+    def is_waiting(self) -> bool:
+        return self._waiting
+
     def _settings_changed(self, snapshot, field):
         if field == 'capture_profile':
             self.profile = self.worker.capture_profile
+            self._bound = True
             self.controller.set_capture_profile_state(self.profile, bound=True)
+            self.binding_state_changed.emit()
 
     def initialize(self, profile):
         self.profile = profile
-        self.controller.set_capture_profile_state(profile, bound=profile is None or profile.source_kind == 'desktop')
+        self.identity = None
+        self._bound = False
+        self.controller.set_capture_profile_state(profile, bound=profile is not None and profile.source_kind == 'desktop')
         if profile is not None and profile.source_kind == 'desktop':
             self._bind_desktop()
+        self.binding_state_changed.emit()
 
     def select_source(self, profile, identity):
         if self.lifecycle.is_active is True:
             self.controller.show_capture_waiting()
             return
         try:
-            save_capture_profile(profile)
-        except ConfigError as error:
+            config.save_capture_profile(profile)
+        except config.ConfigError as error:
             self.controller._show_save_error(str(error)); return
         self.worker.stop_worker(preserve_translation_session=True)
         self.windows.clear_binding()
         self.profile, self.identity = profile, identity
         self._stopped = False
+        self._bound = False
+        self.binding_state_changed.emit()
         self._epoch = max(self._epoch, getattr(self.worker.capture_context, 'binding_epoch', 0)) + 1
         self.controller.set_capture_profile_state(profile, bound=profile.source_kind == 'desktop' or identity is not None)
         if profile.source_kind == 'window':
@@ -59,6 +81,7 @@ class CaptureApplicationBinding(QObject):
     def _bind_desktop(self):
         matching = [screen for screen in self.screens.snapshot() if screen.name == self.profile.monitor_name]
         if len(matching) != 1:
+            self._bound = False
             self.controller.set_capture_profile_state(self.profile, bound=False)
             self._unavailable(None); return
         screen = matching[0]; rect = screen.physical_rect
@@ -102,13 +125,18 @@ class CaptureApplicationBinding(QObject):
         self._timer.stop()
         self.worker.configure_capture(self.profile, context)
         self.controller.set_capture_profile_state(self.profile, bound=True)
+        self._bound = True
         self._waiting = False
+        self.context_changed.emit(context)
+        self.binding_state_changed.emit()
         if self.controller.capture_run_requested is True and self.lifecycle.is_active is not True:
             self.controller.start_ocr(preserve_translation_session=True)
 
     def _unavailable(self, error):
         self._pending = None
         self._waiting = True
+        self._bound = False
+        self.binding_state_changed.emit()
         context = self.worker.capture_context
         if context is not None:
             self.lifecycle.on_capture_terminal(SourceStatus(context.binding_epoch, 'unavailable', error))
@@ -130,5 +158,7 @@ class CaptureApplicationBinding(QObject):
     def stop(self):
         self._stopped = True
         self._pending = None
+        self._bound = False
         self._timer.stop()
         self.windows.clear_binding()
+        self.binding_state_changed.emit()

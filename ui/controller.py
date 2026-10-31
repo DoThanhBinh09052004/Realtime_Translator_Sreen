@@ -21,6 +21,7 @@ class ControllerWindow(QWidget):
     starting_translation = pyqtSignal()
     capture_stop_requested = pyqtSignal()
     daily_state_changed = pyqtSignal()
+    capture_source_selected = pyqtSignal(object, object)
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
@@ -152,6 +153,7 @@ class ControllerWindow(QWidget):
         self.ocr_page.threads_changed.connect(self.settings_coordinator.set_ocr_threads)
         self.ocr_page.select_region_requested.connect(self._on_select_region_clicked)
         self.ocr_page.manage_packs_requested.connect(self.open_language_packs)
+        self.ocr_page.capture_settings.source_selected.connect(self.capture_source_selected.emit)
         self.page_ocr = self.ocr_page
         self.subtitle_page = SubtitleSettingsPage(self.settings_coordinator.snapshot().subtitle, self)
         self.bg_color_btn = self.subtitle_page.bg_color_btn
