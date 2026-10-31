@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import QFrame, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel
 from ui.styles import CARD_FRAME_STYLE, CYBER_PALETTE
 from ui.icons import get_lucide_icon
 
@@ -19,6 +19,8 @@ class ModernCard(QFrame):
             header_layout.setSpacing(2)
             
             t_lbl = QLabel(title)
+            t_lbl.setWordWrap(True)
+            t_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             t_lbl.setStyleSheet(f"""
                 font-size: 13px;
                 font-weight: 600;
@@ -28,6 +30,8 @@ class ModernCard(QFrame):
             
             if subtitle:
                 sub_lbl = QLabel(subtitle)
+                sub_lbl.setWordWrap(True)
+                sub_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
                 sub_lbl.setStyleSheet(f"""
                     font-size: 11.5px;
                     color: {CYBER_PALETTE['text_muted']};
@@ -70,6 +74,8 @@ class MetricCard(QFrame):
         header_row.addWidget(icon_lbl)
 
         t_lbl = QLabel(title)
+        t_lbl.setWordWrap(True)
+        t_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         t_lbl.setStyleSheet(f"font-size: 10.5px; font-weight: 600; color: {CYBER_PALETTE['text_muted']}; letter-spacing: 0.3px;")
         header_row.addWidget(t_lbl)
         header_row.addStretch()

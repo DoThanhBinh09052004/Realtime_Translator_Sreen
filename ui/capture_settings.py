@@ -2,7 +2,7 @@
 from dataclasses import replace
 from uuid import uuid4
 from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, QLabel
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, QLabel, QSizePolicy
 from core.capture.models import CaptureProfile, CaptureRegion, NormalizedRect
 
 
@@ -15,10 +15,10 @@ class CaptureSettings(QWidget):
         self._screens = screens or (lambda: ())
         self._windows = windows or self._enumerate_windows
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
-        self.kind_combo = QComboBox(); self.kind_combo.addItem('Màn hình', 'desktop'); self.kind_combo.addItem('Cửa sổ', 'window')
+        self.kind_combo = QComboBox(); self.kind_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed); self.kind_combo.addItem('Màn hình', 'desktop'); self.kind_combo.addItem('Cửa sổ', 'window')
         self.kind_combo.setCurrentIndex(1 if profile and profile.source_kind == 'window' else 0)
         layout.addWidget(self.kind_combo)
-        self.source_combo = QComboBox(); self.source_combo.setAccessibleName('Nguồn chụp')
+        self.source_combo = QComboBox(); self.source_combo.setAccessibleName('Nguồn chụp'); self.source_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         layout.addWidget(self.source_combo)
         row = QHBoxLayout(); self.refresh_btn = QPushButton('Cập nhật danh sách'); self.choose_btn = QPushButton('Chọn nguồn')
         row.addWidget(self.refresh_btn); row.addWidget(self.choose_btn); layout.addLayout(row)

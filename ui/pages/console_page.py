@@ -4,7 +4,7 @@ import time
 from typing import Any
 from PyQt5.QtWidgets import (
     QWidget, QScrollArea, QLayout, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame
+    QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 
@@ -33,7 +33,7 @@ TARGET_LANGUAGE_LABELS = {
 }
 
 
-class ConsolePage(QScrollArea):
+class ConsolePage(QWidget):
     source_changed = pyqtSignal(str)
     target_changed = pyqtSignal(str)
     toggle_requested = pyqtSignal()
@@ -50,8 +50,6 @@ class ConsolePage(QScrollArea):
 
     def __init__(self, snapshot: ControllerSnapshot, parent=None):
         super().__init__(parent)
-        self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self._translation_status = None
         self._current_readiness_action: str | None = None
@@ -62,10 +60,18 @@ class ConsolePage(QScrollArea):
         self._countdown.setInterval(500)
         self._countdown.timeout.connect(self._refresh_countdown)
 
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(6)
+
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setFrameShape(QFrame.NoFrame)
+
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
-        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setContentsMargins(16, 12, 16, 8)
         layout.setSpacing(12)
 
         # 1. Header Row
@@ -100,6 +106,7 @@ class ConsolePage(QScrollArea):
         src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.src_combo = QComboBox()
         self.src_combo.setAccessibleName("Ngôn ngữ nguồn")
+        self.src_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_source_languages(snapshot)
         self.src_combo.currentIndexChanged.connect(self._on_source_combo_changed)
         src_box.addWidget(src_lbl)
@@ -117,6 +124,7 @@ class ConsolePage(QScrollArea):
         tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.tgt_combo = QComboBox()
         self.tgt_combo.setAccessibleName("Dịch sang")
+        self.tgt_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_target_languages(snapshot)
         self.tgt_combo.currentIndexChanged.connect(self._on_target_combo_changed)
         tgt_box.addWidget(tgt_lbl)
@@ -137,6 +145,8 @@ class ConsolePage(QScrollArea):
         reg_header_row = QHBoxLayout()
         self.region_info_lbl = QLabel("Vùng đọc chữ · Chưa chọn vùng")
         self.region_info_lbl.setStyleSheet("font-size: 12.5px; font-weight: 500;")
+        self.region_info_lbl.setWordWrap(True)
+        self.region_info_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         reg_header_row.addWidget(self.region_info_lbl)
         reg_header_row.addStretch()
 
@@ -152,7 +162,7 @@ class ConsolePage(QScrollArea):
         region_card.layout.addWidget(self.snapshot_widget)
 
         preview_footer = QHBoxLayout()
-        preview_notice = QLabel("Ảnh xem trước, không phải video")
+        preview_notice = QLabel("Ảnh xem trước, không phải video"); preview_notice.setWordWrap(True); preview_notice.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         preview_notice.setStyleSheet(f"font-size: 11.5px; color: {CYBER_PALETTE['text_muted']};")
         preview_footer.addWidget(preview_notice)
         preview_footer.addStretch()
@@ -171,6 +181,8 @@ class ConsolePage(QScrollArea):
         eng_row = QHBoxLayout()
         self.provider_summary_lbl = QLabel(f"{snapshot.ai.provider} · {snapshot.subtitle.overlay_mode}")
         self.provider_summary_lbl.setStyleSheet("font-size: 12.5px; font-weight: 500;")
+        self.provider_summary_lbl.setWordWrap(True)
+        self.provider_summary_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         eng_row.addWidget(self.provider_summary_lbl)
         eng_row.addStretch()
 
@@ -184,49 +196,7 @@ class ConsolePage(QScrollArea):
         engine_card.layout.addLayout(eng_row)
         layout.addWidget(engine_card)
 
-        # 6. Primary Action & Readiness Controls
-        hero_card = ModernCard("Điều khiển Dịch thuật", "Bật hoặc dừng tiến trình quét OCR và dịch màn hình")
-        self.primary_btn = QPushButton("▶ BẮT ĐẦU DỊCH")
-        self.primary_btn.setFixedHeight(44)
-        self.primary_btn.setCursor(Qt.PointingHandCursor)
-        self.primary_btn.setStyleSheet(HERO_START_STYLE)
-        self.primary_btn.clicked.connect(self._on_primary_clicked)
-        hero_card.layout.addWidget(self.primary_btn)
 
-        # Backward compatibility buttons
-        self.start_btn = self.primary_btn
-        self.stop_btn = self.primary_btn
-
-        readiness_row = QHBoxLayout()
-        self.readiness_lbl = QLabel("● Chưa sẵn sàng")
-        self.readiness_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
-        self.readiness_lbl.setWordWrap(True)
-        readiness_row.addWidget(self.readiness_lbl, stretch=1)
-
-        self.readiness_action_btn = QPushButton("Khắc phục")
-        self.readiness_action_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.readiness_action_btn.setCursor(Qt.PointingHandCursor)
-        self.readiness_action_btn.clicked.connect(self._on_readiness_action_clicked)
-        self.readiness_action_btn.hide()
-        readiness_row.addWidget(self.readiness_action_btn)
-        hero_card.layout.addLayout(readiness_row)
-
-        # Translation recovery (Google Translate pause/wait) - outside Details
-        recovery_row = QHBoxLayout()
-        self.translation_message = QLabel()
-        self.translation_message.setWordWrap(True)
-        self.translation_message.hide()
-        recovery_row.addWidget(self.translation_message, stretch=1)
-
-        self.retry_translation_btn = QPushButton("Thử lại")
-        self.retry_translation_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.retry_translation_btn.setCursor(Qt.PointingHandCursor)
-        self.retry_translation_btn.clicked.connect(self.retry_translation_requested.emit)
-        self.retry_translation_btn.hide()
-        recovery_row.addWidget(self.retry_translation_btn)
-        hero_card.layout.addLayout(recovery_row)
-
-        layout.addWidget(hero_card)
 
         # 7. Translation Output Display
         output_card = ModernCard("Bản dịch Hiển thị", "Cặp chữ gốc và bản dịch mới nhất được hiển thị trên màn hình")
@@ -278,7 +248,69 @@ class ConsolePage(QScrollArea):
         }
 
         self.render_summary(snapshot)
-        self.setWidget(content)
+        layout.addStretch()
+        self.scroll_area.setWidget(content)
+        root_layout.addWidget(self.scroll_area, stretch=1)
+
+        # Fixed Footer: Primary Action & Readiness Controls
+        hero_card = ModernCard("Điều khiển Dịch thuật", "Bật hoặc dừng tiến trình quét OCR và dịch màn hình")
+        self.hero_card = hero_card
+        self.primary_btn = QPushButton("▶ BẮT ĐẦU DỊCH")
+        self.primary_btn.setFixedHeight(44)
+        self.primary_btn.setCursor(Qt.PointingHandCursor)
+        self.primary_btn.setStyleSheet(HERO_START_STYLE)
+        self.primary_btn.clicked.connect(self._on_primary_clicked)
+        hero_card.layout.addWidget(self.primary_btn)
+
+        # Backward compatibility buttons
+        self.start_btn = self.primary_btn
+        self.stop_btn = self.primary_btn
+
+        readiness_row = QHBoxLayout()
+        self.readiness_lbl = QLabel("● Chưa sẵn sàng")
+        self.readiness_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
+        self.readiness_lbl.setWordWrap(True)
+        readiness_row.addWidget(self.readiness_lbl, stretch=1)
+
+        self.readiness_action_btn = QPushButton("Khắc phục")
+        self.readiness_action_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.readiness_action_btn.setCursor(Qt.PointingHandCursor)
+        self.readiness_action_btn.clicked.connect(self._on_readiness_action_clicked)
+        self.readiness_action_btn.hide()
+        readiness_row.addWidget(self.readiness_action_btn)
+        hero_card.layout.addLayout(readiness_row)
+
+        # Translation recovery (Google Translate pause/wait) - outside Details
+        recovery_row = QHBoxLayout()
+        self.translation_message = QLabel()
+        self.translation_message.setWordWrap(True)
+        self.translation_message.hide()
+        recovery_row.addWidget(self.translation_message, stretch=1)
+
+        self.retry_translation_btn = QPushButton("Thử lại")
+        self.retry_translation_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.retry_translation_btn.setCursor(Qt.PointingHandCursor)
+        self.retry_translation_btn.clicked.connect(self.retry_translation_requested.emit)
+        self.retry_translation_btn.hide()
+        recovery_row.addWidget(self.retry_translation_btn)
+        hero_card.layout.addLayout(recovery_row)
+
+        root_layout.addWidget(hero_card, stretch=0)
+
+    def widget(self):
+        return self.scroll_area.widget()
+
+    def horizontalScrollBar(self):
+        return self.scroll_area.horizontalScrollBar()
+
+    def verticalScrollBar(self):
+        return self.scroll_area.verticalScrollBar()
+
+    def viewport(self):
+        return self.scroll_area.viewport()
+
+    def ensureWidgetVisible(self, childWidget, xMargin=50, yMargin=50):
+        return self.scroll_area.ensureWidgetVisible(childWidget, xMargin, yMargin)
 
     def _init_source_languages(self, snapshot: ControllerSnapshot):
         blocker = QSignalBlocker(self.src_combo)

@@ -395,11 +395,8 @@ class ControllerWindow(QWidget):
             self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
             self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
             
-            if self.pages.currentIndex() != 0:
-                self._switch_to_page(1)
-                self.ai_page.highlight_missing_key()
-            else:
-                self._show_save_error(f"Thiếu API Key cho {provider}.")
+            self._switch_to_page(1)
+            self.ai_page.highlight_missing_key()
             return
 
         self.capture_run_requested = True

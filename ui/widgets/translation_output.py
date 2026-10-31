@@ -96,6 +96,9 @@ class TranslationOutputWidget(QWidget):
             self.source_edit.setPlainText("\n\n".join(source_parts))
             self.target_edit.setPlainText("\n\n".join(target_parts))
 
+    def is_empty(self) -> bool:
+        return self.placeholder_lbl.isVisible() or (not self.source_edit.toPlainText().strip() and not self.target_edit.toPlainText().strip())
+
     def clear(self) -> None:
         self.source_edit.clear()
         self.target_edit.clear()
