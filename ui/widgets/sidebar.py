@@ -55,7 +55,17 @@ class ControllerSidebar(QFrame):
         brand_row.addLayout(brand_text_box)
         sidebar_layout.addLayout(brand_row)
 
-        sidebar_layout.addSpacing(14)
+        sidebar_layout.addSpacing(10)
+
+        back_btn = QPushButton("← Quay lại dịch")
+        back_btn.setFixedHeight(32)
+        back_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.clicked.connect(lambda: self.page_requested.emit(0))
+        self.back_button = back_btn
+        sidebar_layout.addWidget(back_btn)
+
+        sidebar_layout.addSpacing(8)
 
         # Navigation Buttons (Lucide Vector Icons, Không Emoji)
         self.nav_buttons = []

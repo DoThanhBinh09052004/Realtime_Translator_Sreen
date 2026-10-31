@@ -1,8 +1,8 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog, QMessageBox
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QColorDialog, QMessageBox
+from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
 from ui.pages.console_page import ConsolePage
@@ -13,7 +13,7 @@ from ui.widgets.sidebar import ControllerSidebar
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.settings_coordinator import SettingsCoordinator
 from ui.daily_control import DailyControlCoordinator
-from ui.styles import CYBER_PALETTE, get_app_stylesheet
+from ui.styles import CYBER_PALETTE, get_app_stylesheet, SECONDARY_BUTTON_STYLE
 
 
 class ControllerWindow(QWidget):
@@ -94,7 +94,18 @@ class ControllerWindow(QWidget):
         content_v_layout.setSpacing(12)
 
         # Page Header
-        header_row = QHBoxLayout()
+        self.header_container = QWidget()
+        header_row = QHBoxLayout(self.header_container)
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(10)
+
+        self.back_btn = QPushButton("← Quay lại dịch")
+        self.back_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.back_btn.setCursor(Qt.PointingHandCursor)
+        self.back_btn.setFixedHeight(32)
+        self.back_btn.clicked.connect(lambda: self._switch_to_page(0))
+        header_row.addWidget(self.back_btn)
+
         header_text_box = QVBoxLayout()
         header_text_box.setSpacing(2)
 
@@ -106,7 +117,7 @@ class ControllerWindow(QWidget):
         header_text_box.addWidget(self.page_desc_lbl)
         header_row.addLayout(header_text_box)
         header_row.addStretch()
-        content_v_layout.addLayout(header_row)
+        content_v_layout.addWidget(self.header_container)
 
         # QStackedWidget chứa 4 trang
         self.pages = QStackedWidget()
@@ -204,6 +215,7 @@ class ControllerWindow(QWidget):
         self.settings_coordinator.save_failed.connect(self._show_save_error)
         self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
         self.settings_coordinator.pack_state_changed.connect(self._render_language_packs)
+        self._switch_to_page(0)
 
     def toggle_daily_translation(self):
         self.daily_coordinator.toggle_translation()
@@ -227,18 +239,26 @@ class ControllerWindow(QWidget):
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
-        self.sidebar.set_active_page(index)
+        if index == 0:
+            self.sidebar.hide()
+            if hasattr(self, "header_container"):
+                self.header_container.hide()
+        else:
+            self.sidebar.show()
+            if hasattr(self, "header_container"):
+                self.header_container.show()
+            self.sidebar.set_active_page(index)
 
-        titles = [
-            ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
-            ("Công cụ dịch", "Chọn Google Translate hoặc cấu hình công cụ AI"),
-            ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
-            ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
-        ]
-        if 0 <= index < len(titles):
-            title, desc = titles[index]
-            self.page_title_lbl.setText(title)
-            self.page_desc_lbl.setText(desc)
+            titles = [
+                ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
+                ("Công cụ dịch", "Chọn Google Translate hoặc cấu hình công cụ AI"),
+                ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
+                ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
+            ]
+            if 0 <= index < len(titles):
+                title, desc = titles[index]
+                self.page_title_lbl.setText(title)
+                self.page_desc_lbl.setText(desc)
 
 
     def _render_snapshot(self, snapshot, changed_field):
@@ -350,12 +370,14 @@ class ControllerWindow(QWidget):
                 return
         if not self._capture_bound:
             self._show_save_error('Hãy chọn lại nguồn cửa sổ trước khi Bắt đầu.')
-            self._switch_to_page(2)
+            if self.pages.currentIndex() != 0:
+                self._switch_to_page(2)
             return
         if hasattr(self, "daily_coordinator") and self.daily_coordinator.binding is not None:
             if not load_capture_setup_complete() and not (self._capture_profile and getattr(self._capture_profile, "regions", None)):
                 self._show_save_error('Chưa chọn vùng đọc chữ.')
-                self._switch_to_page(2)
+                if self.pages.currentIndex() != 0:
+                    self._switch_to_page(2)
                 return
         if callable(self.ensure_capture_ready) and not self.ensure_capture_ready():
             return
@@ -363,7 +385,8 @@ class ControllerWindow(QWidget):
             return
         if not self.settings_coordinator.source_ready():
             self._show_save_error(self.settings_coordinator.snapshot().ocr.source_notice)
-            self._switch_to_page(2)
+            if self.pages.currentIndex() != 0:
+                self._switch_to_page(2)
             self.open_language_packs()
             return
         ai = self.settings_coordinator.snapshot().ai
@@ -372,11 +395,11 @@ class ControllerWindow(QWidget):
             self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
             self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
             
-            # Chuyển người dùng sang tab AI Engine
-            self._switch_to_page(1)
-            
-            # Cảnh báo viền thẻ API Key
-            self.ai_page.highlight_missing_key()
+            if self.pages.currentIndex() != 0:
+                self._switch_to_page(1)
+                self.ai_page.highlight_missing_key()
+            else:
+                self._show_save_error(f"Thiếu API Key cho {provider}.")
             return
 
         self.capture_run_requested = True
