@@ -322,10 +322,6 @@ class ConsolePage(QScrollArea):
 
     def _on_primary_clicked(self):
         self.toggle_requested.emit()
-        if self._is_running_phase:
-            self.stop_requested.emit()
-        else:
-            self.start_requested.emit()
 
     def _on_readiness_action_clicked(self):
         if self._current_readiness_action:

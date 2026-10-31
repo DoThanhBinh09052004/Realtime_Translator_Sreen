@@ -224,9 +224,22 @@ def main():
     from ui.capture_binding import CaptureApplicationBinding
     capture_binding = CaptureApplicationBinding(controller, worker, overlay, geometry_provider, region_lifecycle, parent=app)
     controller.ocr_page.capture_settings.set_sources(geometry_provider.snapshot)
+    controller.console_page.capture_settings.set_sources(geometry_provider.snapshot)
+    controller.daily_coordinator.attach_capture(capture_binding, region_lifecycle)
     capture_binding.initialize(load_capture_profile(geometry_provider.snapshot()))
     worker.capture_terminal_status.connect(region_lifecycle.on_capture_terminal, Qt.QueuedConnection)
     region_lifecycle.shutdown_finished.connect(lambda: shutdown.finish('translation'))
+
+    region_lifecycle.dashboard_preview_ready.connect(
+        lambda image, context: controller.console_page.set_capture_snapshot(
+            image, getattr(controller.daily_coordinator.binding, 'profile', None), context
+        )
+    )
+    region_lifecycle.dashboard_preview_invalidated.connect(controller.console_page.clear_capture_snapshot)
+    region_lifecycle.dashboard_preview_error.connect(
+        lambda err: controller.console_page.clear_capture_snapshot(placeholder_text=str(err))
+    )
+    capture_binding.context_changed.connect(lambda ctx: region_lifecycle.cancel_dashboard_preview())
 
     def on_overlay_error(error):
         worker.stop_worker()

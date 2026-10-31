@@ -43,20 +43,32 @@ class DailyControlCoordinator(QObject):
         if self.binding is not None:
             is_bound = getattr(self.binding, "is_bound", False)
             profile = getattr(self.binding, "profile", None)
+            if not is_bound or profile is None:
+                return DailyReadiness(ready=False, reason="Chưa chọn nguồn chụp.", action="select_source")
+
+            # 2. Region setup check
+            if not load_capture_setup_complete():
+                return DailyReadiness(ready=False, reason="Chưa chọn vùng đọc chữ.", action="select_regions")
+
+            regions = getattr(profile, "regions", ())
+            if not any(getattr(r, "enabled", False) for r in regions):
+                return DailyReadiness(ready=False, reason="Chưa bật vùng đọc chữ nào.", action="select_regions")
         else:
             is_bound = getattr(self.controller, "_capture_bound", False)
             profile = getattr(self.controller, "_capture_profile", None)
+            if not is_bound:
+                return DailyReadiness(ready=False, reason="Chưa chọn nguồn chụp.", action="select_source")
 
-        if not is_bound or profile is None:
-            return DailyReadiness(ready=False, reason="Chưa chọn nguồn chụp.", action="select_source")
-
-        # 2. Region setup check
-        if not load_capture_setup_complete():
-            return DailyReadiness(ready=False, reason="Chưa chọn vùng đọc chữ.", action="select_regions")
-
-        regions = getattr(profile, "regions", ())
-        if not any(getattr(r, "enabled", False) for r in regions):
-            return DailyReadiness(ready=False, reason="Chưa bật vùng đọc chữ nào.", action="select_regions")
+            # 2. Region setup check for standalone/legacy controller
+            if profile is not None:
+                regions = getattr(profile, "regions", ())
+                if not load_capture_setup_complete() and not any(getattr(r, "enabled", False) for r in regions):
+                    return DailyReadiness(ready=False, reason="Chưa chọn vùng đọc chữ.", action="select_regions")
+                if not any(getattr(r, "enabled", False) for r in regions):
+                    return DailyReadiness(ready=False, reason="Chưa bật vùng đọc chữ nào.", action="select_regions")
+            else:
+                if not load_capture_setup_complete():
+                    return DailyReadiness(ready=False, reason="Chưa chọn vùng đọc chữ.", action="select_regions")
 
         # 3. Language pack check
         if hasattr(self.settings_coordinator, "source_ready") and not self.settings_coordinator.source_ready():
@@ -86,11 +98,13 @@ class DailyControlCoordinator(QObject):
         return DailyReadiness(ready=True, reason="Sẵn sàng dịch", action=None)
 
     def run_state(self) -> DailyRunState:
-        is_drained = getattr(self.worker, "is_drained", True)
-        run_requested = getattr(self.controller, "capture_run_requested", False)
-        is_running = getattr(self.worker, "is_running", lambda: False)() if callable(getattr(self.worker, "is_running", None)) else False
-        is_qthread = getattr(self.worker, "isRunning", lambda: False)() if callable(getattr(self.worker, "isRunning", None)) else False
-        restart_pending = getattr(self.worker, "restart_pending", False)
+        is_drained = getattr(self.worker, "is_drained", True) is not False
+        run_requested = getattr(self.controller, "capture_run_requested", False) is True
+        is_running_fn = getattr(self.worker, "is_running", None)
+        is_running = is_running_fn() is True if callable(is_running_fn) else False
+        is_qthread_fn = getattr(self.worker, "isRunning", None)
+        is_qthread = is_qthread_fn() is True if callable(is_qthread_fn) else False
+        restart_pending = getattr(self.worker, "restart_pending", False) is True
 
         if self.binding is not None:
             is_waiting = getattr(self.binding, "is_waiting", False) or not getattr(self.binding, "is_bound", False)
@@ -110,7 +124,7 @@ class DailyControlCoordinator(QObject):
             return DailyRunState(phase="starting", message="Đang khởi động...", can_toggle=True, preview_enabled=False)
 
         # 4. Running
-        if is_running or is_qthread or (run_requested and not is_waiting and not is_drained):
+        if is_running or is_qthread or (run_requested and not is_waiting):
             return DailyRunState(phase="running", message="Đang dịch", can_toggle=True, preview_enabled=False)
 
         # 5. Stopped

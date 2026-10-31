@@ -12,6 +12,7 @@ from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.widgets.sidebar import ControllerSidebar
 from ui.widgets.cards import ModernCard, MetricCard
 from ui.settings_coordinator import SettingsCoordinator
+from ui.daily_control import DailyControlCoordinator
 from ui.styles import CYBER_PALETTE, get_app_stylesheet
 
 
@@ -41,6 +42,7 @@ class ControllerWindow(QWidget):
         self.pack_manager = pack_manager
         self._language_packs_dialog = None
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self, pack_manager=pack_manager)
+        self.daily_coordinator = DailyControlCoordinator(self.settings_coordinator, worker, self, parent=self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
         self._retry_pending = False
@@ -123,6 +125,14 @@ class ControllerWindow(QWidget):
         self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
+        self.console_page.source_changed.connect(self.settings_coordinator.set_source)
+        self.console_page.target_changed.connect(self.settings_coordinator.set_target)
+        self.console_page.toggle_requested.connect(self.toggle_daily_translation)
+        self.console_page.preview_requested.connect(self.daily_coordinator.request_preview)
+        self.console_page.settings_requested.connect(lambda: self._switch_to_page(1))
+        self.console_page.readiness_action_requested.connect(self._on_readiness_action)
+        self.console_page.capture_settings.source_selected.connect(self.capture_source_selected.emit)
+        self.daily_coordinator.state_changed.connect(self._on_daily_state_changed)
         self.page_console = self.console_page
         self.ai_page = AiSettingsPage(self.settings_coordinator.snapshot().ai, tuple(get_available_providers()), self)
         self.provider_combo = self.ai_page.provider_combo
@@ -189,10 +199,31 @@ class ControllerWindow(QWidget):
 
         # Đồng bộ ban đầu
         self.console_page.render_summary(self.settings_coordinator.snapshot())
+        self.daily_coordinator.refresh()
         self.settings_coordinator.settings_changed.connect(self._render_snapshot)
         self.settings_coordinator.save_failed.connect(self._show_save_error)
         self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
         self.settings_coordinator.pack_state_changed.connect(self._render_language_packs)
+
+    def toggle_daily_translation(self):
+        self.daily_coordinator.toggle_translation()
+
+    def _on_daily_state_changed(self, readiness, run_state):
+        self.console_page.render_daily(self.settings_coordinator.snapshot(), readiness, run_state)
+
+    def _on_readiness_action(self, action: str):
+        if action == 'select_source':
+            self.console_page.capture_settings.source_combo.setFocus()
+        elif action == 'select_regions':
+            self._on_select_region_clicked()
+        elif action == 'manage_packs':
+            self.open_language_packs()
+        elif action == 'configure_provider':
+            self._switch_to_page(1)
+
+    def _on_translation_presented(self, presentation):
+        labels = {r.id: r.name for r in getattr(self._capture_profile, 'regions', ())} if self._capture_profile else None
+        self.console_page.render_presented(presentation, labels)
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -220,6 +251,7 @@ class ControllerWindow(QWidget):
         if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'overlay_mode', 'rollback'):
             self.subtitle_page.render(snapshot.subtitle)
         self.console_page.render_summary(snapshot)
+        self.daily_coordinator.refresh()
 
 
     def _show_save_error(self, message):
@@ -259,6 +291,7 @@ class ControllerWindow(QWidget):
         if self.worker.is_running() is True or self.worker.restart_pending is True:
             self.daily_state_changed.emit()
             return
+        self.capture_run_requested = False
         self._show_stopped_status()
         self.daily_state_changed.emit()
 
@@ -309,10 +342,21 @@ class ControllerWindow(QWidget):
         self._game_controls = game_controls
 
     def start_ocr(self, preserve_translation_session=False):
+        if hasattr(self, "daily_coordinator") and self.daily_coordinator.lifecycle is not None:
+            if not getattr(self.daily_coordinator.lifecycle, "preview_is_drained", True):
+                self.daily_coordinator.lifecycle.queue_start_intent()
+                return
+            if getattr(self.daily_coordinator.lifecycle, "is_active", False):
+                return
         if not self._capture_bound:
             self._show_save_error('Hãy chọn lại nguồn cửa sổ trước khi Bắt đầu.')
             self._switch_to_page(2)
             return
+        if hasattr(self, "daily_coordinator") and self.daily_coordinator.binding is not None:
+            if not load_capture_setup_complete() and not (self._capture_profile and getattr(self._capture_profile, "regions", None)):
+                self._show_save_error('Chưa chọn vùng đọc chữ.')
+                self._switch_to_page(2)
+                return
         if callable(self.ensure_capture_ready) and not self.ensure_capture_ready():
             return
         if self.worker is not None and self.worker.is_running() is True:
@@ -337,6 +381,7 @@ class ControllerWindow(QWidget):
 
         self.capture_run_requested = True
         self.starting_translation.emit()
+        self.console_page.render_presented(None)
 
         if self.worker:
             if preserve_translation_session:
@@ -355,6 +400,7 @@ class ControllerWindow(QWidget):
         self.capture_stop_requested.emit()
         self._retry_pending = False
         self.clear_translation_status()
+        self.console_page.render_presented(None)
         if self.worker:
             self.worker.stop_worker()
         self._show_stopped_status()
@@ -363,6 +409,7 @@ class ControllerWindow(QWidget):
     def set_capture_profile_state(self, profile, *, bound):
         self._capture_profile, self._capture_bound = profile, bound
         self.ocr_page.capture_settings.set_profile(profile, bound=bound)
+        self.console_page.capture_settings.set_profile(profile, bound=bound)
         self.daily_state_changed.emit()
 
     def show_capture_waiting(self, error=None):
@@ -370,6 +417,7 @@ class ControllerWindow(QWidget):
         self.status.setText(message)
         self.console_page.set_run_status(message)
         self.ocr_page.capture_settings.status_label.setText(message)
+        self.console_page.capture_settings.status_label.setText(message)
         self.daily_state_changed.emit()
 
     def _show_stopped_status(self):
@@ -391,10 +439,17 @@ class ControllerWindow(QWidget):
             return
         if isinstance(self._overlay, QObject):
             self._overlay.position_changed.disconnect(self._on_overlay_position_changed)
+            if hasattr(self._overlay, "translation_presented"):
+                try:
+                    self._overlay.translation_presented.disconnect(self._on_translation_presented)
+                except (TypeError, RuntimeError):
+                    pass
         self._overlay = overlay
         self.settings_coordinator.set_overlay(overlay)
         if isinstance(overlay, QObject):
             overlay.position_changed.connect(self._on_overlay_position_changed)
+            if hasattr(overlay, "translation_presented"):
+                overlay.translation_presented.connect(self._on_translation_presented)
 
     def apply_region_selection(self, region: dict) -> bool:
         return self.settings_coordinator.apply_region_selection(region)

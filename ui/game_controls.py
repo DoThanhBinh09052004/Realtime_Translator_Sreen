@@ -99,9 +99,9 @@ class GameControls(QObject):
     # -- Event filter (WinIdChange monitoring) ------------------------------
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if watched is self.toolbar and event.type() == QEvent.WinIdChange:
+        if getattr(self, "toolbar", None) is not None and watched is self.toolbar and event.type() == QEvent.WinIdChange:
             self.apply_capture_exclusion()
-        elif watched is self._controller and event.type() in (
+        elif getattr(self, "_controller", None) is not None and watched is self._controller and event.type() in (
             QEvent.Show,
             QEvent.Hide,
             QEvent.WindowStateChange,
@@ -372,6 +372,19 @@ class GameControls(QObject):
     def toggle_translation(self) -> None:
         """Toggle translation on/off through canonical controller methods."""
         if self._is_quitting or self._is_shutdown or self._is_selecting:
+            return
+
+        if hasattr(self._controller, "toggle_daily_translation") and callable(self._controller.toggle_daily_translation):
+            self._controller.toggle_daily_translation()
+            self.sync_state()
+            worker_after = self._worker or getattr(self._controller, "worker", None)
+            now_running = (
+                bool(worker_after.is_running() or getattr(worker_after, "restart_pending", False))
+                if worker_after
+                else False
+            )
+            if not now_running:
+                self.open_main_app()
             return
 
         worker = self._worker or getattr(self._controller, "worker", None)
