@@ -285,7 +285,7 @@ class SettingsCoordinator(QObject):
                 revision = self.worker.set_region(load_region())
                 if self.overlay is not None:
                     self.overlay.set_mode(self.state.overlay_mode, revision)
-        return self._commit(lambda: save_region(region), field='region', after_commit=apply)
+        return self._commit(lambda: save_region(region, setup_complete=True), field='region', after_commit=apply)
 
     def apply_capture_profile(self, profile) -> bool:
         context = self.worker.capture_context if self.worker is not None else None
@@ -296,4 +296,4 @@ class SettingsCoordinator(QObject):
             revision = self.worker.configure_capture(profile, context)
             if self.overlay is not None:
                 self.overlay.set_mode(self.state.overlay_mode, revision)
-        return self._commit(lambda: save_capture_profile(profile), field='capture_profile', after_commit=apply)
+        return self._commit(lambda: save_capture_profile(profile, setup_complete=True), field='capture_profile', after_commit=apply)

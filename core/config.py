@@ -209,6 +209,19 @@ def normalize_config(raw: object) -> dict:
     if 'capture_profile' in cfg:
         from core.capture.profile import parse_capture_profile, serialize_capture_profile
         cfg['capture_profile'] = serialize_capture_profile(parse_capture_profile(cfg['capture_profile']))
+    if isinstance(raw, dict) and isinstance(raw.get("capture_setup_complete"), bool):
+        cfg["capture_setup_complete"] = raw["capture_setup_complete"]
+    else:
+        raw_dict = raw if isinstance(raw, dict) else {}
+        has_legacy_profile = "capture_profile" in raw_dict
+        raw_region = raw_dict.get("region")
+        has_legacy_region = (
+            isinstance(raw_region, dict)
+            and all(type(raw_region.get(k)) is int for k in DEFAULT_REGION)
+            and raw_region.get("width", 0) > 0
+            and raw_region.get("height", 0) > 0
+        )
+        cfg["capture_setup_complete"] = bool(has_legacy_profile or has_legacy_region)
     return cfg
 
 
@@ -246,14 +259,22 @@ class State:
             setattr(self, k, changes[names[k]])
 
 
+def load_capture_setup_complete() -> bool:
+    """True if the user has explicitly confirmed/committed an OCR region or capture profile."""
+    return bool(load_config().get("capture_setup_complete", False))
+
+
 def load_region() -> dict:
     """Đọc tọa độ vùng chụp từ file config.json"""
     return load_config().get("region", DEFAULT_REGION.copy())
 
 
-def save_region(region: dict):
+def save_region(region: dict, *, setup_complete: bool | None = None):
     """Lưu tọa độ vùng chụp vào file config.json"""
-    save_config("region", region)
+    changes = {"region": region}
+    if setup_complete is not None:
+        changes["capture_setup_complete"] = bool(setup_complete)
+    save_config_values(changes)
 
 
 def load_capture_profile(screens: tuple['ScreenMapping', ...]) -> 'CaptureProfile | None':
@@ -265,10 +286,13 @@ def load_capture_profile(screens: tuple['ScreenMapping', ...]) -> 'CaptureProfil
     return migrate_legacy_region(data['region'], screens)
 
 
-def save_capture_profile(profile: 'CaptureProfile') -> None:
+def save_capture_profile(profile: 'CaptureProfile', *, setup_complete: bool | None = None) -> None:
     """Commit the profile once, preserving legacy region and protected credentials."""
     from core.capture.profile import serialize_capture_profile
-    save_config_values({'capture_profile': serialize_capture_profile(profile)})
+    changes = {'capture_profile': serialize_capture_profile(profile)}
+    if setup_complete is not None:
+        changes['capture_setup_complete'] = bool(setup_complete)
+    save_config_values(changes)
 
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
