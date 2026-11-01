@@ -79,7 +79,7 @@ class ControllerWindow(QWidget):
         self.nav_item_defs = [
             ("layout-dashboard", "Tổng quan", "Bảng điều khiển nhanh và trạng thái"),
             ("languages", "Công cụ dịch", "Chọn Google Translate hoặc công cụ AI"),
-            ("languages", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
+            ("scan", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
             ("palette", "Giao diện Phụ đề", "Màu sắc, độ trong suốt và xem trước trực tiếp")
         ]
         self.sidebar = ControllerSidebar(tuple(self.nav_item_defs), logo_path, self)
