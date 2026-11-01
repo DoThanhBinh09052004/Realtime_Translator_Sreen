@@ -235,3 +235,46 @@ def test_cancel_region_editor_preserves_saved_regions(qtbot, capture_geometry):
 
     lifecycle.on_selection_cancelled()
     c.settings_coordinator.apply_capture_profile.assert_not_called()
+
+
+def test_shared_preview_rejects_late_frame_after_source_change(ui_window, capture_geometry):
+    from PyQt5.QtGui import QImage
+    profile, context = capture_values(capture_geometry)
+    ui_window.worker.capture_context = context
+    ui_window.set_capture_profile_state(profile, bound=True)
+    image = QImage(100, 80, QImage.Format_RGB32)
+    assert ui_window.accept_capture_snapshot(image, context)
+    from ui.controller_state import PresentedTranslation, PresentedPair
+    ui_window._on_translation_presented(PresentedTranslation(1, 'subtitle', 1, (PresentedPair('old', 'cũ'),)))
+    ui_window.clear_capture_snapshot()
+    ui_window.capture_context_changed(replace(context, geometry_sequence=context.geometry_sequence+1))
+    assert ui_window.subtitle_page._presentation is None
+    ui_window.set_capture_profile_state(profile, bound=False)
+    views = (ui_window.console_page, ui_window.ocr_page, ui_window.subtitle_page)
+    assert all(view.snapshot_widget._image is None for view in views)
+    assert not ui_window.accept_capture_snapshot(image, context)
+    ui_window.worker.capture_context = replace(context, binding_epoch=context.binding_epoch+1)
+    ui_window.set_capture_profile_state(profile, bound=True)
+    assert not ui_window.accept_capture_snapshot(image, context)
+    assert all(view.snapshot_widget._image is None for view in views)
+
+
+def test_preview_cache_is_shared_without_capture_on_navigation(ui_window, capture_geometry):
+    from PyQt5.QtGui import QImage
+    profile, context = capture_values(capture_geometry)
+    ui_window.worker.capture_context = context
+    ui_window.set_capture_profile_state(profile, bound=True)
+    ui_window.daily_coordinator.lifecycle = Mock()
+    image = QImage(100, 80, QImage.Format_RGB32)
+    assert ui_window.accept_capture_snapshot(image, context)
+    for index in range(4):
+        ui_window._switch_to_page(index)
+    lifecycle = ui_window.daily_coordinator.lifecycle
+    lifecycle.request_dashboard_preview.assert_not_called()
+    for page in (ui_window.console_page, ui_window.ocr_page, ui_window.subtitle_page):
+        assert page.snapshot_widget._image == image
+        assert page.snapshot_widget._context == context
+        page.refresh_preview_btn.setEnabled(True)
+        page.refresh_preview_btn.click()
+    assert lifecycle.request_dashboard_preview.call_count == 3
+    ui_window.worker.start_worker.assert_not_called()

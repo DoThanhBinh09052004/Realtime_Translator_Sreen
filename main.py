@@ -219,15 +219,10 @@ def main():
     worker.capture_terminal_status.connect(region_lifecycle.on_capture_terminal, Qt.QueuedConnection)
     region_lifecycle.shutdown_finished.connect(lambda: shutdown.finish('translation'))
 
-    region_lifecycle.dashboard_preview_ready.connect(
-        lambda image, context: controller.console_page.set_capture_snapshot(
-            image, getattr(controller.daily_coordinator.binding, 'profile', None), context
-        )
-    )
-    region_lifecycle.dashboard_preview_invalidated.connect(controller.console_page.clear_capture_snapshot)
-    region_lifecycle.dashboard_preview_error.connect(
-        lambda err: controller.console_page.clear_capture_snapshot(placeholder_text=str(err))
-    )
+    region_lifecycle.dashboard_preview_ready.connect(controller.accept_capture_snapshot)
+    region_lifecycle.dashboard_preview_invalidated.connect(controller.clear_capture_snapshot)
+    region_lifecycle.dashboard_preview_error.connect(controller.show_capture_preview_error)
+    capture_binding.context_changed.connect(controller.capture_context_changed)
     capture_binding.context_changed.connect(lambda ctx: region_lifecycle.cancel_dashboard_preview())
 
     def on_overlay_error(error):

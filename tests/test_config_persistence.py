@@ -91,17 +91,17 @@ def controller(qtbot):
 ])
 def test_failed_save_restores_widget_and_state(controller, monkeypatch, widget, setter, value, expected):
     if widget in ('model_combo', 'api_key_input'):
-        controller.provider_combo.setCurrentText('OpenAI')
+        controller.ai_page.provider_buttons['OpenAI'].click()
         if widget == 'model_combo':
             expected = config.PROVIDERS['OpenAI']['default_model']
     before = vars(controller.state).copy()
     controller.worker.reset_mock()
     monkeypatch.setattr(config.os, "replace", refuse_replace)
-    control = getattr(controller, widget)
-    getattr(control, setter)(value)
+    control = controller.ai_page if widget == 'provider_combo' else getattr(controller, widget)
+    control.provider_buttons[value].click() if widget == 'provider_combo' else getattr(control, setter)(value)
     read = control.value if setter == "setValue" else (
-        control.text if setter == "setText" else control.currentText)
-    assert read() == expected
+        control.text if setter == "setText" else (lambda: control.selected_provider) if widget == "provider_combo" else control.currentText)
+    assert (control.selected_provider if widget == 'provider_combo' else read()) == expected
     assert vars(controller.state) == before
     assert "Không thể lưu" in controller.status.text()
     assert "fake-secret" not in controller.status.text()
@@ -173,13 +173,13 @@ def test_failed_color_save_keeps_preview_and_overlay(controller, monkeypatch, fi
     from ui.pages.subtitle_settings_page import QColorDialog
 
     before = getattr(controller.state, field)
-    preview = controller.live_preview_box.styleSheet()
+    preview = controller.subtitle_page.snapshot_widget._overlay_state
     controller.overlay = Mock()
     monkeypatch.setattr(QColorDialog, "getColor", lambda *args: QColor("#123456"))
     monkeypatch.setattr(config.os, "replace", refuse_replace)
     getattr(controller, handler)()
     assert getattr(controller.state, field) == before
-    assert controller.live_preview_box.styleSheet() == preview
+    assert controller.subtitle_page.snapshot_widget._overlay_state == preview
     controller.overlay.apply_style.assert_not_called()
     assert "Không thể lưu" in controller.status.text()
 

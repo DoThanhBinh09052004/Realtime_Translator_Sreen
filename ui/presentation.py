@@ -84,3 +84,12 @@ def drag_button_style(is_active: bool) -> str:
                 background-color: {TOKENS['raised']};
             }}
         """
+
+
+def preview_position(state, context):
+    presets = {'bottom_center': (.5, .85), 'top_center': (.5, .15), 'bottom_left': (.2, .85)}
+    if state.preset in presets:
+        return presets[state.preset]
+    # Saved overlay coordinates are Qt logical top-left values. A source image
+    # is physical pixels and lacks the overlay size/work-area transform.
+    return None

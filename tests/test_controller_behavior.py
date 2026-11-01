@@ -3,7 +3,7 @@ from core import config
 
 
 def test_missing_key_routes_to_ai_without_starting(ui_window):
-    ui_window.provider_combo.setCurrentText('Google Gemini')
+    ui_window.ai_page.provider_buttons['Google Gemini'].click()
     ui_window.worker.reset_mock()
     ui_window.start_ocr()
     assert ui_window.pages.currentIndex() == 1
@@ -28,7 +28,7 @@ def test_start_stop_and_callbacks_once(ui_window):
     worker.stop_worker.side_effect=lambda:running(False)
     ui_window.set_capture_profile_state(profile,bound=True)
     config.save_region(config.DEFAULT_REGION, setup_complete=True)
-    ui_window.provider_combo.setCurrentText('Google Gemini')
+    ui_window.ai_page.provider_buttons['Google Gemini'].click()
     ui_window.settings_coordinator.set_api_key('fake-test-key')
     ui_window.console_page.primary_btn.click()
     ui_window.worker.start_worker.assert_called_once_with()

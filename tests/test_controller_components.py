@@ -60,8 +60,8 @@ def test_dashboard_uses_shared_font_sizes_for_controls_and_section_titles(ui_win
 
 def test_controller_widgets_belong_to_existing_pages(ui_window):
     for page, attributes in [
-        (ui_window.ai_page, ('provider_combo', 'model_combo', 'api_key_input', 'key_card')),
-        (ui_window.subtitle_page, ('font_size_slider', 'opacity_slider', 'preset_combo', 'live_preview_box')),
+        (ui_window.ai_page, ('model_combo', 'api_key_input', 'key_card')),
+        (ui_window.subtitle_page, ('font_size_slider', 'opacity_slider', 'preset_combo')),
         (ui_window.ocr_page, ('src_combo', 'tgt_combo', 'interval_spin', 'reg_info_lbl')),
     ]:
         for attribute in attributes:

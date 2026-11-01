@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox
+from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox, QGridLayout, QBoxLayout, QLayout
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
-from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, card_style
-from ui.icons import set_theme_icon
+from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, card_style, text_style, CONTROL_HEIGHT, palette_for
+from ui.icons import set_theme_icon, get_provider_icon
 from ui.controller_state import AiPageState
 
 
@@ -30,27 +30,36 @@ class AiSettingsPage(QScrollArea):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 4, 4, 4)
         layout.setSpacing(14)
+        layout.setSizeConstraint(QLayout.SetMinAndMaxSize)
 
-        active_provider = state.provider
-
-        # Card 1: Provider & Model Selector
-        prov_card = ModernCard("Công cụ dịch", "Chọn công cụ thực hiện tác vụ dịch thuật")
-
+        self.columns = QBoxLayout(QBoxLayout.LeftToRight)
+        layout.addLayout(self.columns)
+        self.main_column = QWidget()
+        main_layout = QVBoxLayout(self.main_column)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(14)
+        main_layout.setSizeConstraint(QLayout.SetMinimumSize)
+        self.columns.addWidget(self.main_column, 65)
+        provider_card = ModernCard("Công cụ dịch", "Chọn công cụ phù hợp với nhu cầu của bạn")
+        grid = QGridLayout()
+        self.provider_buttons = {}
+        self.selected_provider = state.provider
+        for index, name in enumerate(providers):
+            button = QPushButton(name)
+            button.setIcon(get_provider_icon(name, palette_for(self)['text']))
+            button.setIconSize(QSize(22, 22))
+            button.setCheckable(True)
+            button.setMinimumHeight(48)
+            button.setAccessibleName('Chọn ' + name)
+            set_style(button, button_style('secondary', 'tokens') + f"QPushButton:checked {{background:{TOKENS['selection_bg']};border:2px solid {TOKENS['focus']};}}")
+            button.clicked.connect(lambda checked=False, name=name: self._request_provider(name))
+            self.provider_buttons[name] = button
+            grid.addWidget(button, index // 2, index % 2)
+        provider_card.layout.addLayout(grid)
+        main_layout.addWidget(provider_card)
+        prov_card = ModernCard("Cấu hình công cụ", "Model và endpoint đang sử dụng")
         row1 = QHBoxLayout()
         row1.setSpacing(12)
-
-        # Provider col
-        p_col = QVBoxLayout()
-        p_col.setSpacing(4)
-        p_lbl = QLabel("Công cụ dịch")
-        set_style(p_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
-        self.provider_combo = QComboBox()
-        self.provider_combo.addItems(providers)
-        self.provider_combo.setCurrentText(active_provider)
-        self.provider_combo.currentTextChanged.connect(self.provider_changed.emit)
-        p_col.addWidget(p_lbl)
-        p_col.addWidget(self.provider_combo)
-        row1.addLayout(p_col)
 
         # Model col
         self.model_container = QWidget()
@@ -58,7 +67,7 @@ class AiSettingsPage(QScrollArea):
         m_col.setContentsMargins(0, 0, 0, 0)
         m_col.setSpacing(4)
         m_lbl = QLabel("Mô hình (Model ID)")
-        set_style(m_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
+        set_style(m_lbl, f"font-size: 12px; font-weight: 500; color: {TOKENS['muted']};")
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self.model_combo.addItems(state.models)
@@ -79,7 +88,7 @@ class AiSettingsPage(QScrollArea):
         base_url_layout.setSpacing(4)
         base_url_label = QLabel("Base URL (OpenAI-compatible)")
         set_style(base_url_label,
-            f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};"
+            f"font-size: 12px; font-weight: 500; color: {TOKENS['muted']};"
         )
         self.base_url_input = QLineEdit()
         self.base_url_input.setPlaceholderText("https://api.example.com/v1")
@@ -93,7 +102,7 @@ class AiSettingsPage(QScrollArea):
         endpoint_help.setWordWrap(True)
         base_url_layout.addWidget(endpoint_help)
         prov_card.layout.addWidget(self.base_url_container)
-        layout.addWidget(prov_card)
+        main_layout.addWidget(prov_card)
 
         context_card=ModernCard('Ngữ cảnh hội thoại')
         self.context_checkbox=QCheckBox('Giữ ngữ cảnh hội thoại')
@@ -112,7 +121,7 @@ class AiSettingsPage(QScrollArea):
         memory_note=QLabel('Bộ nhớ được xóa khi đóng ứng dụng.')
         memory_note.setWordWrap(True)
         context_card.layout.addWidget(memory_note)
-        layout.addWidget(context_card)
+
 
         # Card 2: API Key Management
         self.key_card = ModernCard("Khóa API (API Key)", "Lưu bằng mã hóa Windows hoặc chỉ dùng trong phiên hiện tại")
@@ -130,7 +139,7 @@ class AiSettingsPage(QScrollArea):
         k_input_row.addWidget(self.api_key_input)
 
         self.toggle_key_btn = QPushButton()
-        self.toggle_key_btn.setFixedSize(36, 32)
+        self.toggle_key_btn.setFixedSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
         self.toggle_key_btn.setToolTip("Hiện / Ẩn API Key")
         self.toggle_key_btn.setCursor(Qt.PointingHandCursor)
         set_theme_icon(self.toggle_key_btn, "eye", 'muted', 16)
@@ -150,18 +159,28 @@ class AiSettingsPage(QScrollArea):
         self.import_key_btn = QPushButton('Nhập key cũ từ .env')
         for button in (self.save_key_btn, self.delete_key_btn, self.import_key_btn):
             set_style(button, button_style('secondary', 'tokens'))
-            actions.addWidget(button)
+            if button is not self.import_key_btn:
+                actions.addWidget(button)
         self.save_key_btn.clicked.connect(self._apply_key)
         self.delete_key_btn.clicked.connect(self.api_key_delete_requested.emit)
         self.import_key_btn.clicked.connect(lambda: self.legacy_key_import_requested.emit(self.persist_key_checkbox.isChecked()))
         k_layout.addLayout(actions)
+        advanced = QPushButton('Tùy chọn nâng cao')
+        advanced.setCheckable(True)
+        set_style(advanced, button_style('secondary', 'tokens'))
+        advanced.toggled.connect(self.import_key_btn.setVisible)
+        k_layout.addWidget(advanced)
+        k_layout.addWidget(self.import_key_btn)
+        self.import_key_btn.hide()
 
         self.api_status_lbl = QLabel()
         self._render_status(state)
         k_layout.addWidget(self.api_status_lbl)
 
         self.key_card.layout.addLayout(k_layout)
-        layout.addWidget(self.key_card)
+        main_layout.addWidget(self.key_card)
+        main_layout.addWidget(context_card)
+        main_layout.addStretch()
 
         # Card 3: Guide Note
         note_card = ModernCard("Hướng dẫn lấy API Key")
@@ -174,11 +193,32 @@ class AiSettingsPage(QScrollArea):
         )
         set_style(note_text, f"color: {TOKENS['muted']}; font-size: 12px; line-height: 1.5;")
         note_card.layout.addWidget(note_text)
-        layout.addWidget(note_card)
+        note_text.setWordWrap(True)
+        self.columns.addWidget(note_card, 35)
+        self.columns.setAlignment(note_card, Qt.AlignTop)
 
         layout.addStretch()
         self.setWidget(content)
         self.render(state)
+        self._reflow_layout(self.viewport().width())
+
+    def _render_provider_selection(self):
+        for name, button in self.provider_buttons.items():
+            blocker = QSignalBlocker(button)
+            button.setChecked(name == self.selected_provider)
+            del blocker
+
+    def _request_provider(self, name: str) -> None:
+        self._render_provider_selection()
+        if name != self.selected_provider:
+            self.provider_changed.emit(name)
+
+    def _reflow_layout(self, width: int) -> None:
+        self.columns.setDirection(QBoxLayout.LeftToRight if width >= 800 else QBoxLayout.TopToBottom)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reflow_layout(self.viewport().width())
 
     def _apply_key(self):
         self.api_key_save_requested.emit(self.api_key_input.text(), self.persist_key_checkbox.isChecked())
@@ -206,9 +246,10 @@ class AiSettingsPage(QScrollArea):
             del blocker
         if changed_field in ('initial', 'provider', 'rollback', 'api_key_import', 'api_key_deleted'):
             blockers = [QSignalBlocker(widget) for widget in (
-                self.provider_combo, self.model_combo, self.api_key_input, self.base_url_input,
+                self.model_combo, self.api_key_input, self.base_url_input,
             )]
-            self.provider_combo.setCurrentText(state.provider)
+            self.selected_provider = state.provider
+            self._render_provider_selection()
             self.model_combo.clear()
             models = state.models if state.model_id in state.models else state.models + (state.model_id,)
             self.model_combo.addItems(models)
@@ -247,7 +288,7 @@ class AiSettingsPage(QScrollArea):
         else:
             self.api_status_lbl.setText(f'Trạng thái: Chưa có API Key cho {state.provider}')
             color = TOKENS['warning']
-        set_style(self.api_status_lbl, f'color: {color}; font-size: 11.5px; font-weight: 500;')
+        set_style(self.api_status_lbl, f'color: {color}; font-size: 12px; font-weight: 500;')
 
     def highlight_missing_key(self):
         set_style(self.key_card, f"""
@@ -264,3 +305,5 @@ class AiSettingsPage(QScrollArea):
 
     def apply_theme(self, theme: str):
         apply_widget_theme(self, theme)
+        for name, button in self.provider_buttons.items():
+            button.setIcon(get_provider_icon(name, palette_for(self)['text']))

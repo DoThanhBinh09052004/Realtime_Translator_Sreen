@@ -140,6 +140,7 @@ class CaptureApplicationBinding(QObject):
         self.lifecycle.update_capture_context(context)
         if old is not None and old.binding_epoch == context.binding_epoch and old.source_kind == context.source_kind and old.window == context.window:
             self.worker.update_capture_geometry(context)
+            self.context_changed.emit(context)
             return
         if hasattr(self.lifecycle, 'cancel_dashboard_preview'):
             self.lifecycle.cancel_dashboard_preview()

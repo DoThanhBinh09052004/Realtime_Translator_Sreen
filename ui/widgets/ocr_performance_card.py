@@ -6,7 +6,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPen, QBrush
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QSpinBox, QWidget,
-    QGraphicsOpacityEffect
+    QGraphicsOpacityEffect, QBoxLayout
 )
 
 from ui.styles import TOKENS, set_style, apply_widget_theme, palette_for
@@ -190,6 +190,8 @@ class OcrPerformanceCard(QFrame):
         set_style(title_lbl, f"font-size: 15px; font-weight: 700; color: {TOKENS['text']};")
         desc_lbl = QLabel("Điều chỉnh tốc độ nhận diện và mức sử dụng CPU/RAM")
         set_style(desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
+        title_lbl.setWordWrap(True)
+        desc_lbl.setWordWrap(True)
         header_texts.addWidget(title_lbl)
         header_texts.addWidget(desc_lbl)
         header_row.addLayout(header_texts)
@@ -197,7 +199,8 @@ class OcrPerformanceCard(QFrame):
         main_layout.addLayout(header_row)
 
         # ===== 2. Hai thẻ lựa chọn (High vs Eco) =====
-        cards_row = QHBoxLayout()
+        cards_row = QBoxLayout(QBoxLayout.LeftToRight)
+        self.cards_row = cards_row
         cards_row.setSpacing(16)
 
         self.high_card = SelectableOptionCard(
@@ -255,7 +258,8 @@ class OcrPerformanceCard(QFrame):
         cpu_box_layout.setSpacing(12)
 
         # Hàng 1: Checkbox tự động + Badge trạng thái
-        row1 = QHBoxLayout()
+        row1 = QBoxLayout(QBoxLayout.LeftToRight)
+        self.cpu_row = row1
         self.auto_checkbox = QCheckBox("Tự động tối ưu số luồng CPU")
         self.auto_checkbox.setCursor(Qt.PointingHandCursor)
         set_style(self.auto_checkbox, f"""
@@ -362,6 +366,11 @@ class OcrPerformanceCard(QFrame):
         self._sync_cards()
         self._sync_badge()
         self._toggle_custom_threads(not self.auto_threads, animated=False)
+
+    def set_compact(self, compact: bool):
+        direction = QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
+        self.cards_row.setDirection(direction)
+        self.cpu_row.setDirection(direction)
 
     def _toggle_custom_threads(self, show: bool, animated: bool = True):
         self._anim_group.stop()

@@ -1,7 +1,7 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QMessageBox, QSizePolicy
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
@@ -49,6 +49,8 @@ class ControllerWindow(QWidget):
         self.on_quit_cb = on_quit
         self._retry_pending = False
         self.capture_run_requested = False
+        self._preview_snapshot = None
+        self._preview_captured_at = ""
         self._capture_profile = None
         self._capture_bound = True
         self.ensure_capture_ready = None
@@ -118,9 +120,12 @@ class ControllerWindow(QWidget):
         set_style(self.page_title_lbl, "font-size: 16px; font-weight: 700;")
         self.page_desc_lbl = QLabel("Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực")
         set_style(self.page_desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
+        for label in (self.page_title_lbl, self.page_desc_lbl):
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         header_text_box.addWidget(self.page_title_lbl)
         header_text_box.addWidget(self.page_desc_lbl)
-        header_row.addLayout(header_text_box)
+        header_row.addLayout(header_text_box, 1)
         header_row.addStretch()
         content_v_layout.addWidget(self.header_container)
 
@@ -148,7 +153,6 @@ class ControllerWindow(QWidget):
         self.daily_coordinator.state_changed.connect(self._on_daily_state_changed)
         self.page_console = self.console_page
         self.ai_page = AiSettingsPage(self.settings_coordinator.snapshot().ai, tuple(get_available_providers()), self)
-        self.provider_combo = self.ai_page.provider_combo
         self.model_combo = self.ai_page.model_combo
         self.api_key_input = self.ai_page.api_key_input
         self.toggle_key_btn = self.ai_page.toggle_key_btn
@@ -183,6 +187,8 @@ class ControllerWindow(QWidget):
         self.ocr_page.capture_settings.source_selected.connect(self.capture_source_selected.emit)
         self.page_ocr = self.ocr_page
         self.subtitle_page = SubtitleSettingsPage(self.settings_coordinator.snapshot().subtitle, self)
+        self.ocr_page.preview_requested.connect(self.daily_coordinator.request_preview)
+        self.subtitle_page.preview_requested.connect(self.daily_coordinator.request_preview)
         self.bg_color_btn = self.subtitle_page.bg_color_btn
         self.text_color_btn = self.subtitle_page.text_color_btn
         self.font_size_slider = self.subtitle_page.font_size_slider
@@ -191,7 +197,6 @@ class ControllerWindow(QWidget):
         self.opacity_val_lbl = self.subtitle_page.opacity_val_lbl
         self.preset_combo = self.subtitle_page.preset_combo
         self.drag_toggle_btn = self.subtitle_page.drag_toggle_btn
-        self.live_preview_box = self.subtitle_page.live_preview_box
         self.subtitle_page.style_changed.connect(self.settings_coordinator.set_subtitle_style)
         self.subtitle_page.mode_changed.connect(self.settings_coordinator.set_overlay_mode)
         self.subtitle_page.preset_changed.connect(self.settings_coordinator.set_overlay_preset)
@@ -231,6 +236,7 @@ class ControllerWindow(QWidget):
         self.ui_theme = theme
         apply_widget_theme(self, theme)
         self.sidebar.apply_theme(theme)
+        self.ai_page.apply_theme(theme)
         if self._language_packs_dialog is not None:
             apply_widget_theme(self._language_packs_dialog, theme)
 
@@ -239,6 +245,8 @@ class ControllerWindow(QWidget):
 
     def _on_daily_state_changed(self, readiness, run_state):
         self.console_page.render_daily(self.settings_coordinator.snapshot(), readiness, run_state)
+        for page in (self.ocr_page, self.subtitle_page):
+            page.set_preview_state(run_state.preview_enabled, run_state.message)
 
     def _on_readiness_action(self, action: str):
         if action == 'select_source':
@@ -253,6 +261,7 @@ class ControllerWindow(QWidget):
     def _on_translation_presented(self, presentation):
         labels = {r.id: r.name for r in getattr(self._capture_profile, 'regions', ())} if self._capture_profile else None
         self.console_page.render_presented(presentation, labels)
+        self.subtitle_page.render_presented(presentation, labels)
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -422,7 +431,7 @@ class ControllerWindow(QWidget):
 
         self.capture_run_requested = True
         self.starting_translation.emit()
-        self.console_page.render_presented(None)
+        self._on_translation_presented(None)
 
         if self.worker:
             if preserve_translation_session:
@@ -441,17 +450,47 @@ class ControllerWindow(QWidget):
         self.capture_stop_requested.emit()
         self._retry_pending = False
         self.clear_translation_status()
-        self.console_page.render_presented(None)
+        self._on_translation_presented(None)
         if self.worker:
             self.worker.stop_worker()
         self._show_stopped_status()
         self.daily_state_changed.emit()
 
     def set_capture_profile_state(self, profile, *, bound):
+        if not bound or profile != self._capture_profile:
+            self.clear_capture_snapshot()
+            self._on_translation_presented(None)
         self._capture_profile, self._capture_bound = profile, bound
         self.ocr_page.capture_settings.set_profile(profile, bound=bound)
         self.console_page.capture_settings.set_profile(profile, bound=bound)
         self.daily_state_changed.emit()
+
+    def accept_capture_snapshot(self, image, context) -> bool:
+        current = getattr(self.worker, 'capture_context', None)
+        if not self._capture_bound or self._capture_profile is None or context is None or current != context:
+            return False
+        self._preview_snapshot = (image, self._capture_profile, context)
+        self._preview_captured_at = time.strftime('%H:%M:%S')
+        self.console_page.set_capture_snapshot(image, self._capture_profile, context, captured_at=self._preview_captured_at)
+        for page in (self.ocr_page, self.subtitle_page):
+            page.set_capture_snapshot(image, self._capture_profile, context, captured_at=self._preview_captured_at)
+        return True
+
+    def clear_capture_snapshot(self, message=''):
+        self._preview_snapshot = None
+        self._preview_captured_at = ''
+        self._on_translation_presented(None)
+        self.console_page.clear_capture_snapshot(message or 'Chọn nguồn, sau đó bấm Làm mới ảnh.')
+        self.ocr_page.clear_capture_snapshot(message)
+        self.subtitle_page.clear_capture_snapshot(message)
+
+    def show_capture_preview_error(self, error):
+        self.clear_capture_snapshot(getattr(error, 'user_message', str(error)))
+
+    def capture_context_changed(self, context):
+        if self._preview_snapshot is not None and self._preview_snapshot[2] != context:
+            self.clear_capture_snapshot()
+            self._on_translation_presented(None)
 
     def show_capture_waiting(self, error=None):
         message = error.user_message if error is not None else 'Đang chờ nguồn chụp. Chọn nguồn hoặc thử lại.'

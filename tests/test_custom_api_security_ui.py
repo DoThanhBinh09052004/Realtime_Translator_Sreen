@@ -8,7 +8,7 @@ from core import config
 
 
 def test_invalid_endpoint_save_does_not_reconfigure(ui_window):
-    ui_window.provider_combo.setCurrentText('Custom API')
+    ui_window.ai_page.provider_buttons['Custom API'].click()
     coordinator = ui_window.settings_coordinator
     assert coordinator.set_api_key('fake-key', persist=False)
     assert coordinator.set_custom_base_url('https://api.example.test/v1')
@@ -27,7 +27,7 @@ def test_invalid_endpoint_save_does_not_reconfigure(ui_window):
 
 
 def test_valid_localhost_save_renders_canonical_url(ui_window):
-    ui_window.provider_combo.setCurrentText('Custom API')
+    ui_window.ai_page.provider_buttons['Custom API'].click()
     ui_window.worker.reset_mock()
     editor = ui_window.ai_page.base_url_input
     editor.setText('http://LOCALHOST:8000/v1/')
@@ -38,7 +38,7 @@ def test_valid_localhost_save_renders_canonical_url(ui_window):
 
 
 def test_base_url_render_does_not_save_or_overwrite_key_draft(ui_window):
-    ui_window.provider_combo.setCurrentText('Custom API')
+    ui_window.ai_page.provider_buttons['Custom API'].click()
     page = ui_window.ai_page
     page.api_key_input.setText('unsaved-key-draft')
     spy = QSignalSpy(page.base_url_changed)
@@ -61,7 +61,7 @@ def test_legacy_unsafe_endpoint_keeps_provider_key_and_requires_url(qtbot):
     worker.interval.return_value = 500
     window = ControllerWindow(worker, config.State(), Mock(), Mock())
     qtbot.addWidget(window)
-    assert window.provider_combo.currentText() == 'Custom API'
+    assert window.ai_page.selected_provider == 'Custom API'
     assert window.ai_page.base_url_input.text() == ''
     assert 'Base URL' in window.ai_page.api_status_lbl.text()
     assert config.load_provider_api_key('Custom API') == 'fake-key'

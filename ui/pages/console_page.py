@@ -152,6 +152,7 @@ class ConsolePage(QWidget):
         self.region_card.layout.addWidget(self.snapshot_widget, 1)
         preview_footer = QHBoxLayout()
         notice = QLabel('Ảnh chụp xem trước')
+        self.snapshot_status_label = notice
         set_style(notice, text_style('caption'))
         preview_footer.addWidget(notice, 1)
         self.refresh_preview_btn = QPushButton('Làm mới ảnh')
@@ -451,11 +452,13 @@ class ConsolePage(QWidget):
         self.output_widget.render(presentation, region_labels)
         self._render_subtitle_preview()
 
-    def set_capture_snapshot(self, image: Any | None, profile: Any | None, context: Any | None) -> None:
+    def set_capture_snapshot(self, image: Any | None, profile: Any | None, context: Any | None, *, captured_at: str = '') -> None:
         self.snapshot_widget.set_snapshot(image, profile, context)
+        self.snapshot_status_label.setText('Ảnh chụp xem trước' + (' • ' + captured_at if captured_at else ''))
 
     def clear_capture_snapshot(self, placeholder_text: str = "Ban đầu: Chọn nguồn để xem trước") -> None:
         self.snapshot_widget.clear_snapshot(placeholder_text)
+        self.snapshot_status_label.setText('Ảnh chụp xem trước')
 
     def render_summary(self, snapshot: ControllerSnapshot):
         # 1. Update languages with signal blocker

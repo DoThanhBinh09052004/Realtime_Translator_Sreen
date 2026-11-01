@@ -50,7 +50,7 @@ def test_advanced_api_key_save_and_delete_still_work(qtbot):
 
     # Navigate to AI page
     window._switch_to_page(1)
-    window.provider_combo.setCurrentText("OpenAI")
+    window.ai_page.provider_buttons["OpenAI"].click()
     provider = "OpenAI"
 
     # Save key

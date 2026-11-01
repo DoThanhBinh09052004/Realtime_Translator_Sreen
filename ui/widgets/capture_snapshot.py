@@ -7,8 +7,12 @@ from ui.styles import apply_widget_theme, palette_for, TEXT_SIZES
 
 
 class CaptureSnapshotWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, show_regions=True):
         super().__init__(parent)
+        self._show_regions = show_regions
+        self._overlay_state = None
+        self._overlay_text = ""
+        self._overlay_position = None
         self._image: QImage | None = None
         self._profile: Any | None = None
         self._context: Any | None = None
@@ -42,7 +46,7 @@ class CaptureSnapshotWidget(QWidget):
 
     def aligned_rectangles(self) -> list[tuple[str, QRectF, bool]]:
         """Return (label, QRectF, is_exclusion) scaled to match the letterboxed image."""
-        if self._image is None or self._profile is None:
+        if not self._show_regions or self._image is None or self._profile is None:
             return []
         image_rect = self.image_rect()
         if image_rect.isEmpty():
@@ -70,6 +74,48 @@ class CaptureSnapshotWidget(QWidget):
 
         return rects
 
+    def set_overlay_preview(self, state, text='', *, normalized_position=None):
+        self._overlay_state, self._overlay_text = state, text
+        self._overlay_position = normalized_position
+        self.update()
+
+    def _paint_overlay(self, painter, image_rect):
+        state = self._overlay_state
+        if state is None:
+            return
+        painter.save()
+        painter.setClipRect(image_rect)
+        painter.translate(image_rect.topLeft())
+        scale = image_rect.width() / self._image.width()
+        painter.scale(scale, scale)
+        w, h = self._image.width(), self._image.height()
+        bg = QColor(state.bg_color)
+        bg.setAlpha(round(255 * state.bg_opacity / 100))
+        if state.overlay_mode == 'blocks':
+            from core.blocks.models import Rect, ScreenMapping, CaptureGeometry, OverlayFrame, OverlayBlock
+            from ui.block_layout import layout_blocks, paint_blocks
+            r = Rect(0, 0, w, h)
+            geometry = CaptureGeometry(r, ScreenMapping('preview', r, r), (w, h))
+            frame = OverlayFrame(0, 0, geometry, (
+                OverlayBlock(1, 'Dialogue', 'Xin chào, nhà lữ hành!', Rect(w*.08, h*.7, w*.65, 40)),
+                OverlayBlock(2, 'Menu', 'Nhiệm vụ mới', Rect(w*.55, h*.15, w*.4, 30))))
+            paint_blocks(painter, layout_blocks(frame, max_font_px=state.font_size), bg_color=bg, text_color=QColor(state.text_color))
+        else:
+            font = QFont(self.font())
+            font.setPixelSize(state.font_size)
+            painter.setFont(font)
+            flags = Qt.AlignCenter | Qt.TextWordWrap
+            bounds = painter.boundingRect(QRectF(0, 0, max(20, w*.85-32), h), flags, self._overlay_text)
+            width, height = min(w, bounds.width()+32), min(h, bounds.height()+20)
+            x, y = self._overlay_position or (.5, .85)
+            box = QRectF(max(0, min(w-width, w*x-width/2)), max(0, min(h-height, h*y-height/2)), width, height)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(bg)
+            painter.drawRoundedRect(box, 6, 6)
+            painter.setPen(QColor(state.text_color))
+            painter.drawText(box.adjusted(16, 10, -16, -10), flags, self._overlay_text)
+        painter.restore()
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -86,6 +132,8 @@ class CaptureSnapshotWidget(QWidget):
             image_rect = self.image_rect()
             if not image_rect.isEmpty():
                 painter.drawImage(image_rect, self._image)
+
+                self._paint_overlay(painter, image_rect)
 
                 # Draw region outlines
                 for label, rect, is_exclusion in self.aligned_rectangles():

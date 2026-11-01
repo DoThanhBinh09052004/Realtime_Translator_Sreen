@@ -63,3 +63,18 @@ def test_missing_source_remains_unselected_until_pack_arrives(qtbot, ui_snapshot
     assert page.source_notice_label.text() == 'Thiếu gói Chinese.'
     page.render(replace(state, source_choices=(LanguageChoice('zh-Hans', 'Chinese', 'Chinese'),), source_notice=''))
     assert page.src_combo.currentText() == 'Chinese' and not changed
+
+
+def test_interval_slider_commits_once_on_release(qtbot, ui_snapshot):
+    from ui.pages.ocr_settings_page import OcrSettingsPage
+    from PyQt5.QtTest import QSignalSpy
+    page = OcrSettingsPage(ui_snapshot.ocr, ('English',), ('Vietnamese',))
+    qtbot.addWidget(page)
+    changes = QSignalSpy(page.interval_changed)
+    page.interval_slider.setSliderDown(True)
+    page.interval_slider.setValue(700)
+    page.interval_slider.setValue(900)
+    assert page.interval_spin.value() == 900
+    assert len(changes) == 0
+    page.interval_slider.setSliderDown(False)
+    assert list(changes) == [[900]]

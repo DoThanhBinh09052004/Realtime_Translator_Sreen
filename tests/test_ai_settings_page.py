@@ -36,7 +36,7 @@ def test_ai_render_keeps_editors_and_blocks_saves(qtbot, ui_snapshot):
     assert page.model_combo.currentText() == 'custom-other'
     assert page.api_key_input.text() == 'other-key'
     assert not any(len(spy) for spy in spies)
-    page.provider_combo.setCurrentText('OpenAI')
+    page.provider_buttons['OpenAI'].click()
     page.api_key_input.setText('new-key')
     assert list(spies[0]) == [['OpenAI']]
     assert list(spies[2]) == []

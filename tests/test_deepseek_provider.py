@@ -64,7 +64,7 @@ def test_deepseek_is_available_in_ai_settings(qtbot):
         tuple(config.get_available_providers()),
     )
     qtbot.addWidget(page)
-    assert page.provider_combo.findText("DeepSeek") >= 0
+    assert "DeepSeek" in page.provider_buttons
 
 
 def test_deepseek_api_key_is_cleared_by_test_isolation():

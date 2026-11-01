@@ -249,8 +249,8 @@ def test_ui_configures_worker_only_after_successful_save(qtbot, monkeypatch, wid
     worker.interval.return_value = 500
     window = ControllerWindow(worker, config.State(), lambda: None, lambda: None)
     qtbot.addWidget(window)
-    control = getattr(window, widget)
-    setter = control.setText if widget == "api_key_input" else control.setCurrentText
+    control = window.ai_page if widget == 'provider_combo' else getattr(window, widget)
+    setter = (lambda name: control.provider_buttons[name].click()) if widget == "provider_combo" else control.setText if widget == "api_key_input" else control.setCurrentText
     worker.reset_mock()
 
     def configured(snapshot):

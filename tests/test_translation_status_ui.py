@@ -56,8 +56,8 @@ def test_failed_setting_save_preserves_paused_google_retry(ui_window,monkeypatch
     w.revision=3; w.translation_session_id=1; w.is_running.return_value=True
     ui_window.show_translation_status(TranslationStatus('Google Translate',3,1,'paused',3))
     monkeypatch.setattr(config.os,'replace',Mock(side_effect=OSError('disk full')))
-    ui_window.provider_combo.setCurrentText('OpenAI')
-    assert ui_window.provider_combo.currentText()=='Google Translate'
+    ui_window.ai_page.provider_buttons['OpenAI'].click()
+    assert ui_window.ai_page.selected_provider=='Google Translate'
     assert not ui_window.console_page.retry_translation_btn.isHidden()
     assert not ui_window.settings_coordinator.set_subtitle_style({'font_size':30})
     assert not ui_window.console_page.retry_translation_btn.isHidden()

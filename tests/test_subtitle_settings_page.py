@@ -12,8 +12,8 @@ def test_subtitle_render_and_actions(qtbot, ui_snapshot, monkeypatch):
     drag = QSignalSpy(page.drag_toggle_requested)
     page.render(replace(ui_snapshot.subtitle, font_size=24, bg_opacity=30, preset='top_center'))
     assert len(style) == len(preset) == 0
-    assert '24px' in page.live_preview_box.styleSheet()
-    assert '0.30' in page.live_preview_box.styleSheet()
+    assert page.snapshot_widget._overlay_state.font_size == 24
+    assert page.snapshot_widget._overlay_state.bg_opacity == 30
     assert (page.font_size_slider.minimum(), page.font_size_slider.maximum()) == (14, 36)
     assert (page.opacity_slider.minimum(), page.opacity_slider.maximum()) == (0, 100)
     page.font_size_slider.setValue(30)
@@ -34,3 +34,18 @@ def test_subtitle_render_and_actions(qtbot, ui_snapshot, monkeypatch):
     assert len(drag) == 1
     page.set_drag_mode(True)
     assert 'Khóa vị trí' in page.drag_toggle_btn.text()
+
+
+def test_real_source_preview_empty_and_sample_states(qtbot, ui_snapshot):
+    from ui.pages.subtitle_settings_page import SubtitleSettingsPage
+    from PyQt5.QtGui import QImage
+    page = SubtitleSettingsPage(ui_snapshot.subtitle)
+    qtbot.addWidget(page)
+    assert page.snapshot_widget._image is None
+    assert 'Chọn nguồn' in page.preview_status_label.text()
+    page.set_capture_snapshot(QImage(100, 80, QImage.Format_RGB32), None, None)
+    page.render_presented(None)
+    assert 'Văn bản mẫu' in page.preview_status_label.text()
+    page.clear_capture_snapshot()
+    assert page.snapshot_widget._image is None
+    assert 'Chọn nguồn' in page.preview_status_label.text()
