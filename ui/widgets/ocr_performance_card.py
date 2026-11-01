@@ -44,12 +44,10 @@ class RadioIndicator(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        painter = QPainter(self)
         try:
             if sip.isdeleted(self):
                 return
-            # Qt calls child paint handlers without retaining the Python window.
-            # Keep its owner alive if allocations trigger cyclic GC while painting.
-            paint_owner = self.window()
             painter = QPainter(self)
             if not painter.isActive():
                 return
