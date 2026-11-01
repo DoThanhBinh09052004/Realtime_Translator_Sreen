@@ -6,6 +6,7 @@ import sys
 project_root = Path(SPECPATH).resolve()
 sys.path.insert(0, str(project_root))
 from tools.bundle_layout import bundle_data
+from tools.bundle_filter import runtime_toc
 
 datas = bundle_data(project_root, Path(os.environ.get('TRANSLATEHUD_OCR_MODELS_DIR', project_root / 'assets/ocr')))
 binaries = []
@@ -52,6 +53,11 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+# Hooks add dependency fixtures after the initial datas list. Filter the final
+# analysis, including embedded suites, so releases contain only runtime payloads.
+a.datas = runtime_toc(a.datas)
+a.binaries = runtime_toc(a.binaries)
+a.pure = runtime_toc(a.pure, module=True)
 pyz = PYZ(a.pure)
 
 exe = EXE(
