@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox, QGridLayout, QBoxLayout, QLayout, QFrame, QSizePolicy
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
+from ui.widgets.toggle_switch import ToggleSwitch
 from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, card_style, text_style, CONTROL_HEIGHT, palette_for
 from ui.icons import set_theme_icon, get_provider_icon
 from ui.controller_state import AiPageState
@@ -139,7 +140,7 @@ class AiSettingsPage(QScrollArea):
         main_layout.addWidget(prov_card)
 
         context_card=ModernCard('Ngữ cảnh hội thoại')
-        self.context_checkbox=QCheckBox('Giữ ngữ cảnh hội thoại')
+        self.context_checkbox = ToggleSwitch('Giữ ngữ cảnh hội thoại')
         self.context_checkbox.toggled.connect(self.context_enabled_changed.emit)
         context_row = QBoxLayout(QBoxLayout.LeftToRight)
         self.context_row = context_row

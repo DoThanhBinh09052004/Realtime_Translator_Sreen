@@ -1,8 +1,46 @@
 import pytest
+import subprocess
+import sys
+import textwrap
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 
 from ui.widgets.ocr_performance_card import OcrPerformanceCard
+
+
+@pytest.mark.parametrize('paint_module', ['ocr_performance_card', 'toggle_switch'])
+def test_paint_keeps_owning_window_alive_during_collection(paint_module):
+    # A native crash must fail this test without terminating the test runner.
+    script = textwrap.dedent('''
+        import gc
+        import importlib
+        from PyQt5 import sip
+        from PyQt5.QtWidgets import QApplication
+        from ui.widgets.ocr_performance_card import OcrPerformanceCard
+
+        app = QApplication([])
+        gc.disable()
+        module = importlib.import_module('ui.widgets.' + MODULE)
+        original = module.palette_for
+        painted = []
+
+        def collect_during_paint(widget):
+            gc.collect()
+            assert not sip.isdeleted(widget), 'Owner collected during painting'
+            painted.append(True)
+            return original(widget)
+
+        module.palette_for = collect_during_paint
+        card = OcrPerformanceCard()
+        card.show()
+        del card
+        app.processEvents()
+        assert painted, 'Paint callback did not run'
+    ''').replace('MODULE', repr(paint_module))
+    result = subprocess.run(
+        [sys.executable, '-c', script], capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_ocr_performance_card_initialization(qtbot):

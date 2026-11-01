@@ -1,4 +1,8 @@
 import os
+try:
+    import sip
+except ImportError:
+    from PyQt5 import sip
 from PyQt5.QtCore import (
     Qt, QSize, QSignalBlocker, pyqtSignal, QRectF,
     QEasingCurve, QPropertyAnimation, QParallelAnimationGroup
@@ -11,6 +15,7 @@ from PyQt5.QtWidgets import (
 
 from ui.styles import TOKENS, set_style, apply_widget_theme, palette_for
 from ui.icons import set_theme_icon
+from ui.widgets.toggle_switch import ToggleSwitch
 
 
 def resolve_display_threads(auto: bool, custom_threads: int, total_cores: int) -> int:
@@ -39,34 +44,44 @@ class RadioIndicator(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        try:
+            if sip.isdeleted(self):
+                return
+            # Qt calls child paint handlers without retaining the Python window.
+            # Keep its owner alive if allocations trigger cyclic GC while painting.
+            paint_owner = self.window()
+            painter = QPainter(self)
+            if not painter.isActive():
+                return
+            painter.setRenderHint(QPainter.Antialiasing)
 
-        # Viền ngoài
-        rect = QRectF(1.2, 1.2, self._size - 2.4, self._size - 2.4)
+            # Viền ngoài
+            rect = QRectF(1.2, 1.2, self._size - 2.4, self._size - 2.4)
 
-        if self._selected:
-            # Đường tròn viền ngoài màu nhấn
-            pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(rect)
+            if self._selected:
+                # Đường tròn viền ngoài màu nhấn
+                pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
+                painter.setPen(pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(rect)
 
-            # Chấm tròn đặc ở tâm (filled circle)
-            inner_size = self._size * 0.44  # ~8px cho size 18
-            inner_offset = (self._size - inner_size) / 2.0
-            inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
-            painter.drawEllipse(inner_rect)
-        else:
-            # Đường tròn rỗng mảnh
-            dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
-            painter.setPen(dim_pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(rect)
+                # Chấm tròn đặc ở tâm (filled circle)
+                inner_size = self._size * 0.44  # ~8px cho size 18
+                inner_offset = (self._size - inner_size) / 2.0
+                inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
+                painter.drawEllipse(inner_rect)
+            else:
+                # Đường tròn rỗng mảnh
+                dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
+                painter.setPen(dim_pen)
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(rect)
 
-        painter.end()
+            painter.end()
+        except RuntimeError:
+            return
 
 
 class SelectableOptionCard(QFrame):
@@ -260,26 +275,8 @@ class OcrPerformanceCard(QFrame):
         # Hàng 1: Checkbox tự động + Badge trạng thái
         row1 = QBoxLayout(QBoxLayout.LeftToRight)
         self.cpu_row = row1
-        self.auto_checkbox = QCheckBox("Tự động tối ưu số luồng CPU")
-        self.auto_checkbox.setCursor(Qt.PointingHandCursor)
-        set_style(self.auto_checkbox, f"""
-            QCheckBox {{
-                font-size: 12.5px;
-                color: {TOKENS['text']};
-                spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 17px;
-                height: 17px;
-                border-radius: 4px;
-                border: 1px solid {TOKENS['border_control']};
-                background-color: {TOKENS['input']};
-            }}
-            QCheckBox::indicator:checked {{
-                background-color: {TOKENS['focus']};
-                border-color: {TOKENS['focus']};
-            }}
-        """)
+        self.auto_checkbox = ToggleSwitch("Tự động tối ưu số luồng CPU")
+
         self.auto_checkbox.setChecked(self.auto_threads)
         self.auto_checkbox.toggled.connect(self._on_auto_toggled)
         row1.addWidget(self.auto_checkbox)
