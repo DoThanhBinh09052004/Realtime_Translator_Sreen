@@ -15,6 +15,13 @@ def test_context_controls_render_without_saving_or_touching_editors(qtbot,ui_sna
     assert page.context_checkbox.isChecked() and page.context_reset_button.isEnabled()
     assert 'ngữ cảnh gần đây' in page.context_status_label.text()
     assert page.api_key_input.text()=='unsaved' and len(spy)==0
+    page.render(replace(state, context_supported=False), changed_field='overlay_mode')
+    page.context_checkbox.click()
+    assert list(spy) == [[False]]
+    page.context_checkbox.click()
+    assert list(spy) == [[False], [True]]
+    assert not page.context_reset_button.isEnabled()
+
 
 
 def test_ai_render_keeps_editors_and_blocks_saves(qtbot, ui_snapshot):

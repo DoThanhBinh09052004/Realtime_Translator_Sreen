@@ -330,10 +330,11 @@ class AiSettingsPage(QScrollArea):
         blocker=QSignalBlocker(self.context_checkbox)
         self.context_checkbox.setChecked(state.context_enabled)
         del blocker
-        self.context_checkbox.setEnabled(state.context_supported)
+        self.context_checkbox.setEnabled(True)
+        self._context_supported = state.context_supported
         self.context_reset_button.setEnabled(state.context_enabled and state.context_supported)
-        self.context_status_label.setText('Tính năng này dùng với công cụ dịch AI.' if state.provider=='Google Translate'
-                                        else 'Hiện hỗ trợ chế độ phụ đề.' if not state.context_supported else '')
+        self.context_status_label.setText('Lựa chọn được lưu; ngữ cảnh chỉ áp dụng khi dùng công cụ dịch AI.' if state.provider=='Google Translate'
+                                        else 'Lựa chọn được lưu; ngữ cảnh chỉ áp dụng ở chế độ phụ đề.' if not state.context_supported else '')
         if changed_field == 'base_url':
             blocker = QSignalBlocker(self.base_url_input)
             self.base_url_input.setText(state.base_url)
@@ -363,7 +364,7 @@ class AiSettingsPage(QScrollArea):
         self._render_status(state)
 
     def render_context_status(self,status):
-        if status.phase=='text_fallback' and self.context_checkbox.isEnabled() and self.context_checkbox.isChecked():
+        if status.phase=='text_fallback' and self._context_supported and self.context_checkbox.isChecked():
             self.context_status_label.setText('Đang dịch bằng ngữ cảnh gần đây; công cụ chưa hỗ trợ cập nhật trí nhớ nhân vật.')
 
     def _render_status(self, state):
