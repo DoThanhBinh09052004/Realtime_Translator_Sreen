@@ -69,6 +69,8 @@ def test_provider_render_does_not_request_a_change(qtbot, ui_snapshot):
     page.apply_theme('dark')
     assert len(changes) == 0
     assert page.provider_combo.currentData() == 'OpenAI'
+    assert not page.provider_combo.itemIcon(0).isNull()
+
 
 
 def test_copy_uses_presented_translation_plain_text(qtbot):
@@ -190,6 +192,8 @@ def test_console_summary_is_silent_and_preserves_run_status(qtbot, ui_snapshot):
     assert '800 × 600' in page.region_info_lbl.text()
     assert page.readiness_lbl.text() == 'Running'
     assert page.provider_combo.currentData() == 'OpenAI'
+    assert not page.provider_combo.itemIcon(0).isNull()
+
     assert len(spy) == 0
     page.render_summary(replace(ui_snapshot, ocr=replace(ui_snapshot.ocr, region=None)))
     assert 'Chưa chọn vùng' in page.region_info_lbl.text()

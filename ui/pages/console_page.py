@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame, QSizePolicy, QGridLayout
 )
-from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, pyqtSignal, QSize
 
 from ui.widgets.cards import ModernCard
 from ui.widgets.capture_snapshot import CaptureSnapshotWidget
@@ -14,8 +14,8 @@ from ui.widgets.translation_output import TranslationOutputWidget
 from ui.capture_settings import CaptureSettings
 from ui.presentation import subtitle_preview_style
 from ui.styles import (TOKENS, set_style, apply_widget_theme, button_style, text_style,
-                       CONTROL_HEIGHT, CONTROL_HEADER_HEIGHT)
-from ui.icons import set_theme_icon
+                       CONTROL_HEIGHT, CONTROL_HEADER_HEIGHT, palette_for)
+from ui.icons import set_theme_icon, get_provider_icon
 from ui.controller_state import ControllerSnapshot, DailyReadiness, DailyRunState, PresentedTranslation
 
 
@@ -122,10 +122,11 @@ class ConsolePage(QWidget):
         set_style(engine_label, text_style('body'))
         engine_layout.addWidget(engine_label)
         self.provider_combo = QComboBox()
+        self.provider_combo.setIconSize(QSize(20, 20))
         self.provider_combo.setFixedHeight(CONTROL_HEIGHT)
         self.provider_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.provider_combo.setAccessibleName('Công cụ dịch')
-        self.provider_combo.addItem(snapshot.ai.provider, snapshot.ai.provider)
+        self.provider_combo.addItem(self._provider_icon(snapshot.ai.provider), snapshot.ai.provider, snapshot.ai.provider)
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         engine_layout.addWidget(self.provider_combo)
         engine_layout.addStretch()
@@ -280,15 +281,25 @@ class ConsolePage(QWidget):
             self.body_grid.addWidget(self.output_card, 1, 0)
             self.body_grid.setColumnStretch(0, 1)
 
+    def _provider_icon(self, provider: str):
+        return get_provider_icon(provider, palette_for(self)['text'], 20)
+
+    def _update_provider_icons(self):
+        for i in range(self.provider_combo.count()):
+            provider = self.provider_combo.itemData(i)
+            if provider:
+                self.provider_combo.setItemIcon(i, self._provider_icon(provider))
+
     def apply_theme(self, theme):
         apply_widget_theme(self, theme)
+        self._update_provider_icons()
 
     def set_provider_choices(self, providers):
         current = self.provider_combo.currentData()
         with QSignalBlocker(self.provider_combo):
             self.provider_combo.clear()
             for provider in providers:
-                self.provider_combo.addItem(provider, provider)
+                self.provider_combo.addItem(self._provider_icon(provider), provider, provider)
             self.provider_combo.setCurrentIndex(self.provider_combo.findData(current))
 
     def _on_provider_changed(self, index):
