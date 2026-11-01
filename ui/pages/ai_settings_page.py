@@ -39,9 +39,12 @@ class AiSettingsPage(QScrollArea):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(14)
         main_layout.setSizeConstraint(QLayout.SetMinimumSize)
-        self.columns.addWidget(self.main_column, 65)
+        self.columns.setSpacing(16)
+        self.columns.addWidget(self.main_column, 62)
         provider_card = ModernCard("Chọn công cụ dịch")
         grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
         self.provider_buttons = {}
         self.provider_logo_labels = {}
         descriptions = {
@@ -55,8 +58,8 @@ class AiSettingsPage(QScrollArea):
         for index, name in enumerate(providers):
             button = QPushButton()
             row = QHBoxLayout(button)
-            row.setContentsMargins(14, 10, 14, 10)
-            row.setSpacing(14)
+            row.setContentsMargins(16, 10, 16, 10)
+            row.setSpacing(16)
             logo = QLabel()
             logo.setFixedSize(40, 40)
             logo.setAlignment(Qt.AlignCenter)
@@ -71,14 +74,14 @@ class AiSettingsPage(QScrollArea):
                 label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
                 label.setAttribute(Qt.WA_TransparentForMouseEvents)
             logo.setAttribute(Qt.WA_TransparentForMouseEvents)
-            set_style(title, text_style('body') + 'font-weight:600;background:transparent;')
-            set_style(description, text_style('caption') + 'background:transparent;')
+            set_style(title, text_style('body') + 'font-weight:600;background:transparent;border:none;')
+            set_style(description, text_style('caption') + 'background:transparent;border:none;')
             copy.addWidget(title)
             copy.addWidget(description)
             row.addLayout(copy, 1)
             self.provider_logo_labels[name] = logo
             button.setCheckable(True)
-            button.setMinimumHeight(76)
+            button.setMinimumHeight(64)
             button.setAccessibleName('Chọn ' + name)
             set_style(button, button_style('secondary', 'tokens') + f"QPushButton:checked {{background:{TOKENS['surface']};border:2px solid {TOKENS['text']};}}")
             button.clicked.connect(lambda checked=False, name=name: self._request_provider(name))
@@ -97,8 +100,8 @@ class AiSettingsPage(QScrollArea):
         m_col = QVBoxLayout(self.model_container)
         m_col.setContentsMargins(0, 0, 0, 0)
         m_col.setSpacing(4)
-        m_lbl = QLabel("Mô hình (Model ID)")
-        set_style(m_lbl, f"font-size: 12px; font-weight: 500; color: {TOKENS['muted']};")
+        m_lbl = QLabel("Model ID")
+        set_style(m_lbl, text_style('body') + 'font-weight:500;')
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self.model_combo.addItems(state.models)
@@ -162,7 +165,7 @@ class AiSettingsPage(QScrollArea):
         key_layout.addWidget(QLabel("API key"))
 
         k_layout = QVBoxLayout()
-        k_layout.setSpacing(6)
+        k_layout.setSpacing(10)
 
         k_input_row = QHBoxLayout()
         k_input_row.setSpacing(8)
@@ -196,6 +199,10 @@ class AiSettingsPage(QScrollArea):
             set_style(button, button_style('secondary', 'tokens'))
             if button is not self.import_key_btn:
                 actions.addWidget(button)
+        self.save_key_btn.setMaximumWidth(140)
+        self.delete_key_btn.setMaximumWidth(110)
+        actions.setSpacing(12)
+        actions.addStretch()
         set_style(self.save_key_btn, button_style('primary', 'tokens'))
         self.save_key_btn.clicked.connect(self._apply_key)
         self.delete_key_btn.clicked.connect(self.api_key_delete_requested.emit)
@@ -203,7 +210,8 @@ class AiSettingsPage(QScrollArea):
         k_layout.addLayout(actions)
         self.advanced_btn = advanced = QPushButton('Tùy chọn nâng cao')
         advanced.setCheckable(True)
-        set_style(advanced, button_style('secondary', 'tokens'))
+        advanced.setMaximumWidth(150)
+        set_style(advanced, 'QPushButton {' + text_style('caption') + 'border:none;background:transparent;text-align:left;padding:2px 0;}')
         advanced.toggled.connect(self.import_key_btn.setVisible)
         k_layout.addWidget(advanced)
         k_layout.addWidget(self.import_key_btn)
@@ -211,7 +219,8 @@ class AiSettingsPage(QScrollArea):
 
         self.api_status_lbl = QLabel()
         self._render_status(state)
-        k_layout.addWidget(self.api_status_lbl)
+        self.api_status_lbl.setWordWrap(True)
+        actions.addWidget(self.api_status_lbl, 1)
 
         key_layout.addLayout(k_layout)
         prov_card.layout.addWidget(self.key_card)
@@ -247,7 +256,10 @@ class AiSettingsPage(QScrollArea):
             note_card.layout.addSpacing(18)
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
+        set_style(divider, f'color:{TOKENS["border"]};background:{TOKENS["border"]};max-height:1px;border:none;')
+        note_card.layout.addSpacing(12)
         note_card.layout.addWidget(divider)
+        note_card.layout.addSpacing(12)
         google_row = QHBoxLayout()
         self.google_guide_logo = QLabel()
         self.google_guide_logo.setFixedSize(40, 40)
@@ -255,6 +267,7 @@ class AiSettingsPage(QScrollArea):
         google_copy = QLabel('Google Translate\nDịch trực tuyến, không cần API key.')
         google_copy.setWordWrap(True)
         set_style(google_copy, text_style('body'))
+        google_row.setSpacing(18)
         google_row.addWidget(google_copy, 1)
         note_card.layout.addLayout(google_row)
         note_card.layout.addSpacing(18)
@@ -263,13 +276,17 @@ class AiSettingsPage(QScrollArea):
         set_style(privacy, text_style('caption'))
         note_card.layout.addWidget(privacy)
         note_card.layout.addStretch()
-        self.columns.addWidget(note_card, 35)
-        self.columns.setAlignment(note_card, Qt.AlignTop)
+        self.columns.addWidget(note_card, 38)
+
 
         layout.addStretch()
         footer = QLabel('✓  Thiết lập được đồng bộ với màn hình chính.')
         set_style(footer, text_style('caption'))
         layout.addWidget(footer)
+        for card in (provider_card, prov_card, context_card, note_card):
+            labels = card.findChildren(QLabel)
+            if labels:
+                set_style(labels[0], text_style('section'))
         self.setWidget(content)
         self.render(state)
         self._reflow_layout(self.viewport().width())
@@ -362,7 +379,7 @@ class AiSettingsPage(QScrollArea):
         else:
             self.api_status_lbl.setText(f'Trạng thái: Chưa có API Key cho {state.provider}')
             color = TOKENS['warning']
-        set_style(self.api_status_lbl, f'color: {color}; font-size: 12px; font-weight: 500;')
+        set_style(self.api_status_lbl, text_style('caption', color=color))
 
     def highlight_missing_key(self):
         set_style(self.config_card, f"""
