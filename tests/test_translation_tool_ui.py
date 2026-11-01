@@ -6,7 +6,7 @@ from core import config
 def test_google_ui_hides_credentials_and_can_start(ui_window):
     page=ui_window.ai_page
     assert ui_window.settings_coordinator.snapshot().ai.provider=='Google Translate'
-    assert page.model_container.isHidden() and page.key_card.isHidden() and page.guide_card.isHidden()
+    assert page.model_container.isHidden() and page.key_card.isHidden() and not page.guide_card.isHidden()
     assert 'không cần API key' in page.google_note.text()
     ui_window.worker.reset_mock(); ui_window.start_ocr()
     ui_window.worker.start_worker.assert_called_once()

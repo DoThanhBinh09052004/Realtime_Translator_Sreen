@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox, QGridLayout, QBoxLayout, QLayout
+from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox, QGridLayout, QBoxLayout, QLayout, QFrame, QSizePolicy
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
 from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, card_style, text_style, CONTROL_HEIGHT, palette_for
@@ -40,24 +40,55 @@ class AiSettingsPage(QScrollArea):
         main_layout.setSpacing(14)
         main_layout.setSizeConstraint(QLayout.SetMinimumSize)
         self.columns.addWidget(self.main_column, 65)
-        provider_card = ModernCard("Công cụ dịch", "Chọn công cụ phù hợp với nhu cầu của bạn")
+        provider_card = ModernCard("Chọn công cụ dịch")
         grid = QGridLayout()
         self.provider_buttons = {}
+        self.provider_logo_labels = {}
+        descriptions = {
+            'Google Translate': 'Dịch trực tuyến, không cần API key',
+            'Google Gemini': 'Sử dụng mô hình Gemini của Google',
+            'OpenAI': 'Sử dụng mô hình GPT của OpenAI',
+            'DeepSeek': 'Sử dụng mô hình của DeepSeek',
+            'Custom API': 'Kết nối với API tương thích OpenAI',
+        }
         self.selected_provider = state.provider
         for index, name in enumerate(providers):
-            button = QPushButton(name)
-            button.setIcon(get_provider_icon(name, palette_for(self)['text']))
-            button.setIconSize(QSize(22, 22))
+            button = QPushButton()
+            row = QHBoxLayout(button)
+            row.setContentsMargins(14, 10, 14, 10)
+            row.setSpacing(14)
+            logo = QLabel()
+            logo.setFixedSize(40, 40)
+            logo.setAlignment(Qt.AlignCenter)
+            logo.setPixmap(get_provider_icon(name, palette_for(self)['text'], 38).pixmap(38, 38))
+            row.addWidget(logo, 0, Qt.AlignVCenter)
+            copy = QVBoxLayout()
+            copy.setSpacing(3)
+            title = QLabel(name)
+            description = QLabel(descriptions.get(name, 'Công cụ dịch'))
+            for label in (title, description):
+                label.setWordWrap(True)
+                label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+                label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            logo.setAttribute(Qt.WA_TransparentForMouseEvents)
+            set_style(title, text_style('body') + 'font-weight:600;background:transparent;')
+            set_style(description, text_style('caption') + 'background:transparent;')
+            copy.addWidget(title)
+            copy.addWidget(description)
+            row.addLayout(copy, 1)
+            self.provider_logo_labels[name] = logo
             button.setCheckable(True)
-            button.setMinimumHeight(48)
+            button.setMinimumHeight(76)
             button.setAccessibleName('Chọn ' + name)
-            set_style(button, button_style('secondary', 'tokens') + f"QPushButton:checked {{background:{TOKENS['selection_bg']};border:2px solid {TOKENS['focus']};}}")
+            set_style(button, button_style('secondary', 'tokens') + f"QPushButton:checked {{background:{TOKENS['surface']};border:2px solid {TOKENS['text']};}}")
             button.clicked.connect(lambda checked=False, name=name: self._request_provider(name))
             self.provider_buttons[name] = button
             grid.addWidget(button, index // 2, index % 2)
         provider_card.layout.addLayout(grid)
         main_layout.addWidget(provider_card)
-        prov_card = ModernCard("Cấu hình công cụ", "Model và endpoint đang sử dụng")
+        prov_card = ModernCard("Cấu hình " + state.provider)
+        self.config_card = prov_card
+        self.config_title_label = prov_card.findChildren(QLabel)[0]
         row1 = QHBoxLayout()
         row1.setSpacing(12)
 
@@ -107,14 +138,15 @@ class AiSettingsPage(QScrollArea):
         context_card=ModernCard('Ngữ cảnh hội thoại')
         self.context_checkbox=QCheckBox('Giữ ngữ cảnh hội thoại')
         self.context_checkbox.toggled.connect(self.context_enabled_changed.emit)
-        context_card.layout.addWidget(self.context_checkbox)
-        context_help=QLabel('Tự ghi nhớ cách xưng hô trong phiên. Khoanh cả tên nhân vật và lời thoại nếu có.')
-        context_help.setWordWrap(True)
-        context_card.layout.addWidget(context_help)
+        context_row = QBoxLayout(QBoxLayout.LeftToRight)
+        self.context_row = context_row
+        context_row.addWidget(self.context_checkbox, 1)
+        self.context_checkbox.setToolTip('Khoanh cả tên nhân vật và lời thoại nếu có. Bộ nhớ chỉ giữ trong phiên.')
         self.context_reset_button=QPushButton('Bắt đầu hội thoại mới')
         set_style(self.context_reset_button, button_style('secondary', 'tokens'))
         self.context_reset_button.clicked.connect(self.context_reset_requested.emit)
-        context_card.layout.addWidget(self.context_reset_button)
+        context_row.addWidget(self.context_reset_button)
+        context_card.layout.addLayout(context_row)
         self.context_status_label=QLabel()
         self.context_status_label.setWordWrap(True)
         context_card.layout.addWidget(self.context_status_label)
@@ -124,7 +156,10 @@ class AiSettingsPage(QScrollArea):
 
 
         # Card 2: API Key Management
-        self.key_card = ModernCard("Khóa API (API Key)", "Lưu bằng mã hóa Windows hoặc chỉ dùng trong phiên hiện tại")
+        self.key_card = QFrame()
+        key_layout = QVBoxLayout(self.key_card)
+        key_layout.setContentsMargins(0, 0, 0, 0)
+        key_layout.addWidget(QLabel("API key"))
 
         k_layout = QVBoxLayout()
         k_layout.setSpacing(6)
@@ -150,7 +185,7 @@ class AiSettingsPage(QScrollArea):
 
         k_layout.addLayout(k_input_row)
 
-        self.persist_key_checkbox = QCheckBox('Lưu key mã hóa cho lần sau')
+        self.persist_key_checkbox = QCheckBox('Lưu an toàn trên máy này')
         self.persist_key_checkbox.setChecked(True)
         k_layout.addWidget(self.persist_key_checkbox)
         actions = QHBoxLayout()
@@ -161,11 +196,12 @@ class AiSettingsPage(QScrollArea):
             set_style(button, button_style('secondary', 'tokens'))
             if button is not self.import_key_btn:
                 actions.addWidget(button)
+        set_style(self.save_key_btn, button_style('primary', 'tokens'))
         self.save_key_btn.clicked.connect(self._apply_key)
         self.delete_key_btn.clicked.connect(self.api_key_delete_requested.emit)
         self.import_key_btn.clicked.connect(lambda: self.legacy_key_import_requested.emit(self.persist_key_checkbox.isChecked()))
         k_layout.addLayout(actions)
-        advanced = QPushButton('Tùy chọn nâng cao')
+        self.advanced_btn = advanced = QPushButton('Tùy chọn nâng cao')
         advanced.setCheckable(True)
         set_style(advanced, button_style('secondary', 'tokens'))
         advanced.toggled.connect(self.import_key_btn.setVisible)
@@ -177,27 +213,63 @@ class AiSettingsPage(QScrollArea):
         self._render_status(state)
         k_layout.addWidget(self.api_status_lbl)
 
-        self.key_card.layout.addLayout(k_layout)
-        main_layout.addWidget(self.key_card)
+        key_layout.addLayout(k_layout)
+        prov_card.layout.addWidget(self.key_card)
         main_layout.addWidget(context_card)
         main_layout.addStretch()
 
         # Card 3: Guide Note
-        note_card = ModernCard("Hướng dẫn lấy API Key")
+        note_card = ModernCard('Thiết lập công cụ')
         self.guide_card = note_card
-        note_text = QLabel(
-            "• Google Gemini: Truy cập Google AI Studio (aistudio.google.com)\n"
-            "• OpenAI: Truy cập platform.openai.com/api-keys\n"
-            "• DeepSeek: Truy cập platform.deepseek.com để tạo API Key\n"
-            "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng nhiều model"
-        )
-        set_style(note_text, f"color: {TOKENS['muted']}; font-size: 12px; line-height: 1.5;")
-        note_card.layout.addWidget(note_text)
-        note_text.setWordWrap(True)
+        for number, title, description in (
+            ('1', 'Chọn công cụ', 'Chọn nhà cung cấp dịch phù hợp với nhu cầu của bạn.'),
+            ('2', 'Nhập model và API key', 'Nhập tên model (nếu có) và API key của bạn.'),
+            ('3', 'Áp dụng để sử dụng', 'Nhấn Áp dụng key để lưu key. Model được lưu khi thay đổi.'),
+        ):
+            row = QHBoxLayout()
+            row.setSpacing(16)
+            badge = QLabel(number)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setFixedSize(40, 40)
+            set_style(badge, text_style('section') + f'background:{TOKENS["raised"]};border-radius:20px;')
+            row.addWidget(badge, 0, Qt.AlignTop)
+            copy = QVBoxLayout()
+            heading = QLabel(title)
+            heading.setWordWrap(True)
+            set_style(heading, text_style('body') + 'font-weight:600;')
+            body = QLabel(description)
+            body.setWordWrap(True)
+            set_style(body, text_style('caption'))
+            copy.addWidget(heading)
+            copy.addWidget(body)
+            row.addLayout(copy, 1)
+            note_card.layout.addLayout(row)
+            note_card.layout.addSpacing(18)
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        note_card.layout.addWidget(divider)
+        google_row = QHBoxLayout()
+        self.google_guide_logo = QLabel()
+        self.google_guide_logo.setFixedSize(40, 40)
+        google_row.addWidget(self.google_guide_logo)
+        google_copy = QLabel('Google Translate\nDịch trực tuyến, không cần API key.')
+        google_copy.setWordWrap(True)
+        set_style(google_copy, text_style('body'))
+        google_row.addWidget(google_copy, 1)
+        note_card.layout.addLayout(google_row)
+        note_card.layout.addSpacing(18)
+        privacy = QLabel('Dữ liệu gửi đi\n\nVăn bản nhận diện được gửi đến công cụ bạn chọn.')
+        privacy.setWordWrap(True)
+        set_style(privacy, text_style('caption'))
+        note_card.layout.addWidget(privacy)
+        note_card.layout.addStretch()
         self.columns.addWidget(note_card, 35)
         self.columns.setAlignment(note_card, Qt.AlignTop)
 
         layout.addStretch()
+        footer = QLabel('✓  Thiết lập được đồng bộ với màn hình chính.')
+        set_style(footer, text_style('caption'))
+        layout.addWidget(footer)
         self.setWidget(content)
         self.render(state)
         self._reflow_layout(self.viewport().width())
@@ -215,6 +287,7 @@ class AiSettingsPage(QScrollArea):
 
     def _reflow_layout(self, width: int) -> None:
         self.columns.setDirection(QBoxLayout.LeftToRight if width >= 800 else QBoxLayout.TopToBottom)
+        self.context_row.setDirection(QBoxLayout.LeftToRight if width >= 800 else QBoxLayout.TopToBottom)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -263,7 +336,8 @@ class AiSettingsPage(QScrollArea):
         self.base_url_container.setVisible(state.supports_base_url)
         self.model_container.setVisible(state.supports_models)
         self.key_card.setVisible(state.requires_api_key)
-        self.guide_card.setVisible(state.requires_api_key)
+        self.guide_card.show()
+        self.config_title_label.setText("Cấu hình " + state.provider)
         self.google_note.setVisible(not state.requires_api_key)
         self._render_status(state)
 
@@ -291,7 +365,7 @@ class AiSettingsPage(QScrollArea):
         set_style(self.api_status_lbl, f'color: {color}; font-size: 12px; font-weight: 500;')
 
     def highlight_missing_key(self):
-        set_style(self.key_card, f"""
+        set_style(self.config_card, f"""
                 QFrame#cardFrame {{
                     background-color: {TOKENS['surface']};
                     border: 1px solid {TOKENS['negative']};
@@ -301,9 +375,10 @@ class AiSettingsPage(QScrollArea):
         self.highlight_timer.start()
 
     def _clear_highlight(self):
-        set_style(self.key_card, card_style('tokens'))
+        set_style(self.config_card, card_style('tokens'))
 
     def apply_theme(self, theme: str):
         apply_widget_theme(self, theme)
         for name, button in self.provider_buttons.items():
-            button.setIcon(get_provider_icon(name, palette_for(self)['text']))
+            self.provider_logo_labels[name].setPixmap(get_provider_icon(name, palette_for(self)['text'], 38).pixmap(38, 38))
+        self.google_guide_logo.setPixmap(get_provider_icon('Google Translate', palette_for(self)['text'], 40).pixmap(40, 40))

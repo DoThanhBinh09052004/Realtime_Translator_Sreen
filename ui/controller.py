@@ -103,6 +103,7 @@ class ControllerWindow(QWidget):
         # Page Header
         self.header_container = QWidget()
         header_row = QHBoxLayout(self.header_container)
+        self.header_row = header_row
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(10)
 
@@ -114,6 +115,7 @@ class ControllerWindow(QWidget):
         header_row.addWidget(self.back_btn)
 
         header_text_box = QVBoxLayout()
+        self.header_text_box = header_text_box
         header_text_box.setSpacing(2)
 
         self.page_title_lbl = QLabel("Tổng quan")
@@ -286,6 +288,18 @@ class ControllerWindow(QWidget):
                 title, desc = titles[index]
                 self.page_title_lbl.setText(title)
                 self.page_desc_lbl.setText(desc)
+                self.header_row.removeWidget(self.back_btn)
+                self.header_text_box.removeWidget(self.page_desc_lbl)
+                if index == 1:
+                    self.header_row.addWidget(self.back_btn)
+                    self.header_text_box.insertWidget(0, self.page_desc_lbl)
+                    self.page_desc_lbl.setText('Translate HUD')
+                    set_style(self.page_title_lbl, 'font-size:22px;font-weight:700;')
+                else:
+                    self.header_row.insertWidget(0, self.back_btn)
+                    self.header_text_box.addWidget(self.page_desc_lbl)
+                    set_style(self.page_title_lbl, 'font-size:16px;font-weight:700;')
+
 
 
     def _render_snapshot(self, snapshot, changed_field):
