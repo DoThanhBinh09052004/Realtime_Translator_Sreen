@@ -9,6 +9,53 @@ from unittest.mock import Mock
 
 import pytest
 
+
+# First match wins: specific exceptions precede broader filename prefixes.
+# Add new filename families here; existing test modules need no decorators.
+_TEST_GROUP_PREFIXES = {
+    "packaging": (
+        "test_app_paths", "test_bundle_", "test_capture_bundle",
+        "test_ocr_bundle_runtime", "test_ocr_model_assets", "test_language_pack_bundle",
+    ),
+    "settings_security": (
+        "test_config_", "test_secret_", "test_endpoint_", "test_legacy_",
+        "test_settings_", "test_custom_api_security",
+    ),
+    "overlay": (
+        "test_overlay_", "test_subtitle_", "test_presented_translation",
+        "test_google_subtitle_overlay",
+    ),
+    "capture": (
+        "test_capture_", "test_direct_region_selection", "test_selector_", "test_window_",
+    ),
+    "ocr": ("test_ocr_",),
+    "translation": (
+        "test_google_", "test_deepseek_", "test_custom_api_",
+        "test_translation_cache", "test_retry_policy", "test_engine_results",
+    ),
+    "context": ("test_context_",),
+    "dialogue": ("test_dialogue_",),
+    "blocks": ("test_block_", "test_worker_block", "test_compact_block_"),
+    "language_packs": ("test_language_",),
+    "app_ui": (
+        "test_controller_", "test_daily_", "test_game_", "test_global_hotkeys",
+        "test_ai_settings_", "test_translation_tool_", "test_translation_status_",
+        "test_worker_settings", "test_worker_status_", "test_active_worker_",
+        "test_ui_module_", "test_test_isolation",
+    ),
+}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items):
+    """Assign functional groups before pytest applies its -m marker filter."""
+    for item in items:
+        for group, prefixes in _TEST_GROUP_PREFIXES.items():
+            if item.path.stem.startswith(prefixes):
+                item.add_marker(group)
+                break
+
+
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["PYTEST_QT_API"] = "pyqt5"
 
