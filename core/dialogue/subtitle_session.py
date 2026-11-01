@@ -26,12 +26,12 @@ class SubtitleDialogueSession:
     def needs_scan(self):
         return self.track.has_pending or (not self.track.closed and self.track.missing_count > 0)
 
-    def observe(self, text, *, now_s):
+    def observe(self, text, *, now_s, evidence=None, captured_at_s=None):
         self._expire_tail(now_s)
         self._now = self._last_success = now_s
         if text.strip():
             self._end_until = None
-            self.track.observe(text,now_s=now_s)
+            self.track.observe(text,now_s=now_s,evidence=evidence,captured_at_s=captured_at_s)
         elif self.track.miss(now_s=now_s):
             self._end_until = now_s+self.policy.subtitle_end_hold_s
         key = (self.track.turn_id,self.track.text_version)
@@ -75,3 +75,10 @@ class SubtitleDialogueSession:
     def drain_errors(self):
         errors,self._errors=tuple(self._errors),[]
         return errors
+
+    def drain_stable_turns(self):
+        return self.track.drain_stable_turns(revision=self._revision)
+
+    def drain_presentations(self):
+        receipts=self.track.drain_presentations()
+        return receipts if self.current_frame().text else ()

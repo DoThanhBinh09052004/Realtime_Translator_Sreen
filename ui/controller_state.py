@@ -14,6 +14,8 @@ class AiPageState:
     supports_models: bool = True
     supports_base_url: bool = False
     key_storage: str = 'none'
+    context_enabled: bool = False
+    context_supported: bool = False
 
 
 @dataclass(frozen=True)

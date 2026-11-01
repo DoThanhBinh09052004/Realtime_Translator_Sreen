@@ -113,3 +113,9 @@ def test_resolve_ocr_threads():
     assert config.resolve_ocr_threads(auto=False, custom_threads=999) == total_cores
     assert config.resolve_ocr_threads(auto=False, custom_threads=-2) == 1
 
+def test_context_config_is_opt_in_strict_bool():
+    from core.config import normalize_config
+    assert normalize_config({})['context_enabled'] is False
+    assert normalize_config({'context_enabled':'false'})['context_enabled'] is False
+    assert normalize_config({'context_enabled':True})['context_enabled'] is True
+

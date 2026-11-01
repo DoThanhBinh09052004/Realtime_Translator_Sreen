@@ -173,6 +173,8 @@ class CaptureApplicationBinding(QObject):
         self.binding_state_changed.emit()
         context = self.worker.capture_context
         if context is not None:
+            if hasattr(self.worker,'invalidate_context_source'):
+                self.worker.invalidate_context_source(context.binding_epoch)
             self.lifecycle.on_capture_terminal(SourceStatus(context.binding_epoch, 'unavailable', error))
         else:
             self.controller.show_capture_waiting(error)

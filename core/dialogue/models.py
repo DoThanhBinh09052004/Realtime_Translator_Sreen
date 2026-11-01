@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from core.contracts import RuntimeSettings, OcrResult
 from core.blocks.models import CaptureGeometry
+from core.dialogue.context_models import PresentationReceipt
 
 RequestKey = tuple[int, int, int, int]
 ActiveTurnKey = tuple[int, int, int]
@@ -23,3 +24,4 @@ class TrackPresentation:
     text_version: int
     source_text: str
     text: str
+    receipt: PresentationReceipt | None = None

@@ -12,6 +12,21 @@ def test_missing_key_routes_to_ai_without_starting(ui_window):
 
 
 def test_start_stop_and_callbacks_once(ui_window):
+    from core.capture.models import CaptureProfile,CaptureRegion,NormalizedRect
+    # Daily controls use the same explicitly bound profile as production.
+    profile=CaptureProfile(1,'desktop','test',None,(CaptureRegion('11111111-1111-4111-8111-111111111111','Dialogue',NormalizedRect(0.,0.,1.,1.),True),),())
+    config.save_capture_profile(profile,setup_complete=True)
+    worker=ui_window.worker
+    worker.is_running.return_value=False
+    worker.isRunning.return_value=False
+    worker.is_drained=True
+    worker.restart_pending=False
+    def running(value):
+        worker.is_running.return_value=value
+        worker.is_drained=not value
+    worker.start_worker.side_effect=lambda:running(True)
+    worker.stop_worker.side_effect=lambda:running(False)
+    ui_window.set_capture_profile_state(profile,bound=True)
     config.save_region(config.DEFAULT_REGION, setup_complete=True)
     ui_window.provider_combo.setCurrentText('Google Gemini')
     ui_window.settings_coordinator.set_api_key('fake-test-key')

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from math import isfinite
 from core.contracts import RuntimeSettings, TranslationResult
+from core.dialogue.context_models import OcrEvidence, ContextSnapshot, ContextStamp
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,8 @@ class BlockJob:
     settings: RuntimeSettings
     turn_id: int = 0
     text_version: int = 0
+    evidence: OcrEvidence | None = None
+    context: ContextSnapshot | None = None
 
     @property
     def request_key(self):
@@ -72,6 +75,7 @@ class BlockTranslationResult:
     result: TranslationResult
     turn_id: int = 0
     text_version: int = 0
+    context_stamp: ContextStamp | None = None
 
     @property
     def request_key(self):

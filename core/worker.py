@@ -24,6 +24,7 @@ from core.capture.profile import serialize_capture_profile
 from core.capture.source import create_capture_source
 from core.capture.scan import RegionScanner
 from core.capture.geometry import resolve_region_crops
+from core.dialogue.context_models import SourceKey, ScopeSpec
 
 
 def compact_memory():
@@ -65,6 +66,7 @@ class TranslationWorker(QThread):
     capture_status_updated = pyqtSignal(object)
     capture_terminal_status = pyqtSignal(object)
     capture_rebind_requested = pyqtSignal(object)
+    context_status_changed = pyqtSignal(object)
 
     def __init__(self, state, region, interval_ms=500, *, ocr_reader=None):
         super().__init__()
@@ -82,6 +84,7 @@ class TranslationWorker(QThread):
         self._capture_geometry = None
         self._capture_profile = None
         self._capture_context = None
+        self._context_source_invalid = False
         self._force_regions = frozenset()
         self._google_recovery = GoogleRecoveryGate()
         self._translation_session_id = 0
@@ -102,6 +105,8 @@ class TranslationWorker(QThread):
         self._coordinator.subtitle_updated.connect(self._publish_dialogue_subtitle)
         self._coordinator.blocks_updated.connect(self.blocks_updated.emit)
         self._coordinator.error_occurred.connect(self.error_occurred.emit)
+        self._coordinator.context_status_changed.connect(self.context_status_changed.emit)
+        self.capture_terminal_status.connect(self._on_context_terminal,Qt.QueuedConnection)
         self._coordinator._timer.timeout.connect(self._dialogue_status_tick)
         self._block_translator = self._new_block_translator()
         self._restart_pending = False
@@ -140,13 +145,51 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             if revision != self._revision: return
             settings, running = self._settings, self._is_running
+            profile, context = self._capture_profile, self._capture_context
+            source,scopes=self._memory_identity(profile,context)
         self._last_emitted_translation = ''
         self._coordinator.reset(settings, revision=revision,
-                                session_id=self.translation_session_id, running=running)
+                                session_id=self.translation_session_id, running=running,memory_source=source,memory_scopes=scopes)
         with QMutexLocker(self._mutex):
             profile, context = self._capture_profile, self._capture_context
         if profile is not None and context is not None:
             self._coordinator.configure_capture(profile, context)
+
+    def _memory_identity(self,profile,context):
+        if self._context_source_invalid:return None,()
+        if profile is not None and context is not None:
+            window=context.window
+            identity=((window.hwnd,window.pid,window.process_started_100ns,context.binding_epoch) if window is not None
+                      else (profile.monitor_name or context.geometry.screen.name,context.binding_epoch))
+            exclusions=tuple(v for rect in profile.exclusions for v in (rect.x,rect.y,rect.width,rect.height))
+            # Layout tuples remain compact even with many exclusion rectangles.
+            import hashlib
+            exclusion_key=hashlib.sha256(repr(exclusions).encode()).hexdigest()
+            scopes=tuple(ScopeSpec(r.id,(*context.geometry.image_size_px,r.rect.x,r.rect.y,r.rect.width,r.rect.height,exclusion_key))
+                         for r in profile.regions if r.enabled)
+            return SourceKey(profile.source_kind,identity),scopes
+        geometry=self._capture_geometry
+        screen=geometry.screen.name if geometry is not None else str(self._region.get('monitor','legacy'))
+        layout=tuple(self._region.get(k,0) for k in ('left','top','width','height'))
+        return SourceKey('desktop',(screen,)),(ScopeSpec('legacy-subtitle',layout),)
+
+    def reset_dialogue_context(self):
+        self._coordinator.clear_context()
+        with QMutexLocker(self._mutex):
+            self._revision+=1;self._invalidated=True;revision=self._revision
+            self._force_regions=frozenset(r.id for r in self._capture_profile.regions if r.enabled) if self._capture_profile else frozenset()
+        self.revision_changed.emit(revision)
+        return revision
+
+    @pyqtSlot(object)
+    def _on_context_terminal(self,status):
+        if status.phase in ('unavailable','error'):self.invalidate_context_source(status.binding_epoch)
+
+    def invalidate_context_source(self,binding_epoch):
+        with QMutexLocker(self._mutex):
+            if self._capture_context is None or self._capture_context.binding_epoch!=binding_epoch or self._context_source_invalid:return
+            self._context_source_invalid=True
+        self.reset_dialogue_context()
 
     @pyqtSlot(int, object)
     def request_capture_scan(self, revision, regions):
@@ -175,6 +218,7 @@ class TranslationWorker(QThread):
             raise ValueError('Capture source requires an explicit matching identity')
         with QMutexLocker(self._mutex):
             self._capture_profile, self._capture_context = profile, context
+            self._context_source_invalid = False
             self._capture_geometry = context.geometry
             self._revision += 1
             revision = self._revision

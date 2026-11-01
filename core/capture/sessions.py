@@ -16,6 +16,7 @@ from core.capture.profile import serialize_capture_profile
 from core.contracts import OcrResult, SubtitleFrame
 from core.dialogue.policy import DEFAULT_DIALOGUE_POLICY
 from core.dialogue.subtitle_session import SubtitleDialogueSession
+from core.dialogue.evidence import evidence_from_ocr
 
 
 class RegionDialogueSession:
@@ -141,8 +142,9 @@ class RegionDialogueSession:
                               frame_id=batch.scan_id, geometry=self._context.geometry,
                               now_s=item.completed_at_s)
             else:
-                child.observe(item.ocr.text, now_s=item.completed_at_s)
+                child.observe(item.ocr.text, now_s=item.completed_at_s,evidence=evidence_from_ocr(item.ocr),captured_at_s=item.captured_at_s)
         self._sync_routes()
+        return tuple(valid_items)
 
     def _sync_routes(self):
         active = {(region_id, local_id) for region_id, child in self._sessions.items()
@@ -222,3 +224,20 @@ class RegionDialogueSession:
     def drain_errors(self):
         errors, self._errors = tuple(self._errors), []
         return errors+tuple(error for child in self._sessions.values() for error in child.drain_errors())
+
+    def scope_for_job(self, job):
+        self._sync_routes()
+        route=self._reverse.get(job.block_id)
+        return route[0] if route else None
+
+    def drain_stable_turns(self):
+        self._sync_routes()
+        return tuple((region,replace(turn,track_id=self._routes[region,turn.track_id]))
+                     for region,child in self._sessions.items() if hasattr(child,'drain_stable_turns')
+                     for turn in child.drain_stable_turns())
+
+    def drain_presentations(self):
+        self._sync_routes()
+        return tuple((region,replace(receipt,request_key=(receipt.request_key[0],self._routes[region,receipt.request_key[1]],*receipt.request_key[2:])))
+                     for region,child in self._sessions.items() if hasattr(child,'drain_presentations')
+                     for receipt in child.drain_presentations() if (region,receipt.request_key[1]) in self._routes)

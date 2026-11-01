@@ -1,6 +1,7 @@
 """Immutable values exchanged between settings, engines and worker threads."""
 from dataclasses import dataclass, field
 from typing import Literal
+from core.dialogue.context_models import ContextOutcome
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class RuntimeSettings:
     ocr_performance_mode: str = 'high'
     ocr_auto_threads: bool = True
     ocr_threads: int = 4
+    context_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -45,10 +47,13 @@ class TranslationResult:
     input_tokens: int | None = None
     output_tokens: int | None = None
     from_cache: bool = False
+    context: ContextOutcome | None = None
+    context_degraded: bool = False
 
     def __post_init__(self):
         if self.error is not None:
             object.__setattr__(self, "text", "")
+            object.__setattr__(self, "context", None)
 
 
 @dataclass(frozen=True)

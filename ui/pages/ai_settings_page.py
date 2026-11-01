@@ -14,6 +14,8 @@ class AiSettingsPage(QScrollArea):
     api_key_delete_requested = pyqtSignal()
     legacy_key_import_requested = pyqtSignal(bool)
     base_url_changed = pyqtSignal(str)
+    context_enabled_changed = pyqtSignal(bool)
+    context_reset_requested = pyqtSignal()
 
     def __init__(self, state: AiPageState, providers: tuple[str, ...], parent=None):
         super().__init__(parent)
@@ -92,6 +94,25 @@ class AiSettingsPage(QScrollArea):
         base_url_layout.addWidget(endpoint_help)
         prov_card.layout.addWidget(self.base_url_container)
         layout.addWidget(prov_card)
+
+        context_card=ModernCard('Ngữ cảnh hội thoại')
+        self.context_checkbox=QCheckBox('Giữ ngữ cảnh hội thoại')
+        self.context_checkbox.toggled.connect(self.context_enabled_changed.emit)
+        context_card.layout.addWidget(self.context_checkbox)
+        context_help=QLabel('Tự ghi nhớ cách xưng hô trong phiên. Khoanh cả tên nhân vật và lời thoại nếu có.')
+        context_help.setWordWrap(True)
+        context_card.layout.addWidget(context_help)
+        self.context_reset_button=QPushButton('Bắt đầu hội thoại mới')
+        self.context_reset_button.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        self.context_reset_button.clicked.connect(self.context_reset_requested.emit)
+        context_card.layout.addWidget(self.context_reset_button)
+        self.context_status_label=QLabel()
+        self.context_status_label.setWordWrap(True)
+        context_card.layout.addWidget(self.context_status_label)
+        memory_note=QLabel('Bộ nhớ được xóa khi đóng ứng dụng.')
+        memory_note.setWordWrap(True)
+        context_card.layout.addWidget(memory_note)
+        layout.addWidget(context_card)
 
         # Card 2: API Key Management
         self.key_card = ModernCard("Khóa API (API Key)", "Lưu bằng mã hóa Windows hoặc chỉ dùng trong phiên hiện tại")
@@ -172,6 +193,13 @@ class AiSettingsPage(QScrollArea):
             self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
 
     def render(self, state: AiPageState, *, changed_field='initial'):
+        blocker=QSignalBlocker(self.context_checkbox)
+        self.context_checkbox.setChecked(state.context_enabled)
+        del blocker
+        self.context_checkbox.setEnabled(state.context_supported)
+        self.context_reset_button.setEnabled(state.context_enabled and state.context_supported)
+        self.context_status_label.setText('Tính năng này dùng với công cụ dịch AI.' if state.provider=='Google Translate'
+                                        else 'Hiện hỗ trợ chế độ phụ đề.' if not state.context_supported else '')
         if changed_field == 'base_url':
             blocker = QSignalBlocker(self.base_url_input)
             self.base_url_input.setText(state.base_url)
@@ -197,6 +225,10 @@ class AiSettingsPage(QScrollArea):
         self.guide_card.setVisible(state.requires_api_key)
         self.google_note.setVisible(not state.requires_api_key)
         self._render_status(state)
+
+    def render_context_status(self,status):
+        if status.phase=='text_fallback' and self.context_checkbox.isEnabled() and self.context_checkbox.isChecked():
+            self.context_status_label.setText('Đang dịch bằng ngữ cảnh gần đây; công cụ chưa hỗ trợ cập nhật trí nhớ nhân vật.')
 
     def _render_status(self, state):
         if not state.requires_api_key:

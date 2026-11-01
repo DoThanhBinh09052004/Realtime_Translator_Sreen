@@ -3,6 +3,19 @@ from PyQt5.QtTest import QSignalSpy
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QLineEdit
 
+def test_context_controls_render_without_saving_or_touching_editors(qtbot,ui_snapshot):
+    from ui.pages.ai_settings_page import AiSettingsPage
+    from core.dialogue.context_models import ContextStatus
+    state=replace(ui_snapshot.ai,context_enabled=True,context_supported=True)
+    page=AiSettingsPage(state,('OpenAI',));qtbot.addWidget(page)
+    spy=QSignalSpy(page.context_enabled_changed)
+    page.api_key_input.setText('unsaved')
+    page.render(state,changed_field='context_enabled')
+    page.render_context_status(ContextStatus('text_fallback',1))
+    assert page.context_checkbox.isChecked() and page.context_reset_button.isEnabled()
+    assert 'ngữ cảnh gần đây' in page.context_status_label.text()
+    assert page.api_key_input.text()=='unsaved' and len(spy)==0
+
 
 def test_ai_render_keeps_editors_and_blocks_saves(qtbot, ui_snapshot):
     from ui.pages.ai_settings_page import AiSettingsPage

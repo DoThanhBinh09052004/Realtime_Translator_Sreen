@@ -4,6 +4,7 @@ from core import config
 
 
 CASES = [
+    ('set_context_enabled', (True,), 'context_enabled', True),
     ('set_provider', ('OpenAI',), 'provider', True),
     ('set_model', ('fake-custom',), 'model', True),
     ('set_api_key', ('fake-new-key',), 'api_key', True),
@@ -15,6 +16,17 @@ CASES = [
     ('save_overlay_position', (-200, 40), 'overlay_position', False),
     ('apply_region_selection', ({'left': -10, 'top': 0, 'width': 200, 'height': 100},), 'region', False),
 ]
+
+def test_context_reset_only_calls_worker_and_does_not_save(coordinator):
+    assert not coordinator.reset_dialogue_context()
+    assert coordinator.set_context_enabled(True)
+    coordinator.worker.reset_mock()
+    events=[]
+    coordinator.settings_changed.connect(lambda *args:events.append(args))
+    assert coordinator.reset_dialogue_context()
+    coordinator.worker.reset_dialogue_context.assert_called_once()
+    coordinator.worker.configure.assert_not_called()
+    assert events==[]
 
 
 @pytest.fixture

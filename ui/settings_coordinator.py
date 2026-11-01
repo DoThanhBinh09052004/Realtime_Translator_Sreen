@@ -47,7 +47,8 @@ class SettingsCoordinator(QObject):
                         PROVIDERS[provider]['placeholder'],
                         load_custom_api_base_url() if provider == 'Custom API' else '',
                         capabilities.requires_api_key, capabilities.supports_models, capabilities.supports_base_url,
-                        provider_key_storage(provider)),
+                        provider_key_storage(provider),getattr(self.state,'context_enabled',False),
+                        provider!='Google Translate' and self.state.overlay_mode=='subtitle'),
             OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
                          tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None,
                          self._source_choices(), self._source_notice(),
@@ -156,6 +157,16 @@ class SettingsCoordinator(QObject):
         if mode not in ('subtitle', 'blocks'):
             return False
         return self._commit(lambda: self.state.update(overlay_mode=mode), field='overlay_mode', after_commit=self._configure_worker)
+
+    def set_context_enabled(self,enabled):
+        if type(enabled) is not bool:return False
+        return self._commit(lambda:self.state.update(context_enabled=enabled),field='context_enabled',after_commit=self._configure_worker)
+
+    def reset_dialogue_context(self):
+        state=self.snapshot().ai
+        if self.worker is None or not state.context_enabled or not state.context_supported:return False
+        self.worker.reset_dialogue_context()
+        return True
 
     def initialize_worker_interval(self) -> None:
         if not self._interval_initialized:

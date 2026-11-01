@@ -158,6 +158,10 @@ class ControllerWindow(QWidget):
         self.ai_page.api_key_delete_requested.connect(self.settings_coordinator.delete_api_key)
         self.ai_page.legacy_key_import_requested.connect(self._import_legacy_key)
         self.ai_page.base_url_changed.connect(self.settings_coordinator.set_custom_base_url)
+        self.ai_page.context_enabled_changed.connect(self.settings_coordinator.set_context_enabled)
+        self.ai_page.context_reset_requested.connect(self.settings_coordinator.reset_dialogue_context)
+        if hasattr(self.worker,'context_status_changed'):
+            self.worker.context_status_changed.connect(self._render_context_status)
         self.page_ai = self.ai_page
         snapshot = self.settings_coordinator.snapshot()
         self.settings_coordinator.initialize_worker_interval()
@@ -264,7 +268,7 @@ class ControllerWindow(QWidget):
     def _render_snapshot(self, snapshot, changed_field):
         if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback', 'language_packs'):
             self.clear_translation_status()
-        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback'):
+        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback','context_enabled','overlay_mode','source','target'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback', 'language_packs'):
             self.ocr_page.render(snapshot.ocr)
@@ -272,6 +276,9 @@ class ControllerWindow(QWidget):
             self.subtitle_page.render(snapshot.subtitle)
         self.console_page.render_summary(snapshot)
         self.daily_coordinator.refresh()
+
+    def _render_context_status(self,status):
+        if status.revision==self.worker.revision:self.ai_page.render_context_status(status)
 
 
     def _show_save_error(self, message):
