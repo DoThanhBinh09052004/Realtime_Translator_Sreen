@@ -88,3 +88,21 @@ def test_cached_language_dialog_and_new_rows_follow_theme(ui_window):
     dialog.close()
     ui_window.apply_theme('light')
     assert theme_for(dialog) == 'light'
+
+
+def test_dark_theme_reaches_native_scroll_surfaces_and_tables(ui_window, qtbot, capture_geometry):
+    from PyQt5.QtGui import QPalette, QColor
+    from ui.capture_regions_dialog import CaptureRegionsDialog
+    from ui.styles import get_palette
+    from test_capture_app_integration import capture_values
+    p = get_palette('dark')
+    ui_window.apply_theme('dark')
+    for page in (ui_window.console_page, ui_window.ai_page):
+        content = page.scroll_area.widget() if hasattr(page, 'scroll_area') else page.widget()
+        assert content.palette().color(QPalette.Window) == QColor(p['ground'])
+    profile, context = capture_values(capture_geometry)
+    dialog = CaptureRegionsDialog(profile, None, context)
+    qtbot.addWidget(dialog)
+    dialog.apply_theme('dark')
+    assert dialog.table.palette().color(QPalette.Base) == QColor(p['input'])
+    assert dialog.table.horizontalHeader().palette().color(QPalette.Window) == QColor(p['ground'])

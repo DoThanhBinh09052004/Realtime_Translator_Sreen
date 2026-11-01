@@ -38,6 +38,7 @@ class CaptureSettings(QWidget):
                 button = QPushButton(title)
                 button.setMaximumWidth(95)
                 button.setCheckable(True)
+                button.setAutoExclusive(True)
                 button.clicked.connect(lambda checked=False, i=index: self.kind_combo.setCurrentIndex(i))
                 kinds.addWidget(button)
                 self.kind_buttons.append(button)

@@ -53,6 +53,9 @@ def apply_widget_theme(widget, theme: str) -> None:
         child._ui_theme = theme
         if hasattr(child, '_theme_style'):
             child.setStyleSheet(_resolve(child._theme_style, theme))
+        # QSS polishing gives scroll contents, tables and headers explicit palettes;
+        # updating only the parent leaves those native surfaces in the old theme.
+        child.setPalette(palette)
         if hasattr(child, '_theme_icon'):
             name, role, size = child._theme_icon
             icon = get_lucide_icon(name, color=get_palette(theme)[role], size=size)

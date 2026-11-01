@@ -62,3 +62,15 @@ def test_unbound_source_never_claims_previous_source_is_active(qtbot, capture_ge
     panel.set_profile(profile, bound=False)
     assert panel.summary_label.isHidden()
     assert not panel.status_label.isHidden()
+
+
+def test_selected_source_kind_cannot_toggle_itself_off(qtbot):
+    panel = CaptureSettings(compact=True)
+    qtbot.addWidget(panel)
+    assert panel.kind_buttons[0].isChecked()
+    panel.kind_buttons[0].click()
+    assert panel.kind_buttons[0].isChecked()
+    panel.kind_buttons[1].click()
+    assert panel.kind_buttons[1].isChecked()
+    assert not panel.kind_buttons[0].isChecked()
+    assert panel.kind_combo.currentData() == 'window'
