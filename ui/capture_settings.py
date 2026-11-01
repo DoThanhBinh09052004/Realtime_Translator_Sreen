@@ -1,10 +1,11 @@
 """Explicit monitor/window selection; runtime identity never enters config."""
 from dataclasses import replace
 from uuid import uuid4
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QPushButton, QLabel, QSizePolicy
 from core.capture.models import CaptureProfile, CaptureRegion, NormalizedRect
-from ui.styles import TOKENS, set_style, apply_widget_theme, button_style
+from ui.styles import (TOKENS, set_style, apply_widget_theme, button_style, text_style,
+                       CONTROL_HEIGHT, CONTROL_HEADER_HEIGHT)
 from ui.icons import set_theme_icon
 
 
@@ -21,7 +22,7 @@ class CaptureSettings(QWidget):
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0)
         self.summary_label = QLabel(); self.summary_label.setWordWrap(True)
         self.summary_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        set_style(self.summary_label, f'color:{TOKENS["positive"]};font-size:11px;')
+        set_style(self.summary_label, text_style('caption') + f'color:{TOKENS["positive"]};')
         layout.addWidget(self.summary_label)
         self.change_btn = QPushButton('Đổi nguồn')
         set_style(self.change_btn, button_style('secondary', 'tokens'))
@@ -37,6 +38,7 @@ class CaptureSettings(QWidget):
             for index, title in enumerate(('Màn hình', 'Cửa sổ')):
                 button = QPushButton(title)
                 button.setMaximumWidth(95)
+                button.setFixedHeight(CONTROL_HEADER_HEIGHT)
                 button.setCheckable(True)
                 button.setAutoExclusive(True)
                 button.clicked.connect(lambda checked=False, i=index: self.kind_combo.setCurrentIndex(i))
@@ -57,6 +59,8 @@ class CaptureSettings(QWidget):
             set_theme_icon(self.refresh_btn, 'refresh-cw', size=15)
             set_theme_icon(self.choose_btn, 'check', size=15)
             row.addWidget(self.refresh_btn)
+            for control in (self.source_combo, self.choose_btn, self.refresh_btn):
+                control.setFixedHeight(CONTROL_HEIGHT)
         else:
             layout.addWidget(self.source_combo)
             row.addWidget(self.refresh_btn)
@@ -101,13 +105,13 @@ class CaptureSettings(QWidget):
                 self._show_picker(self.compact)
                 self.status_label.setText('Nguồn đã sẵn sàng. Bước tiếp theo: Khoanh vùng đọc.')
                 self.status_label.setVisible(not self.compact)
-                set_style(self.status_label, f'color:{TOKENS["positive"]};font-size:11px;')
+                set_style(self.status_label, text_style('caption') + f'color:{TOKENS["positive"]};')
             else:
                 self.summary_label.hide()
                 self.change_btn.hide()
                 self._show_picker(True)
                 self.status_label.show()
-                set_style(self.status_label, f'color:{TOKENS["warning"]};font-size:11px;')
+                set_style(self.status_label, text_style('caption') + f'color:{TOKENS["warning"]};')
         self._bound = bound
 
     def _show_picker(self, visible):
@@ -127,9 +131,9 @@ class CaptureSettings(QWidget):
         self.choose_btn.setText('Xác nhận' if self.compact else ('Dùng cửa sổ này' if window else 'Dùng màn hình này'))
         for index, button in enumerate(self.kind_buttons):
             button.setChecked(index == self.kind_combo.currentIndex())
-            set_style(button, button_style('secondary', 'tokens') + f'QPushButton:checked {{background:{TOKENS["raised"]};font-weight:600;}}')
+            set_style(button, button_style('secondary', 'tokens') + f'QPushButton:checked {{background:{TOKENS["raised"]};}}')
         self.status_label.setText('Chưa áp dụng · Bấm nút bên trên để xác nhận nguồn cần dịch.')
-        set_style(self.status_label, f'color:{TOKENS["warning"]};font-size:11px;')
+        set_style(self.status_label, text_style('caption') + f'color:{TOKENS["warning"]};')
 
     def refresh_sources(self, *args):
         self._pending_source()

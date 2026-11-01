@@ -3,14 +3,27 @@ from types import MappingProxyType
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QPalette, QColor
 
+FONT_FAMILY = 'Segoe UI'
+TEXT_SIZES = MappingProxyType(dict(body=14, caption=12, section=16, title=22, reading=16, translation=22))
+CONTROL_HEIGHT = 38
+CONTROL_HEADER_HEIGHT = 32
+
 _LIGHT = dict(ground='#fafaf9', sidebar='#f2f2f0', surface='#ffffff', input='#ffffff', input_hover='#f4f4f3', raised='#eeeeec', border='#e3e3e0', border_control='#c8c8c4', text='#191919', muted='#61615e', focus='#376a77', selection_bg='#dce9ed', selection_text='#152b31', primary_bg='#191919', primary_text='#ffffff', primary_hover='#333333', positive='#23704d', warning='#895300', negative='#b52c40', positive_bg='#e8f3ec', warning_bg='#fff3db', negative_bg='#fcebef')
-_DARK = dict(ground='#161616', sidebar='#1c1c1c', surface='#202020', input='#252525', input_hover='#303030', raised='#333333', border='#363636', border_control='#626262', text='#f2f2f0', muted='#b5b5b0', focus='#8fc9d1', selection_bg='#365158', selection_text='#ffffff', primary_bg='#eeeeeb', primary_text='#191919', primary_hover='#ffffff', positive='#83d3a5', warning='#edbf6c', negative='#ff96a6', positive_bg='#203b2b', warning_bg='#49391e', negative_bg='#472831')
+_DARK = dict(ground='#181818', sidebar='#1d1d1d', surface='#232323', input='#292929', input_hover='#333333', raised='#353535', border='#3a3a3a', border_control='#686868', text='#f0f0ed', muted='#b7b7b2', focus='#8fc9d1', selection_bg='#365158', selection_text='#ffffff', primary_bg='#eeeeeb', primary_text='#191919', primary_hover='#ffffff', positive='#83d3a5', warning='#edbf6c', negative='#ff96a6', positive_bg='#203b2b', warning_bg='#49391e', negative_bg='#472831')
+for _palette in (_LIGHT, _DARK):
+    _palette.update(preview='#111111', preview_text='#bfbfba')
 _PALETTES = {'light': MappingProxyType(_LIGHT), 'dark': MappingProxyType(_DARK)}
 TOKENS = MappingProxyType({key: f'@{key}@' for key in _LIGHT})
 
 
 def get_palette(theme: str = 'light'):
     return _PALETTES.get(theme, _PALETTES['light'])
+
+
+def text_style(role: str = 'body', *, color: str | None = None) -> str:
+    weight = 600 if role in ('title', 'section') else 400
+    color = color or (TOKENS['muted'] if role == 'caption' else TOKENS['text'])
+    return f'font-family:"{FONT_FAMILY}";font-size:{TEXT_SIZES[role]}px;font-weight:{weight};color:{color};'
 
 
 def theme_for(widget) -> str:
@@ -75,7 +88,7 @@ def button_style(role: str, theme: str = 'light') -> str:
         bg, fg, hover = p['negative_bg'], p['negative'], p['raised']
     elif role == 'stopping':
         fg = p['muted']
-    return f'''QPushButton {{background:{bg};color:{fg};border:1px solid {p['border_control']};border-radius:6px;padding:7px 12px;font-size:13px;font-weight:500;}}
+    return f'''QPushButton {{background:{bg};color:{fg};border:1px solid {p['border_control']};border-radius:6px;padding:7px 12px;font-family:"{FONT_FAMILY}";font-size:{TEXT_SIZES['body']}px;font-weight:500;}}
         QPushButton:hover {{background:{hover};}}
         QPushButton:focus {{border:2px solid {p['focus']};}}
         QPushButton:disabled {{background:{p['raised']};color:{p['muted']};border-color:{p['border']};}}'''
@@ -93,7 +106,7 @@ def sidebar_style(theme: str = 'light') -> str:
 
 def nav_button_style(active: bool, collapsed: bool, theme: str = 'light') -> str:
     p = TOKENS if theme == 'tokens' else get_palette(theme)
-    return f'''QPushButton {{background:{p['raised'] if active else 'transparent'};color:{p['text'] if active else p['muted']};border:0;border-radius:6px;text-align:{'center' if collapsed else 'left'};padding:8px;font-size:13px;}}
+    return f'''QPushButton {{background:{p['raised'] if active else 'transparent'};color:{p['text'] if active else p['muted']};border:0;border-radius:6px;text-align:{'center' if collapsed else 'left'};padding:8px;font-family:"{FONT_FAMILY}";font-size:{TEXT_SIZES['body']}px;}}
         QPushButton:hover {{background:{p['raised']};color:{p['text']};}} QPushButton:focus {{border:1px solid {p['focus']};}}'''
 
 
@@ -110,7 +123,7 @@ def language_packs_style(theme: str = 'light') -> str:
 
 def get_app_stylesheet(theme: str = 'light') -> str:
     p = TOKENS if theme == 'tokens' else get_palette(theme)
-    return f'''QWidget {{color:{p['text']};font-family:"Segoe UI";font-size:14px;}}
+    return f'''QWidget {{color:{p['text']};font-family:"{FONT_FAMILY}";font-size:{TEXT_SIZES['body']}px;font-weight:400;}}
         QWidget#controllerWindow, QDialog {{background:{p['ground']};}}
         QLabel {{background:transparent;}} QScrollArea {{border:0;background:transparent;}}
         QScrollBar:vertical {{background:{p['ground']};width:7px;border:0;}}

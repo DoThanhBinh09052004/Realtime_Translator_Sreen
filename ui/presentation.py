@@ -1,9 +1,9 @@
 from PyQt5.QtGui import QColor
-from ui.styles import TOKENS
+from ui.styles import TOKENS, FONT_FAMILY
 from ui.controller_state import SubtitlePageState
 
 
-def subtitle_preview_style(state: SubtitlePageState) -> str:
+def subtitle_preview_style(state: SubtitlePageState, *, compact: bool = False) -> str:
     bg_col = QColor(state.bg_color)
     if not bg_col.isValid():
         bg_col = QColor("#0e0f12")
@@ -13,6 +13,7 @@ def subtitle_preview_style(state: SubtitlePageState) -> str:
 
     alpha = max(0.0, min(1.0, state.bg_opacity / 100.0))
     r, g, b = bg_col.red(), bg_col.green(), bg_col.blue()
+    border = 'none' if compact else '1px solid rgba(255, 255, 255, 0.18)'
 
     return f"""
         QLabel {{
@@ -20,10 +21,10 @@ def subtitle_preview_style(state: SubtitlePageState) -> str:
             background-color: rgba({r}, {g}, {b}, {alpha:.2f});
             font-size: {state.font_size}px;
             font-weight: 600;
-            padding: 10px 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            padding: {8 if compact else 10}px {16 if compact else 20}px;
+            border-radius: {6 if compact else 12}px;
+            border: {border};
+            font-family: '{FONT_FAMILY}';
         }}
     """
 

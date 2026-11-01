@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QFrame, QSizePolicy, QVBoxLayout, QHBoxLayout, QLabel
-from ui.styles import TOKENS, set_style, apply_widget_theme, card_style
+from PyQt5.QtWidgets import QFrame, QSizePolicy, QVBoxLayout, QLabel
+from ui.styles import set_style, apply_widget_theme, card_style, text_style
 
 
 class ModernCard(QFrame):
@@ -20,21 +20,14 @@ class ModernCard(QFrame):
             t_lbl = QLabel(title)
             t_lbl.setWordWrap(True)
             t_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-            set_style(t_lbl, f"""
-                font-size: 13px;
-                font-weight: 600;
-                color: {TOKENS['text']};
-            """)
+            set_style(t_lbl, text_style('section'))
             header_layout.addWidget(t_lbl)
             
             if subtitle:
                 sub_lbl = QLabel(subtitle)
                 sub_lbl.setWordWrap(True)
                 sub_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-                set_style(sub_lbl, f"""
-                    font-size: 11.5px;
-                    color: {TOKENS['muted']};
-                """)
+                set_style(sub_lbl, text_style('caption'))
                 header_layout.addWidget(sub_lbl)
                 
             self.box_layout.addLayout(header_layout)

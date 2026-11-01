@@ -1,9 +1,10 @@
 """Read-only selectable plain-text translation output monitor."""
 from typing import Any
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QTextOption
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QApplication, QSizePolicy
 from ui.icons import set_theme_icon
-from ui.styles import TOKENS, set_style, apply_widget_theme
+from ui.styles import TOKENS, set_style, apply_widget_theme, text_style, FONT_FAMILY, TEXT_SIZES
 
 
 class TranslationOutputWidget(QWidget):
@@ -15,7 +16,7 @@ class TranslationOutputWidget(QWidget):
 
         # Placeholder label when no translated text is available
         self.placeholder_lbl = QLabel("Chưa có bản dịch được hiển thị")
-        set_style(self.placeholder_lbl, f"color: {TOKENS['muted']}; font-size: 13px; padding: 12px;")
+        set_style(self.placeholder_lbl, text_style('body') + f"color:{TOKENS['muted']};padding:12px;")
         self.placeholder_lbl.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.placeholder_lbl)
 
@@ -25,15 +26,16 @@ class TranslationOutputWidget(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(6)
 
-        header_style = f"font-size: 11px; font-weight: 700; color: {TOKENS['muted']}; letter-spacing: 0.5px;"
+        header_style = text_style('caption')
         edit_style = f"""
             QPlainTextEdit {{
-                background-color: {TOKENS['surface']};
+                background-color: transparent;
                 color: {TOKENS['text']};
-                border: 1px solid {TOKENS['border']};
-                border-radius: 6px;
-                padding: 6px 8px;
-                font-size: 13px;
+                border: none;
+                padding: 4px 0;
+                font-family: '{FONT_FAMILY}';
+                font-size: {TEXT_SIZES['reading']}px;
+                font-weight: 400;
             }}
             QPlainTextEdit:focus {{
                 border-color: {TOKENS['focus']};
@@ -54,10 +56,11 @@ class TranslationOutputWidget(QWidget):
         content_layout.addLayout(header_row)
 
         self.source_edit = QPlainTextEdit()
+        self.source_edit.document().setDocumentMargin(0)
         self.source_edit.setReadOnly(True)
         self.source_edit.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         set_style(self.source_edit, edit_style)
-        self.source_edit.setFixedHeight(62)
+        self.source_edit.setFixedHeight(54)
         content_layout.addWidget(self.source_edit)
 
         self.target_header = QLabel('Bản dịch')
@@ -65,12 +68,17 @@ class TranslationOutputWidget(QWidget):
         content_layout.addWidget(self.target_header)
 
         self.target_edit = QPlainTextEdit()
+        self.target_edit.document().setDocumentMargin(0)
         self.target_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         self.target_edit.setReadOnly(True)
         self.target_edit.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
-        self.target_edit.setMinimumHeight(76)
-        set_style(self.target_edit, f'QPlainTextEdit {{background:transparent;color:{TOKENS["text"]};border:0;padding:8px 0;font-size:22px;}}')
+        self.target_edit.setMinimumHeight(90)
+        set_style(self.target_edit, f'QPlainTextEdit {{background:transparent;color:{TOKENS["text"]};border:0;padding:4px 0;font-family:"{FONT_FAMILY}";font-size:{TEXT_SIZES["translation"]}px;font-weight:400;}}')
         content_layout.addWidget(self.target_edit, 1)
+        for editor in (self.source_edit, self.target_edit):
+            editor.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+            editor.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
 
         layout.addWidget(self.content_widget)
         self.clear()

@@ -3,17 +3,18 @@ import math
 import time
 from typing import Any
 from PyQt5.QtWidgets import (
-    QWidget, QScrollArea, QLayout, QVBoxLayout, QHBoxLayout,
+    QWidget, QScrollArea, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame, QSizePolicy, QGridLayout
 )
-from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, pyqtSignal
 
 from ui.widgets.cards import ModernCard
 from ui.widgets.capture_snapshot import CaptureSnapshotWidget
 from ui.widgets.translation_output import TranslationOutputWidget
 from ui.capture_settings import CaptureSettings
 from ui.presentation import subtitle_preview_style
-from ui.styles import TOKENS, set_style, apply_widget_theme, button_style
+from ui.styles import (TOKENS, set_style, apply_widget_theme, button_style, text_style,
+                       CONTROL_HEIGHT, CONTROL_HEADER_HEIGHT)
 from ui.icons import set_theme_icon
 from ui.controller_state import ControllerSnapshot, DailyReadiness, DailyRunState, PresentedTranslation
 
@@ -71,7 +72,7 @@ class ConsolePage(QWidget):
         title = QLabel('Translate HUD  |  Màn hình chính')
         title.setWordWrap(True)
         title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        set_style(title, 'font-size:22px;font-weight:600;padding:8px 0;')
+        set_style(title, text_style('title') + 'padding:8px 0;')
         header.addWidget(title, 1)
         self.settings_btn = QPushButton('Thiết lập')
         set_theme_icon(self.settings_btn, 'sliders', size=15)
@@ -86,14 +87,19 @@ class ConsolePage(QWidget):
         self.language_group = QWidget()
         languages = QVBoxLayout(self.language_group)
         languages.setContentsMargins(0, 0, 0, 0)
-        languages.addWidget(QLabel('Ngôn ngữ'))
+        language_label = QLabel('Ngôn ngữ')
+        language_label.setFixedHeight(CONTROL_HEADER_HEIGHT)
+        set_style(language_label, text_style('body'))
+        languages.addWidget(language_label)
         language_row = QHBoxLayout()
         self.src_combo = QComboBox()
+        self.src_combo.setFixedHeight(CONTROL_HEIGHT)
         self.src_combo.setAccessibleName('Ngôn ngữ nguồn')
         self.src_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_source_languages(snapshot)
         self.src_combo.currentIndexChanged.connect(self._on_source_combo_changed)
         self.tgt_combo = QComboBox()
+        self.tgt_combo.setFixedHeight(CONTROL_HEIGHT)
         self.tgt_combo.setAccessibleName('Ngôn ngữ đích')
         self.tgt_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_target_languages(snapshot)
@@ -111,8 +117,12 @@ class ConsolePage(QWidget):
         self.engine_group = QWidget()
         engine_layout = QVBoxLayout(self.engine_group)
         engine_layout.setContentsMargins(0, 0, 0, 0)
-        engine_layout.addWidget(QLabel('Công cụ dịch'))
+        engine_label = QLabel('Công cụ dịch')
+        engine_label.setFixedHeight(CONTROL_HEADER_HEIGHT)
+        set_style(engine_label, text_style('body'))
+        engine_layout.addWidget(engine_label)
         self.provider_combo = QComboBox()
+        self.provider_combo.setFixedHeight(CONTROL_HEIGHT)
         self.provider_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.provider_combo.setAccessibleName('Công cụ dịch')
         self.provider_combo.addItem(snapshot.ai.provider, snapshot.ai.provider)
@@ -126,11 +136,11 @@ class ConsolePage(QWidget):
         self.region_card = ModernCard()
         region_header = QHBoxLayout()
         region_title = QLabel('Vùng đọc chữ')
-        set_style(region_title, 'font-size:16px;font-weight:600;')
+        set_style(region_title, text_style('section'))
         region_header.addWidget(region_title)
         self.region_info_lbl = QLabel()
         self.region_info_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        set_style(self.region_info_lbl, f'font-size:12px;color:{TOKENS["muted"]};')
+        set_style(self.region_info_lbl, text_style('caption'))
         region_header.addWidget(self.region_info_lbl, 1)
         self.select_region_btn = QPushButton('Khoanh vùng')
         set_theme_icon(self.select_region_btn, 'scan', size=15)
@@ -142,7 +152,7 @@ class ConsolePage(QWidget):
         self.region_card.layout.addWidget(self.snapshot_widget, 1)
         preview_footer = QHBoxLayout()
         notice = QLabel('Ảnh chụp xem trước')
-        set_style(notice, f'font-size:12px;color:{TOKENS["muted"]};')
+        set_style(notice, text_style('caption'))
         preview_footer.addWidget(notice, 1)
         self.refresh_preview_btn = QPushButton('Làm mới ảnh')
         set_theme_icon(self.refresh_preview_btn, 'refresh-cw', size=14)
@@ -161,19 +171,25 @@ class ConsolePage(QWidget):
         self.output_card.layout.addWidget(self.output_widget, 1)
         subtitle_header = QHBoxLayout()
         subtitle_label = QLabel('Xem trước phụ đề')
-        set_style(subtitle_label, f'font-size:12px;color:{TOKENS["muted"]};')
+        set_style(subtitle_label, text_style('caption'))
         subtitle_header.addWidget(subtitle_label, 1)
         self.customize_btn = QPushButton('Tùy chỉnh')
         self.customize_btn.clicked.connect(self.subtitle_settings_requested.emit)
         self.subtitle_settings_btn = self.customize_btn
         subtitle_header.addWidget(self.customize_btn)
         self.output_card.layout.addLayout(subtitle_header)
+        self.subtitle_preview_frame = QFrame()
+        self.subtitle_preview_frame.setObjectName('subtitlePreviewFrame')
+        preview_layout = QVBoxLayout(self.subtitle_preview_frame)
+        preview_layout.setContentsMargins(6, 6, 6, 6)
+        preview_layout.setSpacing(0)
         self.subtitle_preview = QLabel('Chưa có bản dịch được hiển thị')
         self.subtitle_preview.setWordWrap(True)
         self.subtitle_preview.setTextFormat(Qt.PlainText)
         self.subtitle_preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.subtitle_preview.setAlignment(Qt.AlignCenter)
-        self.output_card.layout.addWidget(self.subtitle_preview)
+        preview_layout.addWidget(self.subtitle_preview)
+        self.output_card.layout.addWidget(self.subtitle_preview_frame)
         layout.addLayout(self.body_grid, 1)
 
         self.details_toggle_btn = QPushButton('▸ Chi tiết phiên dịch')
@@ -217,7 +233,7 @@ class ConsolePage(QWidget):
         row.addWidget(self.primary_btn)
         footer_layout.addLayout(row)
         self.session_info = QLabel()
-        set_style(self.session_info, f'font-size:12px;color:{TOKENS["muted"]};')
+        set_style(self.session_info, text_style('caption'))
         footer_layout.addWidget(self.session_info)
         recovery = QHBoxLayout()
         self.translation_message = QLabel()
@@ -280,13 +296,19 @@ class ConsolePage(QWidget):
             self.provider_changed.emit(provider)
 
     def _render_subtitle_preview(self):
+        blocks = self._subtitle_state.overlay_mode == 'blocks'
+        background = TOKENS['surface'] if blocks else TOKENS['preview']
+        set_style(self.subtitle_preview_frame, f'QFrame#subtitlePreviewFrame {{background:{background};border:1px solid {TOKENS["border"]};border-radius:8px;}}')
         if self._subtitle_state.overlay_mode == 'blocks':
             self.subtitle_preview.setText('Đang dùng bản dịch tại vị trí chữ')
-            set_style(self.subtitle_preview, f'padding:12px;color:{TOKENS["muted"]};')
+            set_style(self.subtitle_preview, text_style('caption') + 'padding:12px;background:transparent;')
         else:
             pairs = getattr(self._presentation, 'pairs', ())
             self.subtitle_preview.setText('\n'.join(pair.translated_text for pair in pairs) or 'Chưa có bản dịch được hiển thị')
-            set_style(self.subtitle_preview, subtitle_preview_style(self._subtitle_state))
+            if pairs:
+                set_style(self.subtitle_preview, subtitle_preview_style(self._subtitle_state, compact=True))
+            else:
+                set_style(self.subtitle_preview, text_style('body', color=TOKENS['preview_text']) + 'padding:12px;background:transparent;')
 
     def widget(self):
         return self.scroll_area.widget()

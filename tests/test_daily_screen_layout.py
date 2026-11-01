@@ -66,6 +66,45 @@ def test_wide_dashboard_keeps_subtitle_preview_in_first_screen(qtbot, ui_window)
     assert page.viewport().rect().contains(QRect(preview.mapTo(page.viewport(), QPoint()), preview.size()))
 
 
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_dashboard_source_controls_share_a_baseline_and_height(ui_window, theme):
+    page = ui_window.console_page
+    ui_window.resize(1200, 800)
+    ui_window.apply_theme(theme)
+    ui_window.show()
+    QApplication.processEvents()
+    controls = (page.src_combo, page.tgt_combo, page.capture_settings.source_combo,
+                page.capture_settings.choose_btn, page.capture_settings.refresh_btn, page.provider_combo)
+    assert len({control.mapTo(page, QPoint()).y() for control in controls}) == 1
+    assert len({control.height() for control in controls}) == 1
+
+
+def test_dashboard_subtitle_is_centered_inside_its_preview_surface(ui_window):
+    from PyQt5.QtCore import QRect
+    page = ui_window.console_page
+    page.render_presented(PresentedTranslation(1, 'subtitle', 1, (PresentedPair('Stay close.', 'Hãy theo sát tôi.'),)))
+    ui_window.resize(1200, 800)
+    ui_window.show()
+    QApplication.processEvents()
+    frame = page.subtitle_preview_frame
+    label = page.subtitle_preview
+    rect = QRect(label.mapTo(frame, QPoint()), label.size())
+    assert frame.rect().contains(rect)
+    assert abs(rect.left() - (frame.width() - 1 - rect.right())) <= 1
+    assert abs(rect.top() - (frame.height() - 1 - rect.bottom())) <= 1
+
+
+def test_dialogue_reading_boxes_wrap_without_horizontal_scrollbars(ui_window):
+    page = ui_window.console_page
+    page.render_presented(PresentedTranslation(1, 'subtitle', 1, (PresentedPair('The path ahead is dangerous. Stay close.', 'Con đường phía trước rất nguy hiểm. Hãy theo sát tôi.'),)))
+    ui_window.resize(1200, 800)
+    ui_window.show()
+    QApplication.processEvents()
+    for editor in (page.output_widget.source_edit, page.output_widget.target_edit):
+        assert editor.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
+        assert editor.lineWrapMode() == editor.WidgetWidth
+
+
 def test_long_source_and_translation_do_not_expand_window(qtbot):
     """Long source title (200 chars) and multi-line unicode translations do not expand window geometry."""
     worker = Mock()

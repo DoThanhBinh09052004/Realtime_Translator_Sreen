@@ -45,6 +45,19 @@ def test_theme_preserves_drafts_and_runtime(ui_window):
     ui_window.worker.stop_worker.assert_not_called()
 
 
+def test_dashboard_uses_shared_font_sizes_for_controls_and_section_titles(ui_window):
+    from PyQt5.QtWidgets import QLabel
+    from PyQt5.QtWidgets import QApplication
+    page = ui_window.console_page
+    ui_window.show()
+    QApplication.processEvents()
+    assert page.capture_settings.choose_btn.font().pixelSize() == page.src_combo.font().pixelSize() == 14
+    region = next(label for label in page.region_card.findChildren(QLabel) if label.text() == 'Vùng đọc chữ')
+    output = next(label for label in page.output_card.findChildren(QLabel) if label.text() == 'Bản dịch mới nhất')
+    assert region.font().pixelSize() == output.font().pixelSize() == 16
+    assert region.font().weight() == output.font().weight()
+
+
 def test_controller_widgets_belong_to_existing_pages(ui_window):
     for page, attributes in [
         (ui_window.ai_page, ('provider_combo', 'model_combo', 'api_key_input', 'key_card')),

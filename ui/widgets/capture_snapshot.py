@@ -1,9 +1,9 @@
 """Snapshot preview widget rendering letterboxed image and normalized regions."""
 from typing import Any
 from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPixmap, QImage
+from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPainterPath, QImage
 from PyQt5.QtWidgets import QWidget, QSizePolicy
-from ui.styles import apply_widget_theme, palette_for
+from ui.styles import apply_widget_theme, palette_for, TEXT_SIZES
 
 
 class CaptureSnapshotWidget(QWidget):
@@ -32,20 +32,23 @@ class CaptureSnapshotWidget(QWidget):
         self._placeholder_text = placeholder_text
         self.update()
 
+    def image_rect(self) -> QRectF:
+        """One floating-point transform for both the source image and its regions."""
+        if self._image is None or self._image.isNull() or self.width() <= 0 or self.height() <= 0:
+            return QRectF()
+        scale = min(self.width() / self._image.width(), self.height() / self._image.height())
+        width, height = self._image.width() * scale, self._image.height() * scale
+        return QRectF((self.width() - width) / 2, (self.height() - height) / 2, width, height)
+
     def aligned_rectangles(self) -> list[tuple[str, QRectF, bool]]:
         """Return (label, QRectF, is_exclusion) scaled to match the letterboxed image."""
         if self._image is None or self._profile is None:
             return []
-        img_w = self._image.width()
-        img_h = self._image.height()
-        if img_w <= 0 or img_h <= 0 or self.width() <= 0 or self.height() <= 0:
+        image_rect = self.image_rect()
+        if image_rect.isEmpty():
             return []
-
-        scale = min(self.width() / img_w, self.height() / img_h)
-        draw_w = img_w * scale
-        draw_h = img_h * scale
-        offset_x = (self.width() - draw_w) / 2.0
-        offset_y = (self.height() - draw_h) / 2.0
+        draw_w, draw_h = image_rect.width(), image_rect.height()
+        offset_x, offset_y = image_rect.x(), image_rect.y()
 
         rects: list[tuple[str, QRectF, bool]] = []
         for region in getattr(self._profile, 'regions', ()):
@@ -70,28 +73,19 @@ class CaptureSnapshotWidget(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-
-        # Draw container background
-        bg_color = QColor(palette_for(self)['surface'])
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        frame = QPainterPath()
+        frame.addRoundedRect(QRectF(self.rect()).adjusted(.5, .5, -.5, -.5), 6, 6)
+        bg_color = QColor(palette_for(self)['input'])
         border_color = QColor(palette_for(self)['border'])
-        painter.setBrush(bg_color)
-        painter.setPen(QPen(border_color, 1))
-        painter.drawRoundedRect(0, 0, self.width() - 1, self.height() - 1, 6, 6)
+        painter.fillPath(frame, bg_color)
+        painter.save()
+        painter.setClipPath(frame)
 
         if self._image is not None and not self._image.isNull():
-            img_w = self._image.width()
-            img_h = self._image.height()
-            if img_w > 0 and img_h > 0:
-                scale = min(self.width() / img_w, self.height() / img_h)
-                draw_w = int(img_w * scale)
-                draw_h = int(img_h * scale)
-                offset_x = int((self.width() - draw_w) / 2)
-                offset_y = int((self.height() - draw_h) / 2)
-
-                pixmap = QPixmap.fromImage(self._image).scaled(
-                    draw_w, draw_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
-                )
-                painter.drawPixmap(offset_x, offset_y, pixmap)
+            image_rect = self.image_rect()
+            if not image_rect.isEmpty():
+                painter.drawImage(image_rect, self._image)
 
                 # Draw region outlines
                 for label, rect, is_exclusion in self.aligned_rectangles():
@@ -101,9 +95,16 @@ class CaptureSnapshotWidget(QWidget):
                     painter.drawRect(rect)
 
                     # Text label
-                    painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
+                    font = QFont(self.font())
+                    font.setPixelSize(TEXT_SIZES['caption'])
+                    font.setWeight(QFont.Medium)
+                    painter.setFont(font)
                     painter.drawText(int(rect.x()) + 4, int(rect.y()) + 14, label)
         else:
             painter.setPen(QPen(QColor(palette_for(self)['muted'])))
-            painter.setFont(QFont("Segoe UI", 10))
+            painter.setFont(self.font())
             painter.drawText(self.rect(), Qt.AlignCenter, self._placeholder_text)
+        painter.restore()
+        painter.setPen(QPen(border_color, 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(frame)
