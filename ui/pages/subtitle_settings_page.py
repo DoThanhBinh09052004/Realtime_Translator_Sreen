@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLab
 from PyQt5.QtCore import Qt, QSignalBlocker, pyqtSignal
 from PyQt5.QtGui import QColor, QPainter
 from ui.widgets.cards import ModernCard
-from ui.styles import CYBER_PALETTE
+from ui.styles import TOKENS, set_style, apply_widget_theme
 from ui.presentation import subtitle_preview_style, color_button_presentation, drag_button_style
 from ui.controller_state import SubtitlePageState
 from core.blocks.models import Rect, ScreenMapping, CaptureGeometry, OverlayFrame, OverlayBlock
@@ -66,7 +66,7 @@ class SubtitleSettingsPage(QScrollArea):
         bg_col = QVBoxLayout()
         bg_col.setSpacing(4)
         bg_lbl = QLabel("Màu nền (Background)")
-        bg_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(bg_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.bg_color_btn = QPushButton()
         self.bg_color_btn.setFixedHeight(34)
         self.bg_color_btn.setCursor(Qt.PointingHandCursor)
@@ -80,7 +80,7 @@ class SubtitleSettingsPage(QScrollArea):
         txt_col = QVBoxLayout()
         txt_col.setSpacing(4)
         txt_lbl = QLabel("Màu chữ (Text)")
-        txt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(txt_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.text_color_btn = QPushButton()
         self.text_color_btn.setFixedHeight(34)
         self.text_color_btn.setCursor(Qt.PointingHandCursor)
@@ -97,9 +97,9 @@ class SubtitleSettingsPage(QScrollArea):
         font_header = QHBoxLayout()
         font_lbl = QLabel("Cỡ chữ phụ đề (Font Size)")
         self.font_label = font_lbl
-        font_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(font_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.font_size_val_lbl = QLabel(f"{state.font_size}px")
-        self.font_size_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
+        set_style(self.font_size_val_lbl, f"font-size: 12px; font-weight: 600; color: {TOKENS['focus']};")
         font_header.addWidget(font_lbl)
         font_header.addStretch()
         font_header.addWidget(self.font_size_val_lbl)
@@ -108,19 +108,19 @@ class SubtitleSettingsPage(QScrollArea):
         self.font_size_slider = QSlider(Qt.Horizontal)
         self.font_size_slider.setRange(14, 36)
         self.font_size_slider.setValue(state.font_size)
-        self.font_size_slider.setStyleSheet(f"""
+        set_style(self.font_size_slider, f"""
             QSlider::groove:horizontal {{
                 height: 5px;
-                background: {CYBER_PALETTE['bg_input']};
+                background: {TOKENS['input']};
                 border-radius: 2px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {CYBER_PALETTE['neon_indigo']};
+                background: {TOKENS['focus']};
                 border-radius: 2px;
             }}
             QSlider::handle:horizontal {{
-                background: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
+                background: {TOKENS['text']};
+                border: 1px solid {TOKENS['focus']};
                 width: 14px;
                 margin-top: -5px;
                 margin-bottom: -5px;
@@ -134,9 +134,9 @@ class SubtitleSettingsPage(QScrollArea):
         # Opacity Slider
         opacity_header = QHBoxLayout()
         op_lbl = QLabel("Độ trong suốt nền (Background Opacity)")
-        op_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(op_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.opacity_val_lbl = QLabel(f"{state.bg_opacity}%")
-        self.opacity_val_lbl.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']};")
+        set_style(self.opacity_val_lbl, f"font-size: 12px; font-weight: 600; color: {TOKENS['focus']};")
         opacity_header.addWidget(op_lbl)
         opacity_header.addStretch()
         opacity_header.addWidget(self.opacity_val_lbl)
@@ -145,19 +145,19 @@ class SubtitleSettingsPage(QScrollArea):
         self.opacity_slider = QSlider(Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setValue(state.bg_opacity)
-        self.opacity_slider.setStyleSheet(f"""
+        set_style(self.opacity_slider, f"""
             QSlider::groove:horizontal {{
                 height: 5px;
-                background: {CYBER_PALETTE['bg_input']};
+                background: {TOKENS['input']};
                 border-radius: 2px;
             }}
             QSlider::sub-page:horizontal {{
-                background: {CYBER_PALETTE['neon_indigo']};
+                background: {TOKENS['focus']};
                 border-radius: 2px;
             }}
             QSlider::handle:horizontal {{
-                background: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
+                background: {TOKENS['text']};
+                border: 1px solid {TOKENS['focus']};
                 width: 14px;
                 margin-top: -5px;
                 margin-bottom: -5px;
@@ -179,7 +179,7 @@ class SubtitleSettingsPage(QScrollArea):
         preset_box = QVBoxLayout()
         preset_box.setSpacing(4)
         preset_lbl = QLabel("Vị trí hiển thị (Preset)")
-        preset_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(preset_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.preset_combo = QComboBox()
         self.preset_combo.setFixedHeight(34)
         self.preset_combo.addItem("Dưới giữa (Mặc định)", "bottom_center")
@@ -212,10 +212,10 @@ class SubtitleSettingsPage(QScrollArea):
         preview_card = ModernCard("Xem trước Thời gian thực", "Mô phỏng chính xác khung phụ đề nổi hiển thị trên màn hình game")
         
         sim_container = QFrame()
-        sim_container.setStyleSheet(f"""
+        set_style(sim_container, f"""
             QFrame {{
                 background-color: #08090b;
-                border: 1px dashed {CYBER_PALETTE['border_card']};
+                border: 1px dashed {TOKENS['border']};
                 border-radius: 8px;
                 min-height: 120px;
             }}
@@ -228,7 +228,7 @@ class SubtitleSettingsPage(QScrollArea):
         self.live_preview_box = QLabel("Đây là đoạn phụ đề xem trước thời gian thực...")
         self.live_preview_box.setAlignment(Qt.AlignCenter)
         self.live_preview_box.setWordWrap(True)
-        self.live_preview_box.setStyleSheet(subtitle_preview_style(state))
+        set_style(self.live_preview_box, subtitle_preview_style(state))
 
         sim_layout.addWidget(self.live_preview_box)
         self.block_preview = _BlockPreview()
@@ -261,7 +261,7 @@ class SubtitleSettingsPage(QScrollArea):
         self.set_preset_display(state.preset)
         self._update_color_btn_style(self.bg_color_btn, state.bg_color)
         self._update_color_btn_style(self.text_color_btn, state.text_color)
-        self.live_preview_box.setStyleSheet(subtitle_preview_style(state))
+        set_style(self.live_preview_box, subtitle_preview_style(state))
         del blockers
 
     def set_preset_display(self, preset: str):
@@ -273,12 +273,12 @@ class SubtitleSettingsPage(QScrollArea):
 
     def set_drag_mode(self, enabled: bool):
         self.drag_toggle_btn.setText('✓ Đã xong (Khóa vị trí phụ đề)' if enabled else '✥ Di chuyển phụ đề trên màn hình')
-        self.drag_toggle_btn.setStyleSheet(drag_button_style(enabled))
+        set_style(self.drag_toggle_btn, drag_button_style(enabled))
 
     def _update_color_btn_style(self, button, color):
         text, style = color_button_presentation(color)
         button.setText(text)
-        button.setStyleSheet(style)
+        set_style(button, style)
 
     def pick_bg_color(self):
         color = QColorDialog.getColor(QColor(self._state.bg_color), self, 'Chọn màu nền phụ đề')
@@ -289,3 +289,6 @@ class SubtitleSettingsPage(QScrollArea):
         color = QColorDialog.getColor(QColor(self._state.text_color), self, 'Chọn màu chữ phụ đề')
         if color.isValid():
             self.style_changed.emit({'text_color': color.name()})
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

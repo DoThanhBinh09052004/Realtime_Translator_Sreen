@@ -436,6 +436,7 @@ class RegionSelectionLifecycle(QObject):
                 self.current_editor.screen_fallback_requested.connect(self._start_screen_fallback)
             else:
                 self.current_editor = self.editor_factory(self.worker.capture_profile, image, context)
+            self._apply_editor_theme(self.current_editor)
             if self._latest_capture_context is not None:
                 self.current_editor.update_context(self._latest_capture_context)
             generation = self._session_generation
@@ -443,6 +444,15 @@ class RegionSelectionLifecycle(QObject):
             self.current_editor.cancelled.connect(lambda: self._cancel_capture(generation))
             self.current_editor.refresh_requested.connect(self._refresh_preview)
             self.current_editor.show()
+
+    def _apply_editor_theme(self, editor):
+        from PyQt5.QtWidgets import QWidget
+        if not isinstance(editor, QWidget) or not hasattr(editor, 'apply_theme'):
+            return
+        editor.apply_theme(getattr(self.controller, 'ui_theme', 'light'))
+        signal = getattr(getattr(self.controller, 'settings_coordinator', None), 'ui_theme_changed', None)
+        if signal is not None:
+            signal.connect(editor.apply_theme)
 
     def _receive_preview(self, image, context, generation):
         if not self._is_closed and generation == self._session_generation:

@@ -112,3 +112,22 @@ def test_invalid_custom_api_url_reports_validation_error(coordinator):
 
     assert not coordinator.set_custom_base_url('ftp://llm.example.test/v1')
     assert len(errors) == 1 and 'HTTPS' in errors[0] and 'loopback' in errors[0]
+def test_theme_changes_are_persisted_without_runtime_events(coordinator, monkeypatch):
+    from PyQt5.QtTest import QSignalSpy
+    changed = QSignalSpy(coordinator.ui_theme_changed)
+    runtime = QSignalSpy(coordinator.settings_changed)
+    coordinator.worker.reset_mock()
+    assert coordinator.set_ui_theme('dark')
+    assert config.State().ui_theme == 'dark'
+    assert list(changed) == [['dark']]
+    assert len(runtime) == 0
+    coordinator.worker.configure.assert_not_called()
+    assert coordinator.set_ui_theme('dark')
+    assert len(changed) == 1
+    def fail(*args):
+        raise OSError('disk unavailable')
+    monkeypatch.setattr(config.os, 'replace', fail)
+    assert not coordinator.set_ui_theme('light')
+    assert coordinator.state.ui_theme == 'dark'
+    assert config.State().ui_theme == 'dark'
+    assert len(changed) == 1 and len(runtime) == 0

@@ -1,5 +1,5 @@
 from PyQt5.QtGui import QColor
-from ui.styles import CYBER_PALETTE
+from ui.styles import TOKENS
 from ui.controller_state import SubtitlePageState
 
 
@@ -46,7 +46,7 @@ def color_button_presentation(hex_color: str) -> tuple[str, str]:
             padding-left: 12px;
         }}
         QPushButton:hover {{
-            border: 1px solid {CYBER_PALETTE['neon_indigo']};
+            border: 1px solid {TOKENS['focus']};
         }}
     """
 
@@ -55,31 +55,31 @@ def drag_button_style(is_active: bool) -> str:
     if is_active:
         return f"""
             QPushButton {{
-                background-color: {CYBER_PALETTE['neon_green']};
-                color: #0b101b;
-                border: 1px solid #34d399;
+                background-color: {TOKENS['positive_bg']};
+                color: {TOKENS['positive']};
+                border: 1px solid {TOKENS['positive']};
                 border-radius: 6px;
                 font-weight: 700;
                 font-size: 12.5px;
                 height: 34px;
             }}
             QPushButton:hover {{
-                background-color: #34d399;
+                background-color: {TOKENS['raised']};
             }}
         """
     else:
         return f"""
             QPushButton {{
-                background-color: {CYBER_PALETTE['bg_input']};
-                color: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['border']};
+                background-color: {TOKENS['input']};
+                color: {TOKENS['text']};
+                border: 1px solid {TOKENS['border']};
                 border-radius: 6px;
                 font-weight: 600;
                 font-size: 12px;
                 height: 34px;
             }}
             QPushButton:hover {{
-                border: 1px solid {CYBER_PALETTE['neon_indigo']};
-                background-color: {CYBER_PALETTE['bg_card_hover']};
+                border: 1px solid {TOKENS['focus']};
+                background-color: {TOKENS['raised']};
             }}
         """

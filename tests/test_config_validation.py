@@ -119,3 +119,7 @@ def test_context_config_is_opt_in_strict_bool():
     assert normalize_config({'context_enabled':'false'})['context_enabled'] is False
     assert normalize_config({'context_enabled':True})['context_enabled'] is True
 
+@pytest.mark.parametrize('value,expected', [(None, 'light'), ('invalid', 'light'), (True, 'light'), ('dark', 'dark'), ('light', 'light')])
+def test_ui_theme_normalization(value, expected):
+    assert config.normalize_config({'ui_theme': value})['ui_theme'] == expected
+

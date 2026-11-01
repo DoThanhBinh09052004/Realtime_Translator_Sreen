@@ -1,7 +1,7 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QColorDialog, QMessageBox
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QMessageBox
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
@@ -10,10 +10,9 @@ from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.ocr_settings_page import OcrSettingsPage
 from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.widgets.sidebar import ControllerSidebar
-from ui.widgets.cards import ModernCard, MetricCard
 from ui.settings_coordinator import SettingsCoordinator
 from ui.daily_control import DailyControlCoordinator
-from ui.styles import CYBER_PALETTE, get_app_stylesheet, SECONDARY_BUTTON_STYLE
+from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, get_app_stylesheet
 
 
 class ControllerWindow(QWidget):
@@ -35,6 +34,7 @@ class ControllerWindow(QWidget):
 
     def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None, *, pack_manager=None):
         super().__init__()
+        self.setObjectName('controllerWindow')
 
         self.worker = worker
         self.state = state
@@ -43,6 +43,7 @@ class ControllerWindow(QWidget):
         self.pack_manager = pack_manager
         self._language_packs_dialog = None
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self, pack_manager=pack_manager)
+        self.ui_theme = state.ui_theme
         self.daily_coordinator = DailyControlCoordinator(self.settings_coordinator, worker, self, parent=self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
@@ -54,9 +55,10 @@ class ControllerWindow(QWidget):
 
         # Window and navigation shell
         self.setWindowTitle("Translate HUD - Realtime Screen Translator")
-        self.resize(740, 720)
+        available = self.screen().availableGeometry()
+        self.resize(min(1200, available.width()), min(800, available.height()))
         self.setMinimumSize(660, 480)
-        self.setStyleSheet(get_app_stylesheet())
+        set_style(self, get_app_stylesheet('tokens'))
 
         # Thiết lập Icon ứng dụng từ logo
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
@@ -85,6 +87,8 @@ class ControllerWindow(QWidget):
         self.status = self.sidebar.status
         self.sidebar.page_requested.connect(self._switch_to_page)
         self.sidebar.quit_requested.connect(self.on_quit_cb)
+        self.sidebar.theme_toggle_requested.connect(self._on_theme_toggle_requested)
+        self.settings_coordinator.ui_theme_changed.connect(self.apply_theme)
 
         main_h_layout.addWidget(self.sidebar_frame)
 
@@ -101,7 +105,7 @@ class ControllerWindow(QWidget):
         header_row.setSpacing(10)
 
         self.back_btn = QPushButton("← Quay lại dịch")
-        self.back_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(self.back_btn, button_style('secondary', 'tokens'))
         self.back_btn.setCursor(Qt.PointingHandCursor)
         self.back_btn.setFixedHeight(32)
         self.back_btn.clicked.connect(lambda: self._switch_to_page(0))
@@ -111,9 +115,9 @@ class ControllerWindow(QWidget):
         header_text_box.setSpacing(2)
 
         self.page_title_lbl = QLabel("Tổng quan")
-        self.page_title_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
+        set_style(self.page_title_lbl, "font-size: 16px; font-weight: 700;")
         self.page_desc_lbl = QLabel("Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực")
-        self.page_desc_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
+        set_style(self.page_desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
         header_text_box.addWidget(self.page_title_lbl)
         header_text_box.addWidget(self.page_desc_lbl)
         header_row.addLayout(header_text_box)
@@ -125,14 +129,12 @@ class ControllerWindow(QWidget):
 
         # Khởi tạo 4 trang
         self.console_page = ConsolePage(self.settings_coordinator.snapshot(), self)
-        self.start_btn = self.console_page.start_btn
-        self.stop_btn = self.console_page.stop_btn
-        self.console_page.start_requested.connect(self.start_ocr)
+        self.console_page.set_provider_choices(tuple(get_available_providers()))
+        self.console_page.provider_changed.connect(self.settings_coordinator.set_provider)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.worker.log_updated.connect(self.console_page.append_log)
         self.worker.error_occurred.connect(self.show_worker_error)
         self.worker.finished.connect(self._on_worker_finished)
-        self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
         self.console_page.manage_regions_requested.connect(self.manage_regions_requested.emit)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
@@ -220,6 +222,17 @@ class ControllerWindow(QWidget):
         self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
         self.settings_coordinator.pack_state_changed.connect(self._render_language_packs)
         self._switch_to_page(0)
+        self.apply_theme(self.ui_theme)
+
+    def _on_theme_toggle_requested(self):
+        self.settings_coordinator.set_ui_theme('light' if self.ui_theme == 'dark' else 'dark')
+
+    def apply_theme(self, theme: str):
+        self.ui_theme = theme
+        apply_widget_theme(self, theme)
+        self.sidebar.apply_theme(theme)
+        if self._language_packs_dialog is not None:
+            apply_widget_theme(self._language_packs_dialog, theme)
 
     def toggle_daily_translation(self):
         self.daily_coordinator.toggle_translation()
@@ -243,8 +256,9 @@ class ControllerWindow(QWidget):
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
+        self.sidebar.show()
+        self.sidebar.set_active_page(index)
         if index == 0:
-            self.sidebar.hide()
             if hasattr(self, "header_container"):
                 self.header_container.hide()
         else:
@@ -282,7 +296,7 @@ class ControllerWindow(QWidget):
 
 
     def _show_save_error(self, message):
-        self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+        self.sidebar.set_status(message, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
         self.daily_state_changed.emit()
 
     def _import_legacy_key(self, persist):
@@ -400,7 +414,7 @@ class ControllerWindow(QWidget):
         provider = ai.provider
         if ai.requires_api_key and not ai.api_key.strip():
             self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
-            self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+            set_style(self.status, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
             
             self._switch_to_page(1)
             self.ai_page.highlight_missing_key()
@@ -417,7 +431,7 @@ class ControllerWindow(QWidget):
                 self.worker.start_worker()
         
         self.status.setText("Đang hoạt động")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
+        set_style(self.status, f"color: {TOKENS['positive']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đang hoạt động")
         self.daily_state_changed.emit()
 
@@ -453,7 +467,7 @@ class ControllerWindow(QWidget):
         if self.overlay is not None:
             self.overlay.clear()
         self.status.setText("Đã dừng")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+        set_style(self.status, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đã dừng")
 
     @property

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QTableWidget, QTableWidgetItem, QHeaderView)
 from core.capture.models import CaptureRegion, NormalizedRect
 from core.capture.profile import parse_capture_profile, serialize_capture_profile
+from ui.styles import set_style, apply_widget_theme, get_app_stylesheet
 
 
 class _Preview(QLabel):
@@ -40,6 +41,7 @@ class CaptureRegionsDialog(QDialog):
     def __init__(self, profile, image, context, parent=None):
         super().__init__(parent)
         self.profile, self.context = profile, context
+        set_style(self, get_app_stylesheet('tokens'))
         self._stale = False
         self.setWindowTitle('Quản lý vùng quét')
         self.resize(850, 680)
@@ -139,3 +141,6 @@ class CaptureRegionsDialog(QDialog):
 
     def reject(self):
         self.cancelled.emit(); super().reject()
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

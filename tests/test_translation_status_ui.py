@@ -32,6 +32,23 @@ def test_waiting_message_counts_down_without_triggering_retry(qtbot,ui_window):
     ui_window.worker.retry_translation.assert_not_called()
 
 
+def test_theme_toggle_preserves_google_wait_and_subtitle_style(ui_window):
+    page = ui_window.console_page
+    status = TranslationStatus('Google Translate', 1, 1, 'retry_wait', 1, 130)
+    page.render_translation_status(status, now_s=100)
+    subtitle_style = page.subtitle_preview.styleSheet()
+    message = page.translation_message.text()
+    ui_window.worker.reset_mock()
+    assert ui_window.settings_coordinator.set_ui_theme('dark')
+    assert page._translation_status is status and page._countdown.isActive()
+    assert page.translation_message.text() == message
+    assert page.subtitle_preview.styleSheet() == subtitle_style
+    ui_window.worker.configure.assert_not_called()
+    ui_window.worker.stop_worker.assert_not_called()
+    page.render_translation_status(status, now_s=110)
+    assert '20' in page.translation_message.text()
+
+
 def test_failed_setting_save_preserves_paused_google_retry(ui_window,monkeypatch):
     from unittest.mock import Mock
     from core import config

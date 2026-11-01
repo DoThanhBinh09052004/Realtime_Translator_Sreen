@@ -2,7 +2,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QDialog, QLabel, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget
 from ui.controller_state import LanguagePacksState
-from ui.styles import get_app_stylesheet, LANGUAGE_PACKS_STYLE, SECONDARY_BUTTON_STYLE, PACK_ACTION_STYLE
+from ui.styles import set_style, apply_widget_theme, theme_for, button_style, language_packs_style, pack_action_style, get_app_stylesheet
 from ui.widgets.package_status_row import PackageStatusRow, format_bytes
 
 
@@ -16,7 +16,7 @@ class LanguagePacksDialog(QDialog):
         self.setObjectName('languagePacksDialog')
         self.setWindowTitle('Quản lý gói ngôn ngữ')
         self.setWindowModality(Qt.WindowModal)
-        self.setStyleSheet(get_app_stylesheet() + LANGUAGE_PACKS_STYLE)
+        set_style(self, get_app_stylesheet('tokens') + language_packs_style('tokens'))
         screen = self.screen() or QApplication.primaryScreen()
         geometry = screen.availableGeometry() if screen else None
         width, height = (geometry.width(), geometry.height()) if geometry else (560, 520)
@@ -67,7 +67,7 @@ class LanguagePacksDialog(QDialog):
         self.close_button.setObjectName('packClose')
         self.close_button.setAutoDefault(False)
         self.close_button.setMinimumHeight(32)
-        self.close_button.setStyleSheet(SECONDARY_BUTTON_STYLE + PACK_ACTION_STYLE)
+        set_style(self.close_button, button_style('secondary', 'tokens') + pack_action_style('tokens'))
         self.close_button.clicked.connect(self.close)
         layout.addWidget(self.close_button, 0, Qt.AlignRight)
         self.rows = {}
@@ -106,6 +106,7 @@ class LanguagePacksDialog(QDialog):
             self.setTabOrder(self.close_button, focus_order[0])
         for group, group_layout in self.groups.values():
             group.setVisible(group_layout.count() > 1)
+        apply_widget_theme(self, theme_for(self))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -137,3 +138,6 @@ class LanguagePacksDialog(QDialog):
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
             if answer == QMessageBox.Yes:
                 self.remove_requested.emit(language_id)
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

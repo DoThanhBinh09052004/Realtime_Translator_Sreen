@@ -173,6 +173,7 @@ def normalize_config(raw: object) -> dict:
         ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
         ("overlay_mode", ("subtitle", "blocks"), "subtitle"),
         ("ocr_performance_mode", ("high", "eco"), DEFAULT_OCR_PERFORMANCE_MODE),
+        ("ui_theme", ("light", "dark"), "light"),
     ):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and value in choices else default
@@ -244,6 +245,7 @@ class State:
         self.ocr_auto_threads = cfg.get("ocr_auto_threads", DEFAULT_OCR_AUTO_THREADS)
         self.ocr_threads = int(cfg.get("ocr_threads", DEFAULT_OCR_THREADS))
         self.context_enabled = cfg['context_enabled']
+        self.ui_theme = cfg['ui_theme']
 
     def update(self, **kwargs) -> None:
         names = {"source": "source_lang", "target": "target_lang"}
@@ -252,6 +254,7 @@ class State:
             "overlay_preset", "overlay_x", "overlay_y", "overlay_mode",
             "ocr_performance_mode", "ocr_auto_threads", "ocr_threads",
             "context_enabled",
+            "ui_theme",
         )})
         if any(k not in names for k in kwargs):
             raise ConfigError("Trường thiết lập không hợp lệ.")

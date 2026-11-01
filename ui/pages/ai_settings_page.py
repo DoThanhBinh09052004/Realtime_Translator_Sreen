@@ -1,8 +1,8 @@
 from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton, QCheckBox
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
-from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE, CARD_FRAME_STYLE
-from ui.icons import get_lucide_icon
+from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, card_style
+from ui.icons import set_theme_icon
 from ui.controller_state import AiPageState
 
 
@@ -35,7 +35,7 @@ class AiSettingsPage(QScrollArea):
 
         # Card 1: Provider & Model Selector
         prov_card = ModernCard("Công cụ dịch", "Chọn công cụ thực hiện tác vụ dịch thuật")
-        
+
         row1 = QHBoxLayout()
         row1.setSpacing(12)
 
@@ -43,7 +43,7 @@ class AiSettingsPage(QScrollArea):
         p_col = QVBoxLayout()
         p_col.setSpacing(4)
         p_lbl = QLabel("Công cụ dịch")
-        p_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(p_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(providers)
         self.provider_combo.setCurrentText(active_provider)
@@ -58,7 +58,7 @@ class AiSettingsPage(QScrollArea):
         m_col.setContentsMargins(0, 0, 0, 0)
         m_col.setSpacing(4)
         m_lbl = QLabel("Mô hình (Model ID)")
-        m_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(m_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.model_combo = QComboBox()
         self.model_combo.setEditable(True)
         self.model_combo.addItems(state.models)
@@ -78,8 +78,8 @@ class AiSettingsPage(QScrollArea):
         base_url_layout.setContentsMargins(0, 8, 0, 0)
         base_url_layout.setSpacing(4)
         base_url_label = QLabel("Base URL (OpenAI-compatible)")
-        base_url_label.setStyleSheet(
-            f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};"
+        set_style(base_url_label,
+            f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};"
         )
         self.base_url_input = QLineEdit()
         self.base_url_input.setPlaceholderText("https://api.example.com/v1")
@@ -103,7 +103,7 @@ class AiSettingsPage(QScrollArea):
         context_help.setWordWrap(True)
         context_card.layout.addWidget(context_help)
         self.context_reset_button=QPushButton('Bắt đầu hội thoại mới')
-        self.context_reset_button.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(self.context_reset_button, button_style('secondary', 'tokens'))
         self.context_reset_button.clicked.connect(self.context_reset_requested.emit)
         context_card.layout.addWidget(self.context_reset_button)
         self.context_status_label=QLabel()
@@ -116,10 +116,10 @@ class AiSettingsPage(QScrollArea):
 
         # Card 2: API Key Management
         self.key_card = ModernCard("Khóa API (API Key)", "Lưu bằng mã hóa Windows hoặc chỉ dùng trong phiên hiện tại")
-        
+
         k_layout = QVBoxLayout()
         k_layout.setSpacing(6)
-        
+
         k_input_row = QHBoxLayout()
         k_input_row.setSpacing(8)
 
@@ -133,9 +133,9 @@ class AiSettingsPage(QScrollArea):
         self.toggle_key_btn.setFixedSize(36, 32)
         self.toggle_key_btn.setToolTip("Hiện / Ẩn API Key")
         self.toggle_key_btn.setCursor(Qt.PointingHandCursor)
-        self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
+        set_theme_icon(self.toggle_key_btn, "eye", 'muted', 16)
         self.toggle_key_btn.setIconSize(QSize(16, 16))
-        self.toggle_key_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(self.toggle_key_btn, button_style('secondary', 'tokens'))
         self.toggle_key_btn.clicked.connect(self.toggle_key_visibility)
         k_input_row.addWidget(self.toggle_key_btn)
 
@@ -149,7 +149,7 @@ class AiSettingsPage(QScrollArea):
         self.delete_key_btn = QPushButton('Xóa key')
         self.import_key_btn = QPushButton('Nhập key cũ từ .env')
         for button in (self.save_key_btn, self.delete_key_btn, self.import_key_btn):
-            button.setStyleSheet(SECONDARY_BUTTON_STYLE)
+            set_style(button, button_style('secondary', 'tokens'))
             actions.addWidget(button)
         self.save_key_btn.clicked.connect(self._apply_key)
         self.delete_key_btn.clicked.connect(self.api_key_delete_requested.emit)
@@ -172,7 +172,7 @@ class AiSettingsPage(QScrollArea):
             "• DeepSeek: Truy cập platform.deepseek.com để tạo API Key\n"
             "• OpenRouter: Truy cập openrouter.ai/keys để nhận key dùng nhiều model"
         )
-        note_text.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 12px; line-height: 1.5;")
+        set_style(note_text, f"color: {TOKENS['muted']}; font-size: 12px; line-height: 1.5;")
         note_card.layout.addWidget(note_text)
         layout.addWidget(note_card)
 
@@ -187,10 +187,10 @@ class AiSettingsPage(QScrollArea):
     def toggle_key_visibility(self):
         if self.api_key_input.echoMode() == QLineEdit.Password:
             self.api_key_input.setEchoMode(QLineEdit.Normal)
-            self.toggle_key_btn.setIcon(get_lucide_icon("eye-off", color=CYBER_PALETTE['neon_indigo'], size=16))
+            set_theme_icon(self.toggle_key_btn, "eye-off", 'focus', 16)
         else:
             self.api_key_input.setEchoMode(QLineEdit.Password)
-            self.toggle_key_btn.setIcon(get_lucide_icon("eye", color=CYBER_PALETTE['text_muted'], size=16))
+            set_theme_icon(self.toggle_key_btn, "eye", 'muted', 16)
 
     def render(self, state: AiPageState, *, changed_field='initial'):
         blocker=QSignalBlocker(self.context_checkbox)
@@ -233,31 +233,34 @@ class AiSettingsPage(QScrollArea):
     def _render_status(self, state):
         if not state.requires_api_key:
             self.api_status_lbl.setText('Trạng thái: Google Translate không cần API key')
-            color = CYBER_PALETTE['neon_green']
+            color = TOKENS['positive']
         elif state.provider == 'Custom API' and not state.base_url.strip():
             self.api_status_lbl.setText('Trạng thái: Chưa có Base URL hợp lệ cho Custom API')
-            color = CYBER_PALETTE['neon_amber']
+            color = TOKENS['warning']
         elif state.key_storage == 'unavailable':
             self.api_status_lbl.setText('Không đọc được key đã lưu. Có thể nhập key chỉ dùng trong phiên.')
-            color = CYBER_PALETTE['neon_amber']
+            color = TOKENS['warning']
         elif state.api_key.strip():
             mode = 'Chỉ dùng trong phiên' if state.key_storage == 'session' else 'Đã lưu key mã hóa'
             self.api_status_lbl.setText(f'{mode}; chưa kiểm tra kết nối')
-            color = CYBER_PALETTE['neon_amber']
+            color = TOKENS['warning']
         else:
             self.api_status_lbl.setText(f'Trạng thái: Chưa có API Key cho {state.provider}')
-            color = CYBER_PALETTE['neon_amber']
-        self.api_status_lbl.setStyleSheet(f'color: {color}; font-size: 11.5px; font-weight: 500;')
+            color = TOKENS['warning']
+        set_style(self.api_status_lbl, f'color: {color}; font-size: 11.5px; font-weight: 500;')
 
     def highlight_missing_key(self):
-        self.key_card.setStyleSheet(f"""
+        set_style(self.key_card, f"""
                 QFrame#cardFrame {{
-                    background-color: {CYBER_PALETTE['bg_card']};
-                    border: 1px solid {CYBER_PALETTE['neon_rose']};
+                    background-color: {TOKENS['surface']};
+                    border: 1px solid {TOKENS['negative']};
                     border-radius: 8px;
                 }}
             """)
         self.highlight_timer.start()
 
     def _clear_highlight(self):
-        self.key_card.setStyleSheet(CARD_FRAME_STYLE)
+        set_style(self.key_card, card_style('tokens'))
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

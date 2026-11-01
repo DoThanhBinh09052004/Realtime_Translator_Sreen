@@ -8,6 +8,12 @@ from PyQt5.QtGui import QPixmap, QPainter, QIcon
 from PyQt5.QtCore import QByteArray, Qt
 
 LUCIDE_ICONS = {
+    'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+    'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+    'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1"/>',
+    'moon': '<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>',
+    'copy': '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+    'check': '<path d="m5 12 4 4L19 6"/>',
     "download": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
     "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     "refresh-cw": '<path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"/><path d="M8 16H3v5"/>',
@@ -51,3 +57,13 @@ def get_lucide_icon(name: str, color: str = "#8c90a4", size: int = 18, stroke_wi
     renderer.render(painter)
     painter.end()
     return QIcon(pixmap)
+
+
+def set_theme_icon(widget, name: str, role: str = 'muted', size: int = 18) -> None:
+    from ui.styles import palette_for
+    widget._theme_icon = (name, role, size)
+    icon = get_lucide_icon(name, color=palette_for(widget)[role], size=size)
+    if hasattr(widget, 'setIcon'):
+        widget.setIcon(icon)
+    else:
+        widget.setPixmap(icon.pixmap(size, size))

@@ -170,7 +170,7 @@ def test_failed_preset_save_restores_selection(controller, monkeypatch):
 ])
 def test_failed_color_save_keeps_preview_and_overlay(controller, monkeypatch, field, handler):
     from PyQt5.QtGui import QColor
-    from ui.controller import QColorDialog
+    from ui.pages.subtitle_settings_page import QColorDialog
 
     before = getattr(controller.state, field)
     preview = controller.live_preview_box.styleSheet()

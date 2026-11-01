@@ -4,7 +4,7 @@ import time
 from typing import Any
 from PyQt5.QtWidgets import (
     QWidget, QScrollArea, QLayout, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame, QSizePolicy
+    QPushButton, QLabel, QComboBox, QPlainTextEdit, QFrame, QSizePolicy, QGridLayout
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QSignalBlocker, pyqtSignal
 
@@ -12,28 +12,27 @@ from ui.widgets.cards import ModernCard
 from ui.widgets.capture_snapshot import CaptureSnapshotWidget
 from ui.widgets.translation_output import TranslationOutputWidget
 from ui.capture_settings import CaptureSettings
-from ui.styles import (
-    CYBER_PALETTE, HERO_START_STYLE, HERO_STOP_STYLE, HERO_STOPPING_STYLE,
-    SECONDARY_BUTTON_STYLE
-)
-from ui.icons import get_lucide_icon
+from ui.presentation import subtitle_preview_style
+from ui.styles import TOKENS, set_style, apply_widget_theme, button_style
+from ui.icons import set_theme_icon
 from ui.controller_state import ControllerSnapshot, DailyReadiness, DailyRunState, PresentedTranslation
 
 
 SOURCE_LANGUAGE_LABELS = {
-    'English': 'Tiếng Anh (English)',
-    'Japanese': 'Tiếng Nhật (Japanese)',
-    'Korean': 'Tiếng Hàn (Korean)',
-    'Chinese': 'Tiếng Trung (Chinese)',
+    'English': 'Tiếng Anh',
+    'Japanese': 'Tiếng Nhật',
+    'Korean': 'Tiếng Hàn',
+    'Chinese': 'Tiếng Trung',
 }
 
 TARGET_LANGUAGE_LABELS = {
-    'Vietnamese': 'Tiếng Việt (Vietnamese)',
-    'English': 'Tiếng Anh (English)',
+    'Vietnamese': 'Tiếng Việt',
+    'English': 'Tiếng Anh',
 }
 
 
 class ConsolePage(QWidget):
+    provider_changed = pyqtSignal(str)
     source_changed = pyqtSignal(str)
     target_changed = pyqtSignal(str)
     toggle_requested = pyqtSignal()
@@ -45,254 +44,249 @@ class ConsolePage(QWidget):
     subtitle_settings_requested = pyqtSignal()
     retry_translation_requested = pyqtSignal()
 
-    # Retained for legacy test / embedding compatibility
-    start_requested = pyqtSignal()
-    stop_requested = pyqtSignal()
-
     def __init__(self, snapshot: ControllerSnapshot, parent=None):
         super().__init__(parent)
-
         self._translation_status = None
-        self._current_readiness_action: str | None = None
-        self._is_running_phase: bool = False
-
+        self._current_readiness_action = None
+        self._is_running_phase = False
+        self._presentation = None
+        self._subtitle_state = snapshot.subtitle
+        self._wide_layout = None
         self._countdown = QTimer(self)
         self._countdown.setInterval(500)
         self._countdown.timeout.connect(self._refresh_countdown)
-
-        root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.setSpacing(6)
-
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(12)
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
-
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         content = QWidget()
+        content.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(16, 12, 16, 8)
-        layout.setSpacing(12)
-
-        # 1. Header Row
-        header_row = QHBoxLayout()
-        header_text = QVBoxLayout()
-        header_text.setSpacing(2)
-        title_lbl = QLabel("Translate HUD")
-        title_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
-        desc_lbl = QLabel("Dịch chữ trong game")
-        desc_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
-        header_text.addWidget(title_lbl)
-        header_text.addWidget(desc_lbl)
-        header_row.addLayout(header_text)
-        header_row.addStretch()
-
-        self.settings_btn = QPushButton("Thiết lập")
-        self.settings_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.settings_btn.setCursor(Qt.PointingHandCursor)
-        self.settings_btn.setIcon(get_lucide_icon("settings", color=CYBER_PALETTE['text_muted'], size=14))
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+        header = QHBoxLayout()
+        title = QLabel('Translate HUD  |  Màn hình chính')
+        title.setWordWrap(True)
+        title.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        set_style(title, 'font-size:22px;font-weight:600;padding:8px 0;')
+        header.addWidget(title, 1)
+        self.settings_btn = QPushButton('Thiết lập')
+        set_theme_icon(self.settings_btn, 'sliders', size=15)
         self.settings_btn.clicked.connect(self.settings_requested.emit)
-        header_row.addWidget(self.settings_btn)
-        layout.addLayout(header_row)
+        header.addWidget(self.settings_btn)
+        layout.addLayout(header)
 
-        # 2. Languages Row
-        lang_card = ModernCard("Ngôn ngữ", "Chọn ngôn ngữ hiển thị trong game và ngôn ngữ dịch sang")
-        lang_row = QHBoxLayout()
-        lang_row.setSpacing(12)
-
-        src_box = QVBoxLayout()
-        src_box.setSpacing(4)
-        src_lbl = QLabel("Ngôn ngữ nguồn")
-        src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        controls = ModernCard()
+        self.top_grid = QGridLayout()
+        self.top_grid.setSpacing(16)
+        controls.layout.addLayout(self.top_grid)
+        self.language_group = QWidget()
+        languages = QVBoxLayout(self.language_group)
+        languages.setContentsMargins(0, 0, 0, 0)
+        languages.addWidget(QLabel('Ngôn ngữ'))
+        language_row = QHBoxLayout()
         self.src_combo = QComboBox()
-        self.src_combo.setAccessibleName("Ngôn ngữ nguồn")
+        self.src_combo.setAccessibleName('Ngôn ngữ nguồn')
         self.src_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_source_languages(snapshot)
         self.src_combo.currentIndexChanged.connect(self._on_source_combo_changed)
-        src_box.addWidget(src_lbl)
-        src_box.addWidget(self.src_combo)
-        lang_row.addLayout(src_box, stretch=1)
-
-        arrow_lbl = QLabel("→")
-        arrow_lbl.setAlignment(Qt.AlignCenter)
-        arrow_lbl.setStyleSheet(f"font-size: 16px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']}; margin-top: 16px;")
-        lang_row.addWidget(arrow_lbl)
-
-        tgt_box = QVBoxLayout()
-        tgt_box.setSpacing(4)
-        tgt_lbl = QLabel("Dịch sang")
-        tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
         self.tgt_combo = QComboBox()
-        self.tgt_combo.setAccessibleName("Dịch sang")
+        self.tgt_combo.setAccessibleName('Ngôn ngữ đích')
         self.tgt_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self._init_target_languages(snapshot)
         self.tgt_combo.currentIndexChanged.connect(self._on_target_combo_changed)
-        tgt_box.addWidget(tgt_lbl)
-        tgt_box.addWidget(self.tgt_combo)
-        lang_row.addLayout(tgt_box, stretch=1)
+        language_row.addWidget(self.src_combo, 1)
+        language_row.addWidget(QLabel('→'))
+        language_row.addWidget(self.tgt_combo, 1)
+        languages.addLayout(language_row)
+        languages.addStretch()
+        self.source_group = QWidget()
+        source_layout = QVBoxLayout(self.source_group)
+        source_layout.setContentsMargins(0, 0, 0, 0)
+        self.capture_settings = CaptureSettings(parent=self, compact=True)
+        source_layout.addWidget(self.capture_settings)
+        self.engine_group = QWidget()
+        engine_layout = QVBoxLayout(self.engine_group)
+        engine_layout.setContentsMargins(0, 0, 0, 0)
+        engine_layout.addWidget(QLabel('Công cụ dịch'))
+        self.provider_combo = QComboBox()
+        self.provider_combo.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.provider_combo.setAccessibleName('Công cụ dịch')
+        self.provider_combo.addItem(snapshot.ai.provider, snapshot.ai.provider)
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        engine_layout.addWidget(self.provider_combo)
+        engine_layout.addStretch()
+        layout.addWidget(controls)
 
-        lang_card.layout.addLayout(lang_row)
-        layout.addWidget(lang_card)
-
-        # 3. Capture Source Card
-        source_card = ModernCard("Nguồn chụp", "Chọn màn hình hoặc cửa sổ game cần quét chữ")
-        self.capture_settings = CaptureSettings(parent=self)
-        source_card.layout.addWidget(self.capture_settings)
-        layout.addWidget(source_card)
-
-        # 4. OCR Region Card with Snapshot Preview
-        region_card = ModernCard("Vùng đọc chữ", "Tọa độ và khung hình quét chữ OCR")
-        reg_header_row = QHBoxLayout()
-        self.region_info_lbl = QLabel("Vùng đọc chữ · Chưa chọn vùng")
-        self.region_info_lbl.setStyleSheet("font-size: 12.5px; font-weight: 500;")
-        self.region_info_lbl.setWordWrap(True)
+        self.body_grid = QGridLayout()
+        self.body_grid.setSpacing(14)
+        self.region_card = ModernCard()
+        region_header = QHBoxLayout()
+        region_title = QLabel('Vùng đọc chữ')
+        set_style(region_title, 'font-size:16px;font-weight:600;')
+        region_header.addWidget(region_title)
+        self.region_info_lbl = QLabel()
         self.region_info_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        reg_header_row.addWidget(self.region_info_lbl)
-        reg_header_row.addStretch()
-
-        self.select_region_btn = QPushButton("Khoanh vùng đọc")
-        self.select_region_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.select_region_btn.setCursor(Qt.PointingHandCursor)
-        self.select_region_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=14))
+        set_style(self.region_info_lbl, f'font-size:12px;color:{TOKENS["muted"]};')
+        region_header.addWidget(self.region_info_lbl, 1)
+        self.select_region_btn = QPushButton('Khoanh vùng')
+        set_theme_icon(self.select_region_btn, 'scan', size=15)
         self.select_region_btn.clicked.connect(self.select_region_requested.emit)
-        reg_header_row.addWidget(self.select_region_btn)
-        region_card.layout.addLayout(reg_header_row)
-
+        region_header.addWidget(self.select_region_btn)
+        self.region_card.layout.addLayout(region_header)
         self.snapshot_widget = CaptureSnapshotWidget(self)
-        region_card.layout.addWidget(self.snapshot_widget)
-
+        self.snapshot_widget.setMinimumHeight(185)
+        self.region_card.layout.addWidget(self.snapshot_widget, 1)
         preview_footer = QHBoxLayout()
-        preview_notice = QLabel("Ảnh xem trước, không phải video"); preview_notice.setWordWrap(True); preview_notice.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        preview_notice.setStyleSheet(f"font-size: 11.5px; color: {CYBER_PALETTE['text_muted']};")
-        preview_footer.addWidget(preview_notice)
-        preview_footer.addStretch()
-
-        self.manage_regions_btn = QPushButton('Quản lý vùng nâng cao')
-        self.manage_regions_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.manage_regions_btn.clicked.connect(self.manage_regions_requested.emit)
-        preview_footer.addWidget(self.manage_regions_btn)
-
-        self.refresh_preview_btn = QPushButton("Làm mới ảnh")
-        self.refresh_preview_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.refresh_preview_btn.setCursor(Qt.PointingHandCursor)
-        self.refresh_preview_btn.setIcon(get_lucide_icon("refresh-cw", color=CYBER_PALETTE['text_muted'], size=13))
+        notice = QLabel('Ảnh chụp xem trước')
+        set_style(notice, f'font-size:12px;color:{TOKENS["muted"]};')
+        preview_footer.addWidget(notice, 1)
+        self.refresh_preview_btn = QPushButton('Làm mới ảnh')
+        set_theme_icon(self.refresh_preview_btn, 'refresh-cw', size=14)
         self.refresh_preview_btn.clicked.connect(self.preview_requested.emit)
         preview_footer.addWidget(self.refresh_preview_btn)
-        region_card.layout.addLayout(preview_footer)
-        layout.addWidget(region_card)
+        self.region_card.layout.addLayout(preview_footer)
+        self.manage_regions_btn = QPushButton()
+        self.manage_regions_btn.setToolTip('Quản lý vùng nâng cao')
+        self.manage_regions_btn.setAccessibleName('Quản lý vùng nâng cao')
+        set_theme_icon(self.manage_regions_btn, 'sliders', size=14)
+        self.manage_regions_btn.clicked.connect(self.manage_regions_requested.emit)
+        region_header.addWidget(self.manage_regions_btn)
 
-        # 5. Translation Engine & Presentation Card
-        engine_card = ModernCard("Hiển thị & Công cụ", "Công cụ AI và chế độ hiển thị phụ đề")
-        eng_row = QHBoxLayout()
-        self.provider_summary_lbl = QLabel(f"{snapshot.ai.provider} · {snapshot.subtitle.overlay_mode}")
-        self.provider_summary_lbl.setStyleSheet("font-size: 12.5px; font-weight: 500;")
-        self.provider_summary_lbl.setWordWrap(True)
-        self.provider_summary_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        eng_row.addWidget(self.provider_summary_lbl)
-        eng_row.addStretch()
-
-        self.customize_btn = QPushButton("Tùy chỉnh")
-        self.customize_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.customize_btn.setCursor(Qt.PointingHandCursor)
-        self.customize_btn.setIcon(get_lucide_icon("sliders", color=CYBER_PALETTE['text_muted'], size=13))
-        self.customize_btn.clicked.connect(self.subtitle_settings_requested.emit)
-        eng_row.addWidget(self.customize_btn)
-        self.subtitle_settings_btn = self.customize_btn
-        engine_card.layout.addLayout(eng_row)
-        layout.addWidget(engine_card)
-
-
-
-        # 7. Translation Output Display
-        output_card = ModernCard("Bản dịch Hiển thị", "Cặp chữ gốc và bản dịch mới nhất được hiển thị trên màn hình")
+        self.output_card = ModernCard('Bản dịch mới nhất')
         self.output_widget = TranslationOutputWidget(self)
-        output_card.layout.addWidget(self.output_widget)
-        layout.addWidget(output_card)
+        self.output_card.layout.addWidget(self.output_widget, 1)
+        subtitle_header = QHBoxLayout()
+        subtitle_label = QLabel('Xem trước phụ đề')
+        set_style(subtitle_label, f'font-size:12px;color:{TOKENS["muted"]};')
+        subtitle_header.addWidget(subtitle_label, 1)
+        self.customize_btn = QPushButton('Tùy chỉnh')
+        self.customize_btn.clicked.connect(self.subtitle_settings_requested.emit)
+        self.subtitle_settings_btn = self.customize_btn
+        subtitle_header.addWidget(self.customize_btn)
+        self.output_card.layout.addLayout(subtitle_header)
+        self.subtitle_preview = QLabel('Chưa có bản dịch được hiển thị')
+        self.subtitle_preview.setWordWrap(True)
+        self.subtitle_preview.setTextFormat(Qt.PlainText)
+        self.subtitle_preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.subtitle_preview.setAlignment(Qt.AlignCenter)
+        self.output_card.layout.addWidget(self.subtitle_preview)
+        layout.addLayout(self.body_grid, 1)
 
-        # 8. Collapsible Details Section (Bounded Log & Log Clear)
-        self.details_toggle_btn = QPushButton("▸ Chi tiết")
-        self.details_toggle_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; color: {CYBER_PALETTE['text_muted']}; border: none; text-align: left; font-size: 12px; font-weight: 600; padding: 4px; }}"
-            f"QPushButton:hover {{ color: {CYBER_PALETTE['text_primary']}; }}"
-        )
-        self.details_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self.details_toggle_btn = QPushButton('▸ Chi tiết phiên dịch')
         self.details_toggle_btn.clicked.connect(self._toggle_details)
         layout.addWidget(self.details_toggle_btn)
-
         self.details_container = QWidget()
-        details_layout = QVBoxLayout(self.details_container)
-        details_layout.setContentsMargins(0, 0, 0, 0)
-        details_layout.setSpacing(6)
-
+        details = QVBoxLayout(self.details_container)
+        details.setContentsMargins(0, 0, 0, 0)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(300)
-        self.log_view.setPlaceholderText("Nhật ký sẽ xuất hiện khi bắt đầu quét.")
-        self.log_view.setMinimumHeight(100)
-        self.log_view.setMaximumHeight(160)
-        details_layout.addWidget(self.log_view)
-
-        log_btn_row = QHBoxLayout()
-        log_btn_row.addStretch()
-        self.clear_log_btn = QPushButton("Xóa nhật ký")
-        self.clear_log_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.clear_log_btn.setCursor(Qt.PointingHandCursor)
+        self.log_view.setMaximumHeight(150)
+        self.log_view.setPlaceholderText('Nhật ký sẽ xuất hiện khi bắt đầu quét.')
+        details.addWidget(self.log_view)
+        self.clear_log_btn = QPushButton('Xóa nhật ký')
         self.clear_log_btn.clicked.connect(self.log_view.clear)
-        log_btn_row.addWidget(self.clear_log_btn)
-        details_layout.addLayout(log_btn_row)
-
+        details.addWidget(self.clear_log_btn, alignment=Qt.AlignRight)
         self.details_container.hide()
         layout.addWidget(self.details_container)
-
-        self.render_summary(snapshot)
-        layout.addStretch()
         self.scroll_area.setWidget(content)
-        root_layout.addWidget(self.scroll_area, stretch=1)
+        root.addWidget(self.scroll_area, 1)
 
-        # Fixed Footer: Primary Action & Readiness Controls
-        hero_card = ModernCard("Điều khiển Dịch thuật", "Bật hoặc dừng tiến trình quét OCR và dịch màn hình")
-        self.hero_card = hero_card
-        self.primary_btn = QPushButton("▶ BẮT ĐẦU DỊCH")
-        self.primary_btn.setFixedHeight(44)
-        self.primary_btn.setCursor(Qt.PointingHandCursor)
-        self.primary_btn.setStyleSheet(HERO_START_STYLE)
-        self.primary_btn.clicked.connect(self._on_primary_clicked)
-        hero_card.layout.addWidget(self.primary_btn)
-
-        # Backward compatibility buttons
-        self.start_btn = self.primary_btn
-        self.stop_btn = self.primary_btn
-
-        readiness_row = QHBoxLayout()
-        self.readiness_lbl = QLabel("● Chưa sẵn sàng")
-        self.readiness_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
+        footer = QFrame()
+        set_style(footer, f'QFrame {{border-top:1px solid {TOKENS["border"]};}} QLabel {{border:0;}}')
+        footer_layout = QVBoxLayout(footer)
+        footer_layout.setContentsMargins(0, 12, 0, 0)
+        row = QHBoxLayout()
+        self.readiness_lbl = QLabel('Chưa sẵn sàng')
         self.readiness_lbl.setWordWrap(True)
-        readiness_row.addWidget(self.readiness_lbl, stretch=1)
-
-        self.readiness_action_btn = QPushButton("Khắc phục")
-        self.readiness_action_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.readiness_action_btn.setCursor(Qt.PointingHandCursor)
+        self.readiness_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        row.addWidget(self.readiness_lbl, 1)
+        self.readiness_action_btn = QPushButton('Khắc phục')
         self.readiness_action_btn.clicked.connect(self._on_readiness_action_clicked)
         self.readiness_action_btn.hide()
-        readiness_row.addWidget(self.readiness_action_btn)
-        hero_card.layout.addLayout(readiness_row)
-
-        # Translation recovery (Google Translate pause/wait) - outside Details
-        recovery_row = QHBoxLayout()
+        row.addWidget(self.readiness_action_btn)
+        self.primary_btn = QPushButton('Bắt đầu dịch')
+        self.primary_btn.setMinimumHeight(42)
+        self.primary_btn.setMinimumWidth(165)
+        self.primary_btn.clicked.connect(self._on_primary_clicked)
+        set_style(self.primary_btn, button_style('primary', 'tokens'))
+        row.addWidget(self.primary_btn)
+        footer_layout.addLayout(row)
+        self.session_info = QLabel()
+        set_style(self.session_info, f'font-size:12px;color:{TOKENS["muted"]};')
+        footer_layout.addWidget(self.session_info)
+        recovery = QHBoxLayout()
         self.translation_message = QLabel()
         self.translation_message.setWordWrap(True)
+        self.translation_message.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.translation_message.hide()
-        recovery_row.addWidget(self.translation_message, stretch=1)
-
-        self.retry_translation_btn = QPushButton("Thử lại")
-        self.retry_translation_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
-        self.retry_translation_btn.setCursor(Qt.PointingHandCursor)
+        recovery.addWidget(self.translation_message, 1)
+        self.retry_translation_btn = QPushButton('Thử lại')
         self.retry_translation_btn.clicked.connect(self.retry_translation_requested.emit)
         self.retry_translation_btn.hide()
-        recovery_row.addWidget(self.retry_translation_btn)
-        hero_card.layout.addLayout(recovery_row)
+        recovery.addWidget(self.retry_translation_btn)
+        footer_layout.addLayout(recovery)
+        root.addWidget(footer)
+        self._reflow_layout(self.width())
+        self.render_summary(snapshot)
 
-        root_layout.addWidget(hero_card, stretch=0)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reflow_layout(event.size().width())
+
+    def _reflow_layout(self, content_width: int):
+        wide = content_width >= 1000
+        if wide == self._wide_layout:
+            return
+        self._wide_layout = wide
+        for grid in (self.top_grid, self.body_grid):
+            while grid.count():
+                grid.takeAt(0)
+            for column in range(3):
+                grid.setColumnStretch(column, 0)
+        for index, group in enumerate((self.language_group, self.source_group, self.engine_group)):
+            self.top_grid.addWidget(group, 0 if wide else index, index if wide else 0, alignment=Qt.AlignTop)
+        if wide:
+            for index, stretch in enumerate((4, 5, 3)):
+                self.top_grid.setColumnStretch(index, stretch)
+            self.body_grid.addWidget(self.region_card, 0, 0)
+            self.body_grid.addWidget(self.output_card, 0, 1)
+            self.body_grid.setColumnStretch(0, 55)
+            self.body_grid.setColumnStretch(1, 45)
+        else:
+            self.top_grid.setColumnStretch(0, 1)
+            self.body_grid.addWidget(self.region_card, 0, 0)
+            self.body_grid.addWidget(self.output_card, 1, 0)
+            self.body_grid.setColumnStretch(0, 1)
+
+    def apply_theme(self, theme):
+        apply_widget_theme(self, theme)
+
+    def set_provider_choices(self, providers):
+        current = self.provider_combo.currentData()
+        with QSignalBlocker(self.provider_combo):
+            self.provider_combo.clear()
+            for provider in providers:
+                self.provider_combo.addItem(provider, provider)
+            self.provider_combo.setCurrentIndex(self.provider_combo.findData(current))
+
+    def _on_provider_changed(self, index):
+        provider = self.provider_combo.itemData(index)
+        if provider:
+            self.provider_changed.emit(provider)
+
+    def _render_subtitle_preview(self):
+        if self._subtitle_state.overlay_mode == 'blocks':
+            self.subtitle_preview.setText('Đang dùng bản dịch tại vị trí chữ')
+            set_style(self.subtitle_preview, f'padding:12px;color:{TOKENS["muted"]};')
+        else:
+            pairs = getattr(self._presentation, 'pairs', ())
+            self.subtitle_preview.setText('\n'.join(pair.translated_text for pair in pairs) or 'Chưa có bản dịch được hiển thị')
+            set_style(self.subtitle_preview, subtitle_preview_style(self._subtitle_state))
 
     def widget(self):
         return self.scroll_area.widget()
@@ -380,26 +374,28 @@ class ConsolePage(QWidget):
         self._is_running_phase = phase in ('running', 'starting', 'waiting_source')
 
         if phase == 'stopped':
-            self.primary_btn.setText("▶ BẮT ĐẦU DỊCH")
-            self.primary_btn.setStyleSheet(HERO_START_STYLE)
+            self.primary_btn.setText("Bắt đầu dịch")
+            set_theme_icon(self.primary_btn, 'play', 'primary_text', 16)
+            set_style(self.primary_btn, button_style('primary', 'tokens'))
             self.primary_btn.setEnabled(readiness.ready and run_state.can_toggle)
         elif self._is_running_phase:
-            self.primary_btn.setText("■ DỪNG DỊCH")
-            self.primary_btn.setStyleSheet(HERO_STOP_STYLE)
+            self.primary_btn.setText("Dừng dịch")
+            set_theme_icon(self.primary_btn, 'square', 'negative', 15)
+            set_style(self.primary_btn, button_style('stop', 'tokens'))
             self.primary_btn.setEnabled(run_state.can_toggle)
         elif phase == 'stopping':
             self.primary_btn.setText("Đang dừng...")
-            self.primary_btn.setStyleSheet(HERO_STOPPING_STYLE)
+            set_style(self.primary_btn, button_style('stopping', 'tokens'))
             self.primary_btn.setEnabled(False)
 
         # 5. Readiness Status Line
-        color = CYBER_PALETTE['neon_green'] if phase == 'running' else (
-            CYBER_PALETTE['neon_amber'] if phase in ('starting', 'waiting_source') or not readiness.ready
-            else CYBER_PALETTE['text_muted']
+        color = TOKENS['positive'] if phase == 'running' else (
+            TOKENS['warning'] if phase in ('starting', 'waiting_source') or not readiness.ready
+            else TOKENS['muted']
         )
         msg = run_state.message or readiness.reason
         self.readiness_lbl.setText(f"● {msg}")
-        self.readiness_lbl.setStyleSheet(f"font-size: 12px; color: {color};")
+        set_style(self.readiness_lbl, f"font-size: 12px; color: {color};")
 
         # 6. Action button for readiness repair
         if not readiness.ready and readiness.action and phase == 'stopped':
@@ -429,7 +425,9 @@ class ConsolePage(QWidget):
         presentation: PresentedTranslation | None,
         region_labels: dict[str, str] | None = None
     ) -> None:
+        self._presentation = presentation
         self.output_widget.render(presentation, region_labels)
+        self._render_subtitle_preview()
 
     def set_capture_snapshot(self, image: Any | None, profile: Any | None, context: Any | None) -> None:
         self.snapshot_widget.set_snapshot(image, profile, context)
@@ -460,13 +458,17 @@ class ConsolePage(QWidget):
         # 2. Update region info label
         reg = snapshot.ocr.region
         if reg:
-            self.region_info_lbl.setText(f"Vùng đọc chữ · {reg[2]} × {reg[3]} px")
+            self.region_info_lbl.setText(f"{reg[2]} × {reg[3]} px")
         else:
-            self.region_info_lbl.setText("Vùng đọc chữ · Chưa chọn vùng")
+            self.region_info_lbl.setText("Chưa chọn vùng")
 
         # 3. Update provider / subtitle summary
         mode_text = "Phụ đề nổi" if snapshot.subtitle.overlay_mode == 'subtitle' else "Khối tại chỗ (Blocks)"
-        self.provider_summary_lbl.setText(f"{snapshot.ai.provider} · {mode_text}")
+        self._subtitle_state = snapshot.subtitle
+        self.session_info.setText(f'OCR trên máy · Chu kỳ quét {snapshot.ocr.interval_ms} ms · {mode_text}')
+        with QSignalBlocker(self.provider_combo):
+            self.provider_combo.setCurrentIndex(self.provider_combo.findData(snapshot.ai.provider))
+        self._render_subtitle_preview()
 
     def set_run_status(self, text: str):
         self.readiness_lbl.setText(text)

@@ -9,8 +9,8 @@ from PyQt5.QtWidgets import (
     QGraphicsOpacityEffect
 )
 
-from ui.styles import CYBER_PALETTE
-from ui.icons import get_lucide_icon
+from ui.styles import TOKENS, set_style, apply_widget_theme, palette_for
+from ui.icons import set_theme_icon
 
 
 def resolve_display_threads(auto: bool, custom_threads: int, total_cores: int) -> int:
@@ -29,14 +29,13 @@ class RadioIndicator(QWidget):
         super().__init__(parent)
         self._size = size
         self._selected = False
-        self._color = QColor(CYBER_PALETTE["neon_indigo"])
+        self._role = 'focus'
         self.setFixedSize(size, size)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
-    def set_state(self, selected: bool, color: str = None):
+    def set_state(self, selected: bool, role: str = 'focus'):
         self._selected = selected
-        if color:
-            self._color = QColor(color)
+        self._role = role
         self.update()
 
     def paintEvent(self, event):
@@ -48,7 +47,7 @@ class RadioIndicator(QWidget):
 
         if self._selected:
             # Đường tròn viền ngoài màu nhấn
-            pen = QPen(self._color, 1.8)
+            pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(rect)
@@ -58,11 +57,11 @@ class RadioIndicator(QWidget):
             inner_offset = (self._size - inner_size) / 2.0
             inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QBrush(self._color))
+            painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
             painter.drawEllipse(inner_rect)
         else:
             # Đường tròn rỗng mảnh
-            dim_pen = QPen(QColor(CYBER_PALETTE["text_dim"]), 1.5)
+            dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
             painter.setPen(dim_pen)
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(rect)
@@ -78,8 +77,9 @@ class SelectableOptionCard(QFrame):
         self.setCursor(Qt.PointingHandCursor)
         self._selected = False
         self.setProperty("selected", False)
-        self._active_color = icon_color
-        self._active_bg = "#23233a" if icon_color == CYBER_PALETTE["neon_indigo"] else "#172620"
+        self._active_role = 'focus' if icon_color == TOKENS['focus'] else 'positive'
+        self._active_color = TOKENS[self._active_role]
+        self._active_bg = TOKENS['selection_bg'] if self._active_role == 'focus' else TOKENS['positive_bg']
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -90,15 +90,14 @@ class SelectableOptionCard(QFrame):
         header_row.setSpacing(10)
 
         self.icon_lbl = QLabel()
-        icon = get_lucide_icon(icon_name, color=icon_color, size=20)
-        self.icon_lbl.setPixmap(icon.pixmap(20, 20))
+        set_theme_icon(self.icon_lbl, icon_name, self._active_role, 20)
         header_row.addWidget(self.icon_lbl)
 
         self.title_lbl = QLabel(title)
-        self.title_lbl.setStyleSheet(f"""
+        set_style(self.title_lbl, f"""
             font-size: 13.5px;
             font-weight: 700;
-            color: {CYBER_PALETTE['text_primary']};
+            color: {TOKENS['text']};
         """)
         header_row.addWidget(self.title_lbl)
         header_row.addStretch()
@@ -108,9 +107,9 @@ class SelectableOptionCard(QFrame):
         layout.addLayout(header_row)
 
         self.desc_lbl = QLabel(desc)
-        self.desc_lbl.setStyleSheet(f"""
+        set_style(self.desc_lbl, f"""
             font-size: 11.5px;
-            color: {CYBER_PALETTE['text_muted']};
+            color: {TOKENS['muted']};
             line-height: 1.35;
         """)
         self.desc_lbl.setWordWrap(True)
@@ -126,9 +125,9 @@ class SelectableOptionCard(QFrame):
     def update_selection(self, selected: bool):
         self._selected = selected
         self.setProperty("selected", selected)
-        self.radio_indicator.set_state(selected, self._active_color)
+        self.radio_indicator.set_state(selected, self._active_role)
         if selected:
-            self.setStyleSheet(f"""
+            set_style(self, f"""
                 SelectableOptionCard {{
                     background-color: {self._active_bg};
                     border: 1.5px solid {self._active_color};
@@ -136,14 +135,14 @@ class SelectableOptionCard(QFrame):
                 }}
             """)
         else:
-            self.setStyleSheet(f"""
+            set_style(self, f"""
                 SelectableOptionCard {{
-                    background-color: {CYBER_PALETTE['bg_card']};
-                    border: 1px solid {CYBER_PALETTE['border_card']};
+                    background-color: {TOKENS['surface']};
+                    border: 1px solid {TOKENS['border']};
                     border-radius: 10px;
                 }}
                 SelectableOptionCard:hover {{
-                    border: 1px solid {CYBER_PALETTE['border_light']};
+                    border: 1px solid {TOKENS['border_control']};
                 }}
             """)
 
@@ -160,10 +159,10 @@ class OcrPerformanceCard(QFrame):
     def __init__(self, performance_mode: str = "high", auto_threads: bool = True, threads: int = 4, parent=None):
         super().__init__(parent)
         self.setObjectName("ocrPerformanceCard")
-        self.setStyleSheet(f"""
+        set_style(self, f"""
             QFrame#ocrPerformanceCard {{
-                background-color: {CYBER_PALETTE['bg_card']};
-                border: 1px solid {CYBER_PALETTE['border_card']};
+                background-color: {TOKENS['surface']};
+                border: 1px solid {TOKENS['border']};
                 border-radius: 12px;
             }}
         """)
@@ -182,16 +181,15 @@ class OcrPerformanceCard(QFrame):
         header_row.setSpacing(10)
 
         header_icon = QLabel()
-        zap_icon = get_lucide_icon("zap", color=CYBER_PALETTE['neon_indigo'], size=20)
-        header_icon.setPixmap(zap_icon.pixmap(20, 20))
+        set_theme_icon(header_icon, 'zap', 'focus', 20)
         header_row.addWidget(header_icon, alignment=Qt.AlignTop)
 
         header_texts = QVBoxLayout()
         header_texts.setSpacing(2)
         title_lbl = QLabel("Hiệu năng OCR & Tài nguyên máy")
-        title_lbl.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {CYBER_PALETTE['text_primary']};")
+        set_style(title_lbl, f"font-size: 15px; font-weight: 700; color: {TOKENS['text']};")
         desc_lbl = QLabel("Điều chỉnh tốc độ nhận diện và mức sử dụng CPU/RAM")
-        desc_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
+        set_style(desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
         header_texts.addWidget(title_lbl)
         header_texts.addWidget(desc_lbl)
         header_row.addLayout(header_texts)
@@ -206,7 +204,7 @@ class OcrPerformanceCard(QFrame):
             title="Hiệu năng cao",
             desc="OCR nhanh, dùng nhiều\ntài nguyên hơn",
             icon_name="zap",
-            icon_color=CYBER_PALETTE["neon_indigo"],
+            icon_color=TOKENS['focus'],
             parent=self
         )
         self.high_card.clicked.connect(lambda: self._select_mode("high"))
@@ -216,7 +214,7 @@ class OcrPerformanceCard(QFrame):
             title="Tiết kiệm RAM",
             desc="OCR chậm hơn, sử dụng\nít tài nguyên hơn",
             icon_name="leaf",
-            icon_color=CYBER_PALETTE["neon_green"],
+            icon_color=TOKENS['positive'],
             parent=self
         )
         self.eco_card.clicked.connect(lambda: self._select_mode("eco"))
@@ -227,29 +225,28 @@ class OcrPerformanceCard(QFrame):
         # ===== 3. Đường kẻ phân cách =====
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
-        divider.setStyleSheet(f"background-color: {CYBER_PALETTE['border']}; max-height: 1px;")
+        set_style(divider, f"background-color: {TOKENS['border']}; max-height: 1px;")
         main_layout.addWidget(divider)
 
         # ===== 4. Khu vực Phân bổ CPU =====
         cpu_header = QHBoxLayout()
         cpu_header.setSpacing(8)
         cpu_icon = QLabel()
-        chip_icon = get_lucide_icon("cpu", color=CYBER_PALETTE['text_muted'], size=16)
-        cpu_icon.setPixmap(chip_icon.pixmap(16, 16))
+        set_theme_icon(cpu_icon, 'cpu', 'muted', 16)
         cpu_header.addWidget(cpu_icon)
 
         cpu_title = QLabel("Phân bổ CPU")
-        cpu_title.setStyleSheet(f"font-size: 13.5px; font-weight: 700; color: {CYBER_PALETTE['text_primary']};")
+        set_style(cpu_title, f"font-size: 13.5px; font-weight: 700; color: {TOKENS['text']};")
         cpu_header.addWidget(cpu_title)
         cpu_header.addStretch()
         main_layout.addLayout(cpu_header)
 
         # Sub-container chứa checkbox và spinbox
         cpu_box = QFrame()
-        cpu_box.setStyleSheet(f"""
+        set_style(cpu_box, f"""
             QFrame {{
-                background-color: {CYBER_PALETTE['bg_sidebar']};
-                border: 1px solid {CYBER_PALETTE['border']};
+                background-color: {TOKENS['sidebar']};
+                border: 1px solid {TOKENS['border']};
                 border-radius: 8px;
             }}
         """)
@@ -261,22 +258,22 @@ class OcrPerformanceCard(QFrame):
         row1 = QHBoxLayout()
         self.auto_checkbox = QCheckBox("Tự động tối ưu số luồng CPU")
         self.auto_checkbox.setCursor(Qt.PointingHandCursor)
-        self.auto_checkbox.setStyleSheet(f"""
+        set_style(self.auto_checkbox, f"""
             QCheckBox {{
                 font-size: 12.5px;
-                color: {CYBER_PALETTE['text_primary']};
+                color: {TOKENS['text']};
                 spacing: 8px;
             }}
             QCheckBox::indicator {{
                 width: 17px;
                 height: 17px;
                 border-radius: 4px;
-                border: 1px solid {CYBER_PALETTE['border_light']};
-                background-color: {CYBER_PALETTE['bg_input']};
+                border: 1px solid {TOKENS['border_control']};
+                background-color: {TOKENS['input']};
             }}
             QCheckBox::indicator:checked {{
-                background-color: {CYBER_PALETTE['neon_indigo']};
-                border-color: {CYBER_PALETTE['neon_indigo']};
+                background-color: {TOKENS['focus']};
+                border-color: {TOKENS['focus']};
             }}
         """)
         self.auto_checkbox.setChecked(self.auto_threads)
@@ -285,9 +282,9 @@ class OcrPerformanceCard(QFrame):
         row1.addStretch()
 
         self.threads_badge = QLabel()
-        self.threads_badge.setStyleSheet(f"""
-            background-color: #23233a;
-            color: #a5b4fc;
+        set_style(self.threads_badge, f"""
+            background-color: {TOKENS['selection_bg']};
+            color: {TOKENS['selection_text']};
             border-radius: 5px;
             padding: 3px 8px;
             font-size: 11px;
@@ -298,7 +295,7 @@ class OcrPerformanceCard(QFrame):
 
         # Container chứa phần chỉnh số luồng thủ công (ẩn/hiện mượt mà)
         self.custom_threads_container = QFrame()
-        self.custom_threads_container.setStyleSheet("background: transparent; border: none;")
+        set_style(self.custom_threads_container, "background: transparent; border: none;")
         custom_layout = QVBoxLayout(self.custom_threads_container)
         custom_layout.setContentsMargins(0, 0, 0, 0)
         custom_layout.setSpacing(10)
@@ -306,7 +303,7 @@ class OcrPerformanceCard(QFrame):
         # Divider mờ bên trong
         inner_divider = QFrame()
         inner_divider.setFrameShape(QFrame.HLine)
-        inner_divider.setStyleSheet(f"background-color: {CYBER_PALETTE['border']}; max-height: 1px;")
+        set_style(inner_divider, f"background-color: {TOKENS['border']}; max-height: 1px;")
         custom_layout.addWidget(inner_divider)
 
         # Hàng chọn số luồng thủ công
@@ -314,7 +311,7 @@ class OcrPerformanceCard(QFrame):
         spin_ctrl_row.setSpacing(12)
 
         spin_lbl = QLabel("Số luồng CPU")
-        spin_lbl.setStyleSheet(f"font-size: 12.5px; color: {CYBER_PALETTE['text_primary']};")
+        set_style(spin_lbl, f"font-size: 12.5px; color: {TOKENS['text']};")
         spin_ctrl_row.addWidget(spin_lbl)
         spin_ctrl_row.addStretch()
 
@@ -325,11 +322,11 @@ class OcrPerformanceCard(QFrame):
         self.threads_spin.setFixedHeight(28)
         self.threads_spin.setAlignment(Qt.AlignCenter)
         self.threads_spin.setEnabled(not self.auto_threads)
-        self.threads_spin.setStyleSheet(f"""
+        set_style(self.threads_spin, f"""
             QSpinBox {{
-                background-color: {CYBER_PALETTE['bg_input']};
-                color: {CYBER_PALETTE['text_primary']};
-                border: 1px solid {CYBER_PALETTE['border_light']};
+                background-color: {TOKENS['input']};
+                color: {TOKENS['text']};
+                border: 1px solid {TOKENS['border_control']};
                 border-radius: 5px;
                 padding: 2px 4px;
                 font-size: 12px;
@@ -339,7 +336,7 @@ class OcrPerformanceCard(QFrame):
         spin_ctrl_row.addWidget(self.threads_spin)
 
         max_lbl = QLabel(f"Tối đa: {self.total_cores} luồng")
-        max_lbl.setStyleSheet(f"font-size: 11.5px; color: {CYBER_PALETTE['text_muted']};")
+        set_style(max_lbl, f"font-size: 11.5px; color: {TOKENS['muted']};")
         spin_ctrl_row.addWidget(max_lbl)
         custom_layout.addLayout(spin_ctrl_row)
 
@@ -438,3 +435,6 @@ class OcrPerformanceCard(QFrame):
         self._sync_cards()
         self._sync_badge()
         del blockers
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

@@ -29,7 +29,7 @@ def test_capture_startup_failure_stops_ui_and_explains_error(qtbot, worker_windo
     qtbot.waitUntil(lambda: not window.worker.isRunning()
                     and not window.worker._block_translator.isRunning())
     qtbot.waitUntil(lambda: window.status.text() == 'Đã dừng', timeout=1000)
-    assert window.console_page.primary_btn.text() == '▶ BẮT ĐẦU DỊCH'
+    assert window.console_page.primary_btn.text() == 'Bắt đầu dịch'
     log = window.console_page.log_view.toPlainText()
     assert 'Không thể mở bộ chụp màn hình' in log
     assert 'Chọn lại vùng quét' in log
@@ -89,7 +89,7 @@ def test_old_capture_finish_does_not_stop_requested_restart(
         qtbot.waitUntil(lambda: not worker.isRunning())
         qtbot.wait(30)  # Deliver finished while the old backend is still draining.
         assert window.status.text() == 'Đang hoạt động'
-        assert window.console_page.primary_btn.text() == '■ DỪNG DỊCH'
+        assert window.console_page.primary_btn.text() == 'Dừng dịch'
         release.set()
         qtbot.waitUntil(lambda: worker.is_running() and worker.isRunning())
         # A delayed notification from an older capture must also respect live state.

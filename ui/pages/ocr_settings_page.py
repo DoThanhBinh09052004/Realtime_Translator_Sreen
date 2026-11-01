@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLab
 from PyQt5.QtCore import Qt, QSize, QSignalBlocker, pyqtSignal
 from ui.widgets.cards import ModernCard
 from ui.widgets.ocr_performance_card import OcrPerformanceCard
-from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE
-from ui.icons import get_lucide_icon
+from ui.styles import TOKENS, set_style, apply_widget_theme, button_style
+from ui.icons import set_theme_icon
 from ui.controller_state import LanguageChoice, OcrPageState
 
 
@@ -35,7 +35,7 @@ class OcrSettingsPage(QScrollArea):
         src_col = QVBoxLayout()
         src_col.setSpacing(4)
         src_lbl = QLabel("Ngôn ngữ nguồn (Source)")
-        src_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(src_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.src_combo = QComboBox()
         self.src_combo.setPlaceholderText('Chọn ngôn ngữ đã cài')
         self._source_choices = tuple(LanguageChoice(name, name, name) for name in source_languages)
@@ -47,13 +47,13 @@ class OcrSettingsPage(QScrollArea):
 
         arrow_lbl = QLabel("->")
         arrow_lbl.setAlignment(Qt.AlignCenter)
-        arrow_lbl.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {CYBER_PALETTE['neon_indigo']}; margin-top: 18px;")
+        set_style(arrow_lbl, f"font-size: 15px; font-weight: 600; color: {TOKENS['focus']}; margin-top: 18px;")
         lang_row.addWidget(arrow_lbl)
 
         tgt_col = QVBoxLayout()
         tgt_col.setSpacing(4)
         tgt_lbl = QLabel("Ngôn ngữ dịch (Target)")
-        tgt_lbl.setStyleSheet(f"font-size: 11.5px; font-weight: 500; color: {CYBER_PALETTE['text_muted']};")
+        set_style(tgt_lbl, f"font-size: 11.5px; font-weight: 500; color: {TOKENS['muted']};")
         self.tgt_combo = QComboBox()
         self.tgt_combo.addItems(target_languages)
         self.tgt_combo.setCurrentText(state.target if state.target in target_languages else "Vietnamese")
@@ -65,7 +65,7 @@ class OcrSettingsPage(QScrollArea):
         lang_card.layout.addLayout(lang_row)
         self.source_notice_label = QLabel(state.source_notice)
         self.source_notice_label.setWordWrap(True)
-        self.source_notice_label.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px;")
+        set_style(self.source_notice_label, f"color: {TOKENS['warning']}; font-size: 12px;")
         self.source_notice_label.setVisible(bool(state.source_notice))
         lang_card.layout.addWidget(self.source_notice_label)
         layout.addWidget(lang_card)
@@ -88,7 +88,7 @@ class OcrSettingsPage(QScrollArea):
         timing_row.addWidget(self.interval_spin)
 
         timing_info = QLabel("Khuyến nghị: 500ms cho đối thoại game thông thường, 300ms cho game nhịp độ nhanh")
-        timing_info.setStyleSheet(f"color: {CYBER_PALETTE['text_muted']}; font-size: 11.5px;")
+        set_style(timing_info, f"color: {TOKENS['muted']}; font-size: 11.5px;")
         timing_info.setWordWrap(True)
         timing_row.addWidget(timing_info, stretch=1)
 
@@ -119,9 +119,9 @@ class OcrSettingsPage(QScrollArea):
 
         reg_btn = QPushButton("  Quản lý vùng quét")
         reg_btn.setFixedHeight(34)
-        reg_btn.setIcon(get_lucide_icon("scan", color=CYBER_PALETTE['text_muted'], size=15))
+        set_theme_icon(reg_btn, "scan", 'muted', 15)
         reg_btn.setIconSize(QSize(15, 15))
-        reg_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(reg_btn, button_style('secondary', 'tokens'))
         reg_btn.setCursor(Qt.PointingHandCursor)
         reg_btn.clicked.connect(self.select_region_requested.emit)
         reg_card.layout.addWidget(reg_btn)
@@ -139,10 +139,10 @@ class OcrSettingsPage(QScrollArea):
                 f"Tọa độ: X={reg[0]}, Y={reg[1]} | "
                 f"Kích thước: {reg[2]} x {reg[3]} px"
             )
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 12px; font-weight: 500;")
+            set_style(self.reg_info_lbl, f"color: {TOKENS['positive']}; font-size: 12px; font-weight: 500;")
         else:
             self.reg_info_lbl.setText("Chưa chọn vùng quét màn hình. Bấm nút bên dưới để chọn.")
-            self.reg_info_lbl.setStyleSheet(f"color: {CYBER_PALETTE['neon_amber']}; font-size: 12px; font-weight: 500;")
+            set_style(self.reg_info_lbl, f"color: {TOKENS['warning']}; font-size: 12px; font-weight: 500;")
 
     def render(self, state: OcrPageState):
         blockers = [QSignalBlocker(widget) for widget in (self.src_combo, self.tgt_combo, self.interval_spin)]
@@ -182,3 +182,6 @@ class OcrSettingsPage(QScrollArea):
         if choice is not None:
             self._source_index = index
             self.source_changed.emit(choice.config_name)
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

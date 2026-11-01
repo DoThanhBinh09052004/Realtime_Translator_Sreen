@@ -261,4 +261,4 @@ def test_active_paid_provider_is_not_reset(qtbot, tmp_path):
 
     assert load_active_provider() == "OpenAI"
     assert window.settings_coordinator.snapshot().ai.provider == "OpenAI"
-    assert window.console_page.provider_summary_lbl.text().startswith("OpenAI")
+    assert window.console_page.provider_combo.currentData() == 'OpenAI'

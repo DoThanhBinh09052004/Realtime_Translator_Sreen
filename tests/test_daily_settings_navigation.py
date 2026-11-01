@@ -25,7 +25,7 @@ def test_settings_returns_without_changing_run_intent(qtbot):
     # Return using back button
     window.back_btn.click()
     assert window.pages.currentIndex() == 0
-    assert window.sidebar.isHidden()
+    assert not window.sidebar.isHidden()
     assert window.capture_run_requested is True
     worker.start_worker.assert_not_called()
     worker.stop_worker.assert_not_called()

@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, QPoint, QRectF, pyqtSignal
 from PyQt5.QtGui import QPainter, QPen, QColor
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea
 from ui.direct_region_selector import DirectRegionSelector
-from ui.styles import HERO_START_STYLE, SECONDARY_BUTTON_STYLE
+from ui.styles import button_style, set_style, apply_widget_theme, get_app_stylesheet
 
 
 class ImageSelectionCanvas(DirectRegionSelector):
@@ -56,6 +56,7 @@ class WindowRegionPicker(QDialog):
 
     def __init__(self, profile, image, context, parent=None):
         super().__init__(parent)
+        set_style(self, get_app_stylesheet('tokens'))
         self.setWindowTitle('Khoanh vùng chữ trong cửa sổ')
         self.resize(1000, 720)
         layout = QVBoxLayout(self)
@@ -63,7 +64,7 @@ class WindowRegionPicker(QDialog):
         heading.setWordWrap(True)
         layout.addWidget(heading)
         self.select_all_btn = QPushButton('Chọn toàn bộ cửa sổ')
-        self.select_all_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(self.select_all_btn, button_style('secondary', 'tokens'))
         layout.addWidget(self.select_all_btn)
         self.canvas = ImageSelectionCanvas(profile, image, context)
         self.select_all_btn.clicked.connect(self.canvas.select_all)
@@ -75,7 +76,7 @@ class WindowRegionPicker(QDialog):
         for title, callback in (('Thu nhỏ −', lambda: self._zoom(.8)), ('Phóng to +', lambda: self._zoom(1.25)),
                                 ('Vẽ lại vùng', self._reset), ('Chụp lại ảnh', self.refresh_requested.emit)):
             button = QPushButton(title)
-            button.setStyleSheet(SECONDARY_BUTTON_STYLE)
+            set_style(button, button_style('secondary', 'tokens'))
             button.clicked.connect(callback)
             row.addWidget(button)
         layout.addLayout(row)
@@ -89,7 +90,7 @@ class WindowRegionPicker(QDialog):
         self.error_label.setText('Không thấy video hoặc ảnh bị thiếu? Dùng cách khoanh trên màn hình bên dưới.' if missing else
                                 f'Ảnh nguồn: {image.width()} × {image.height()} px. Nếu ảnh chỉ có thanh điều khiển, hãy khoanh trên màn hình.')
         self.fallback_btn = QPushButton('Không thấy hình video? Khoanh trên màn hình')
-        self.fallback_btn.setStyleSheet(SECONDARY_BUTTON_STYLE)
+        set_style(self.fallback_btn, button_style('secondary', 'tokens'))
         self.fallback_btn.clicked.connect(self.screen_fallback_requested.emit)
         layout.addWidget(self.fallback_btn)
         notice = QLabel('Cách màn hình: video cần hiện và không bị che. Xác nhận xong sẽ đổi nguồn OCR sang màn hình; di chuyển video thì cần khoanh lại.')
@@ -101,7 +102,7 @@ class WindowRegionPicker(QDialog):
         cancel.clicked.connect(self.reject)
         footer.addWidget(cancel)
         self.apply_btn = QPushButton('✓ Dùng vùng này')
-        self.apply_btn.setStyleSheet(HERO_START_STYLE)
+        set_style(self.apply_btn, button_style('primary', 'tokens'))
         self.apply_btn.setMinimumHeight(40)
         self.apply_btn.setEnabled(not missing)
         self.apply_btn.clicked.connect(self.canvas._confirm)
@@ -109,6 +110,9 @@ class WindowRegionPicker(QDialog):
         layout.addLayout(footer)
         self.canvas.profile_selected.connect(self.profile_selected.emit)
         self.canvas.cancelled.connect(self.reject)
+
+    def apply_theme(self, theme):
+        apply_widget_theme(self, theme)
 
     def _zoom(self, factor):
         width = max(160, min(6000, round(self.canvas.width() * factor)))

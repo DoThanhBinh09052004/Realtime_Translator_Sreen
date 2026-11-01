@@ -55,6 +55,17 @@ def test_minimum_window_keeps_primary_action_visible(qtbot):
     assert pos.y() < window.height()
 
 
+def test_wide_dashboard_keeps_subtitle_preview_in_first_screen(qtbot, ui_window):
+    from PyQt5.QtCore import QRect
+    page = ui_window.console_page
+    page.render_presented(PresentedTranslation(1, 'subtitle', 1, (PresentedPair('Stay close.', 'Con đường phía trước rất nguy hiểm. Hãy theo sát tôi.'),)))
+    ui_window.resize(1200, 800)
+    ui_window.show()
+    QApplication.processEvents()
+    preview = page.subtitle_preview
+    assert page.viewport().rect().contains(QRect(preview.mapTo(page.viewport(), QPoint()), preview.size()))
+
+
 def test_long_source_and_translation_do_not_expand_window(qtbot):
     """Long source title (200 chars) and multi-line unicode translations do not expand window geometry."""
     worker = Mock()

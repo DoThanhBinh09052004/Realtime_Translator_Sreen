@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QPalette, QColor, QIcon
+from PyQt5.QtGui import QIcon
 
 from core.config import (State, load_config, load_region, initialize_user_storage, ConfigError,
                          load_capture_profile, recover_legacy_capture_profile)
@@ -17,7 +17,6 @@ from ui.region_selection import RegionSelectionLifecycle
 from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
 
 
-from ui.styles import CYBER_PALETTE
 
 
 class ShutdownBarrier:
@@ -44,19 +43,9 @@ class ShutdownBarrier:
             self._on_ready()
 
 
-def setup_dark_theme(app: QApplication):
-    """Thiết lập giao diện Linear / Raycast Pro Dark Theme"""
-    app.setStyle("Fusion")
-    palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(CYBER_PALETTE["bg_main"]))
-    palette.setColor(QPalette.WindowText, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Base, QColor(CYBER_PALETTE["bg_input"]))
-    palette.setColor(QPalette.Text, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Button, QColor(CYBER_PALETTE["bg_card"]))
-    palette.setColor(QPalette.ButtonText, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Highlight, QColor(CYBER_PALETTE["neon_indigo"]))
-    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
-    app.setPalette(palette)
+def setup_app_style(app: QApplication):
+    """Use consistent native controls; each window owns its persisted palette."""
+    app.setStyle('Fusion')
 
 
 def apply_selected_region(controller, worker, new_region: dict) -> bool:
@@ -81,7 +70,7 @@ def main():
     app = QApplication(sys.argv)
     app.setOrganizationName('TranslateHUD')
     app.setApplicationName('TranslateHUD')
-    setup_dark_theme(app)
+    setup_app_style(app)
     try:
         initialize_user_storage()
     except ConfigError as error:

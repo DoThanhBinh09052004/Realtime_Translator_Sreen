@@ -16,6 +16,7 @@ from ui.controller_state import (AiPageState, OcrPageState, SubtitlePageState, C
 
 
 class SettingsCoordinator(QObject):
+    ui_theme_changed = pyqtSignal(str)
     settings_changed = pyqtSignal(object, str)
     save_failed = pyqtSignal(str)
     drag_mode_changed = pyqtSignal(bool)
@@ -176,6 +177,19 @@ class SettingsCoordinator(QObject):
 
     def set_overlay(self, overlay) -> None:
         self.overlay = overlay
+
+    def set_ui_theme(self, theme: str) -> bool:
+        if theme not in ('light', 'dark'):
+            return False
+        if theme == self.state.ui_theme:
+            return True
+        try:
+            self.state.update(ui_theme=theme)
+        except ConfigError as error:
+            self.save_failed.emit(str(error))
+            return False
+        self.ui_theme_changed.emit(theme)
+        return True
 
     def set_provider(self, name: str) -> bool:
         if name not in PROVIDERS:

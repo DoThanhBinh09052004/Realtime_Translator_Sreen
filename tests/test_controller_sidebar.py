@@ -25,6 +25,23 @@ def test_sidebar_signals_logo_and_status(qtbot, tmp_path, logo):
     assert len(quit_spy) == 1
     sidebar.set_status('Ready', 'color: green;')
     assert sidebar.status.text() == 'Ready'
-    assert sidebar.width() == 205
+    assert sidebar.width() == 64
     assert sidebar.objectName() == 'sidebarFrame'
     assert any(label.pixmap() and not label.pixmap().isNull() for label in sidebar.findChildren(QLabel))
+
+
+def test_sidebar_collapse_and_theme_keep_navigation(qtbot):
+    from ui.widgets.sidebar import ControllerSidebar
+    sidebar = ControllerSidebar((('languages', 'Công cụ dịch', 'Chọn công cụ'),), None)
+    qtbot.addWidget(sidebar)
+    assert sidebar.is_collapsed() and sidebar.width() == 64
+    sidebar.set_collapsed(False)
+    assert sidebar.width() == 212
+    assert sidebar.nav_buttons[0].text().strip() == 'Công cụ dịch'
+    sidebar.apply_theme('dark')
+    sidebar.set_collapsed(True)
+    assert sidebar.width() == 64 and sidebar.nav_buttons[0].text() == ''
+    assert sidebar.nav_buttons[0].toolTip()
+    spy = QSignalSpy(sidebar.theme_toggle_requested)
+    sidebar.theme_button.click()
+    assert len(spy) == 1

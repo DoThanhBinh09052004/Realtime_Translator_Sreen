@@ -3,7 +3,7 @@ from typing import Any
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QPainter, QPen, QColor, QFont, QPixmap, QImage
 from PyQt5.QtWidgets import QWidget, QSizePolicy
-from ui.styles import CYBER_PALETTE
+from ui.styles import apply_widget_theme, palette_for
 
 
 class CaptureSnapshotWidget(QWidget):
@@ -21,6 +21,9 @@ class CaptureSnapshotWidget(QWidget):
         self._profile = profile
         self._context = context
         self.update()
+
+    def apply_theme(self, theme):
+        apply_widget_theme(self, theme)
 
     def clear_snapshot(self, placeholder_text: str = "Ban đầu: Chọn nguồn để xem trước") -> None:
         self._image = None
@@ -69,8 +72,8 @@ class CaptureSnapshotWidget(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
 
         # Draw container background
-        bg_color = QColor(CYBER_PALETTE['bg_card'])
-        border_color = QColor(CYBER_PALETTE['border_card'])
+        bg_color = QColor(palette_for(self)['surface'])
+        border_color = QColor(palette_for(self)['border'])
         painter.setBrush(bg_color)
         painter.setPen(QPen(border_color, 1))
         painter.drawRoundedRect(0, 0, self.width() - 1, self.height() - 1, 6, 6)
@@ -101,6 +104,6 @@ class CaptureSnapshotWidget(QWidget):
                     painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
                     painter.drawText(int(rect.x()) + 4, int(rect.y()) + 14, label)
         else:
-            painter.setPen(QPen(QColor(CYBER_PALETTE['text_muted'])))
+            painter.setPen(QPen(QColor(palette_for(self)['muted'])))
             painter.setFont(QFont("Segoe UI", 10))
             painter.drawText(self.rect(), Qt.AlignCenter, self._placeholder_text)
