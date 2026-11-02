@@ -9,6 +9,7 @@ from ui.block_layout import layout_blocks, paint_blocks
 
 class BlockOverlay(QWidget):
     block_error = pyqtSignal(object)
+    frame_presented = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -48,25 +49,33 @@ class BlockOverlay(QWidget):
             return True
         return super().event(event)
 
-    def set_frame(self, frame):
+    def set_frame(self, frame, *, emit_presented: bool = True) -> bool:
         self._frame = frame
         if not frame.blocks:
             self.clear()
-            return
+            if emit_presented:
+                self.frame_presented.emit(frame)
+            return True
         if not self._protected and not self._protect():
-            return
+            return False
         r = overlay_window_rect(frame.geometry)
         self.setGeometry(floor(r.x), floor(r.y), ceil(r.width), ceil(r.height))
-        self.placed_blocks = layout_blocks(frame, max_font_px=self.font_size)
+        placed = layout_blocks(frame, max_font_px=self.font_size)
+        if not placed:
+            return False
+        self.placed_blocks = placed
         self.show()
         self.update()
+        if emit_presented:
+            self.frame_presented.emit(frame)
+        return True
 
     def apply_style(self, bg_hex=None, opacity_pct=None, text_hex=None, font_size=None):
         for key, value in locals().copy().items():
             if key != 'self' and value is not None:
                 setattr(self, key, value)
         if self._frame is not None:
-            self.set_frame(self._frame)
+            self.set_frame(self._frame, emit_presented=False)
 
     def clear(self):
         self._frame = None

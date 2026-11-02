@@ -14,6 +14,8 @@ class AiPageState:
     supports_models: bool = True
     supports_base_url: bool = False
     key_storage: str = 'none'
+    context_enabled: bool = False
+    context_supported: bool = False
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,9 @@ class OcrPageState:
     region: tuple[int, int, int, int] | None
     source_choices: tuple[LanguageChoice, ...] | None = None
     source_notice: str = ''
+    performance_mode: str = 'high'
+    auto_threads: bool = True
+    threads: int = 4
 
 
 @dataclass(frozen=True)
@@ -72,3 +77,33 @@ class ControllerSnapshot:
     ai: AiPageState
     ocr: OcrPageState
     subtitle: SubtitlePageState
+
+
+@dataclass(frozen=True)
+class DailyReadiness:
+    ready: bool
+    reason: str
+    action: str | None = None  # select_source/select_regions/manage_packs/configure_provider
+
+
+@dataclass(frozen=True)
+class DailyRunState:
+    phase: str  # stopped/starting/running/stopping/waiting_source
+    message: str
+    can_toggle: bool
+    preview_enabled: bool
+
+
+@dataclass(frozen=True)
+class PresentedPair:
+    source_text: str
+    translated_text: str
+    region_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PresentedTranslation:
+    revision: int
+    mode: str
+    sequence: int
+    pairs: tuple[PresentedPair, ...] = ()

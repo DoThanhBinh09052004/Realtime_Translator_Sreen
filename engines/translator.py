@@ -11,8 +11,10 @@ from core.contracts import EngineError, ProviderSettings, RuntimeSettings, Trans
 from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
 from engines.custom_api_http import build_custom_api_http_client
 from engines.google_translate import GoogleTranslateClient, GOOGLE_ADAPTER_VERSION
+from engines.context_protocol import build_context_messages, parse_context_response
+from core.dialogue.context_builder import context_supported
 
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 DEFAULT_TIMEOUT_S = 8.0
 GEMINI_TIMEOUT_S = 10.0
 _MESSAGES = {
@@ -25,6 +27,7 @@ _MESSAGES = {
     "invalid_endpoint": "Custom API cần endpoint cuối dùng HTTPS hoặc HTTP loopback, không chuyển hướng.",
     "invalid_input": "Nội dung dịch không hợp lệ hoặc vượt quá 2000 ký tự.",
     "internal": "Không thể xử lý kết quả từ dịch vụ dịch.",
+    "invalid_response": "Công cụ dịch trả định dạng không hợp lệ. Lượt tiếp theo sẽ dùng bản dịch văn bản.",
 }
 
 
@@ -94,6 +97,7 @@ class TranslationService:
         self._log_callback = log_callback
         self._provider: ProviderSettings | None = None
         self._cache = OrderedDict()
+        self._text_fallback = set()
 
     def _log(self, message):
         if self._log_callback is None:
@@ -109,6 +113,7 @@ class TranslationService:
         google, self._google = self._google, None
         self._provider = None
         self._cache.clear()
+        self._text_fallback.clear()
         if client is not None:
             try:
                 client.close()
@@ -152,9 +157,12 @@ class TranslationService:
                 raise
         self._provider = provider
 
-    def translate(self, text: str, settings: RuntimeSettings) -> TranslationResult:
+    def translate(self, text: str, settings: RuntimeSettings, *, context=None) -> TranslationResult:
         if not isinstance(text, str) or len(text) > 2000:
             return _error("invalid_input")
+        if context is not None and context_supported(settings) and text != context.current.source_text:
+            return _error('invalid_input')
+        if not context_supported(settings): context=None
         text = text.strip()
         if not text:
             return TranslationResult()
@@ -194,19 +202,22 @@ class TranslationService:
             return _error("invalid_model")
         try:
             self._prepare_client(provider)
+            capability=(provider.name,provider.model_id,provider.base_url or '')
+            structured=capability not in self._text_fallback
             key = (provider.name, provider.model_id, settings.source_lang,
-                   settings.target_lang, text, PROMPT_VERSION)
+                   settings.target_lang, text, PROMPT_VERSION,provider.base_url or '',
+                   (structured,context.stamp) if context is not None else None)
             if key in self._cache:
                 self._log(f'Dịch cache hit; {provider.name}/{provider.model_id}; văn bản={text!r}')
                 return replace(self._cache[key], from_cache=True)
             started = perf_counter()
             self._log(f'Gửi request {provider.name}/{provider.model_id}; {settings.source_lang} → {settings.target_lang}; văn bản={text!r}')
+            messages=build_context_messages(text,settings.source_lang,settings.target_lang,context,structured=structured) if context is not None else [
+                    {"role":"system","content":"You are a professional translator. Provide only the translated text without commentary."},
+                    {"role":"user","content":f"Translate the following text from {settings.source_lang} to {settings.target_lang}:\n\n{text}"}]
             response = self._client.chat.completions.create(
                 model=provider.model_id,
-                messages=[
-                    {"role": "system", "content": "You are a professional translator. Provide only the translated text without commentary."},
-                    {"role": "user", "content": f"Translate the following text from {settings.source_lang} to {settings.target_lang}:\n\n{text}"},
-                ],
+                messages=messages,
                 temperature=0, top_p=1.0, timeout=_request_timeout(provider),
             )
             content = response.choices[0].message.content
@@ -214,9 +225,16 @@ class TranslationService:
                 self._log(f'Nhận phản hồi rỗng/không hợp lệ sau {perf_counter() - started:.3f}s')
                 return _error("internal")
             usage = getattr(response, "usage", None)
+            outcome=None
+            if context is not None:
+                parsed=parse_context_response(content,context,structured=structured,finish_reason=getattr(response.choices[0],'finish_reason',None))
+                if parsed.fallback_required: self._text_fallback.add(capability)
+                if parsed.format_error: return replace(_error('invalid_response'),context_degraded=True)
+                content,outcome=parsed.text,parsed.outcome
             result = TranslationResult(
                 text=content.strip(), input_tokens=getattr(usage, "prompt_tokens", None),
                 output_tokens=getattr(usage, "completion_tokens", None),
+                context=outcome,context_degraded=bool(outcome and outcome.degraded),
             )
             self._log(f'Nhận phản hồi {provider.name}/{provider.model_id} sau {perf_counter() - started:.3f}s; bản dịch={result.text!r}')
             if len(self._cache) >= 300:

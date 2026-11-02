@@ -15,6 +15,7 @@ class BlockTranslationWorker(QThread):
     log_updated = pyqtSignal(str)
     job_started = pyqtSignal(object)
     result_ready = pyqtSignal(object)
+    diagnostic_event = pyqtSignal(object)
 
     def __init__(self, *, clock=time.monotonic, service_factory=TranslationService, google_recovery=None, parent=None):
         super().__init__(parent)
@@ -50,6 +51,13 @@ class BlockTranslationWorker(QThread):
     def pending_count(self):
         with self._condition:return len(self._pending)
 
+    def _trace_drop(self,job):
+        context=job.context
+        stamp=context.stamp if context is not None else None
+        self.diagnostic_event.emit(dict(kind='dropped',request_key=job.request_key,
+            source_id=context.current.source_id if context is not None else None,
+            stamp=dict(memory_epoch=stamp.memory_epoch,scope_id=stamp.scope_id,snapshot_digest=stamp.snapshot_digest) if stamp is not None else None))
+
     def replace_pending(self,jobs,active_keys,revision):
         with self._condition:
             if self._stopping or (self._revision is not None and revision<self._revision):return
@@ -72,10 +80,15 @@ class BlockTranslationWorker(QThread):
                     token=self._token(job)
                     if (job.revision!=revision or token not in self._active or token in self._exhausted
                             or job.text_version<=self._done.get(token,-1) or self._key(job)==self._inflight):continue
+                    if token in incoming and incoming[token].request_key==job.request_key:
+                        continue  # Retry the exact dispatched snapshot, even if pending memory refreshed.
                     if token in incoming or len(incoming)<32:incoming[token]=job
             else:incoming.clear()
             order={k:i for i,k in enumerate(previous)}
             self._pending=OrderedDict(sorted(incoming.items(),key=lambda kv:order.get(kv[0],len(order))))
+            for token,old in previous.items():
+                replacement=self._pending.get(token)
+                if replacement is None or replacement.request_key!=old.request_key:self._trace_drop(old)
             if self._last_served in self._pending:self._pending.move_to_end(self._last_served)
             self._condition.notify_all()
 
@@ -110,13 +123,18 @@ class BlockTranslationWorker(QThread):
                     key=self._key(job)
                     self._inflight=key;self._last_served=token;self._started[token]=now
                 self.job_started.emit(job)
-                try:result=service.translate(job.source_text,job.settings)
+                try:
+                    result=(service.translate(job.source_text,job.settings,context=job.context) if job.context is not None
+                            else service.translate(job.source_text,job.settings))
                 except Exception:result=TranslationResult(error=EngineError('network','Translation request failed.',True))
+                if result.context is not None and (job.context is None or result.context.stamp!=job.context.stamp):
+                    result=replace(result,context=None,context_degraded=True)
                 if google:self.google_recovery.record_result(result,generation=recovery.generation,now_s=self._clock())
-                response=BlockTranslationResult(job.revision,job.block_id,job.source_text,result,job.turn_id,job.text_version)
+                response=BlockTranslationResult(job.revision,job.block_id,job.source_text,result,job.turn_id,job.text_version,job.context.stamp if job.context else None)
                 with self._condition:
                     self._inflight=None
-                    if self._stopping or token not in self._active:continue
+                    if self._stopping or token not in self._active:
+                        self._trace_drop(job);continue
                     self._results[key]=response
                     while len(self._results)>32:self._results.popitem(last=False)
                     error=result.error

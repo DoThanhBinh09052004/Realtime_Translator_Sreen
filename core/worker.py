@@ -14,12 +14,17 @@ from engines.translator import TranslationService
 from core.config import SUPPORTED_LANGUAGES, load_runtime_settings
 from core.contracts import EngineError, RuntimeSettings, TranslationStatus, SubtitleFrame
 from core.retry import RetryState
-from core.subtitle_stabilizer import SubtitleStabilizer
 from core.blocks.translation_worker import BlockTranslationWorker
 from core.blocks.models import Rect
 from core.google_recovery import GoogleRecoveryGate
 from core.dialogue.coordinator import DialogueCoordinator
 from core.dialogue.models import DialogueObservation
+from core.capture.models import CaptureStatus, SourceStatus
+from core.capture.profile import serialize_capture_profile
+from core.capture.source import create_capture_source
+from core.capture.scan import RegionScanner
+from core.capture.geometry import resolve_region_crops
+from core.dialogue.context_models import SourceKey, ScopeSpec
 
 
 def compact_memory():
@@ -48,7 +53,6 @@ class TranslationWorker(QThread):
 
     # Signals gửi về UI Main Thread
     text_translated = pyqtSignal(str)
-    text_unchanged = pyqtSignal()
     error_occurred = pyqtSignal(object)
     status_updated = pyqtSignal(str)
     blocks_updated = pyqtSignal(object)
@@ -58,6 +62,11 @@ class TranslationWorker(QThread):
     translation_status_updated = pyqtSignal(object)
     log_updated = pyqtSignal(str)
     observation_ready = pyqtSignal(object)
+    capture_observation_ready = pyqtSignal(object)
+    capture_status_updated = pyqtSignal(object)
+    capture_terminal_status = pyqtSignal(object)
+    capture_rebind_requested = pyqtSignal(object)
+    context_status_changed = pyqtSignal(object)
 
     def __init__(self, state, region, interval_ms=500, *, ocr_reader=None):
         super().__init__()
@@ -71,13 +80,12 @@ class TranslationWorker(QThread):
         self._mutex = QMutex()
 
         self._prev_frame_thumb = None
-        self._prev_text = ""
-        self._retry_not_before = 0.0
-        self._retry_state = RetryState()
-        self._retry_frame_only = False
-        self._stabilizer = SubtitleStabilizer()
         self._overlay_rect = None  # (x, y, w, h)
         self._capture_geometry = None
+        self._capture_profile = None
+        self._capture_context = None
+        self._context_source_invalid = False
+        self._force_regions = frozenset()
         self._google_recovery = GoogleRecoveryGate()
         self._translation_session_id = 0
         self._last_translation_status = None
@@ -90,11 +98,15 @@ class TranslationWorker(QThread):
         self._last_emitted_translation = ''
         self._coordinator = DialogueCoordinator(clock=lambda: time.monotonic(), parent=self)
         self.observation_ready.connect(self._coordinator.observe, Qt.QueuedConnection)
+        self.capture_observation_ready.connect(self._coordinator.observe_capture, Qt.QueuedConnection)
+        self._coordinator.capture_scan_policy_changed.connect(self.request_capture_scan)
         self._coordinator.jobs_changed.connect(self._replace_dialogue_pending)
         self._coordinator.scan_policy_changed.connect(self.request_dialogue_scan)
         self._coordinator.subtitle_updated.connect(self._publish_dialogue_subtitle)
         self._coordinator.blocks_updated.connect(self.blocks_updated.emit)
         self._coordinator.error_occurred.connect(self.error_occurred.emit)
+        self._coordinator.context_status_changed.connect(self.context_status_changed.emit)
+        self.capture_terminal_status.connect(self._on_context_terminal,Qt.QueuedConnection)
         self._coordinator._timer.timeout.connect(self._dialogue_status_tick)
         self._block_translator = self._new_block_translator()
         self._restart_pending = False
@@ -117,9 +129,6 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             return self._translation_session_id
 
-    @staticmethod
-    def _uses_async(settings):
-        return True
 
     @pyqtSlot(object, object, int)
     def _replace_dialogue_pending(self, jobs, active_turns, revision):
@@ -136,9 +145,102 @@ class TranslationWorker(QThread):
         with QMutexLocker(self._mutex):
             if revision != self._revision: return
             settings, running = self._settings, self._is_running
+            profile, context = self._capture_profile, self._capture_context
+            source,scopes=self._memory_identity(profile,context)
         self._last_emitted_translation = ''
         self._coordinator.reset(settings, revision=revision,
-                                session_id=self.translation_session_id, running=running)
+                                session_id=self.translation_session_id, running=running,memory_source=source,memory_scopes=scopes)
+        with QMutexLocker(self._mutex):
+            profile, context = self._capture_profile, self._capture_context
+        if profile is not None and context is not None:
+            self._coordinator.configure_capture(profile, context)
+
+    def _memory_identity(self,profile,context):
+        if self._context_source_invalid:return None,()
+        if profile is not None and context is not None:
+            window=context.window
+            identity=((window.hwnd,window.pid,window.process_started_100ns,context.binding_epoch) if window is not None
+                      else (profile.monitor_name or context.geometry.screen.name,context.binding_epoch))
+            exclusions=tuple(v for rect in profile.exclusions for v in (rect.x,rect.y,rect.width,rect.height))
+            # Layout tuples remain compact even with many exclusion rectangles.
+            import hashlib
+            exclusion_key=hashlib.sha256(repr(exclusions).encode()).hexdigest()
+            scopes=tuple(ScopeSpec(r.id,(*context.geometry.image_size_px,r.rect.x,r.rect.y,r.rect.width,r.rect.height,exclusion_key))
+                         for r in profile.regions if r.enabled)
+            return SourceKey(profile.source_kind,identity),scopes
+        geometry=self._capture_geometry
+        screen=geometry.screen.name if geometry is not None else str(self._region.get('monitor','legacy'))
+        layout=tuple(self._region.get(k,0) for k in ('left','top','width','height'))
+        return SourceKey('desktop',(screen,)),(ScopeSpec('legacy-subtitle',layout),)
+
+    def reset_dialogue_context(self):
+        self._coordinator.clear_context()
+        with QMutexLocker(self._mutex):
+            self._revision+=1;self._invalidated=True;revision=self._revision
+            self._force_regions=frozenset(r.id for r in self._capture_profile.regions if r.enabled) if self._capture_profile else frozenset()
+        self.revision_changed.emit(revision)
+        return revision
+
+    @pyqtSlot(object)
+    def _on_context_terminal(self,status):
+        if status.phase in ('unavailable','error'):self.invalidate_context_source(status.binding_epoch)
+
+    def invalidate_context_source(self,binding_epoch):
+        with QMutexLocker(self._mutex):
+            if self._capture_context is None or self._capture_context.binding_epoch!=binding_epoch or self._context_source_invalid:return
+            self._context_source_invalid=True
+        self.reset_dialogue_context()
+
+    @pyqtSlot(int, object)
+    def request_capture_scan(self, revision, regions):
+        with QMutexLocker(self._mutex):
+            if revision == self._revision:
+                self._force_regions = frozenset(regions)
+
+    @property
+    def is_drained(self):
+        return not self.isRunning() and not self._block_translator.isRunning()
+
+    @property
+    def capture_context(self):
+        with QMutexLocker(self._mutex):
+            return self._capture_context
+
+    @property
+    def capture_profile(self):
+        with QMutexLocker(self._mutex):
+            return self._capture_profile
+
+    def configure_capture(self, profile, context):
+        serialize_capture_profile(profile)
+        if (context.source_kind != profile.source_kind
+                or (profile.source_kind == 'window' and context.window is None)):
+            raise ValueError('Capture source requires an explicit matching identity')
+        with QMutexLocker(self._mutex):
+            self._capture_profile, self._capture_context = profile, context
+            self._context_source_invalid = False
+            self._capture_geometry = context.geometry
+            self._revision += 1
+            revision = self._revision
+            self._invalidated = True
+            self._force_regions = frozenset()
+        self.revision_changed.emit(revision)
+        return revision
+
+    @pyqtSlot(object)
+    def update_capture_geometry(self, context):
+        with QMutexLocker(self._mutex):
+            old = self._capture_context
+            if old is None or (old.binding_epoch, old.source_kind, old.window,
+                    old.geometry.image_size_px, old.geometry.screen) != (
+                    context.binding_epoch, context.source_kind, context.window,
+                    context.geometry.image_size_px, context.geometry.screen):
+                return
+            if context.geometry_sequence < old.geometry_sequence:
+                return
+            self._capture_context = context
+            self._capture_geometry = context.geometry
+        self._coordinator.update_capture_geometry(context)
 
     @pyqtSlot(object)
     def _publish_dialogue_subtitle(self, frame):
@@ -186,13 +288,12 @@ class TranslationWorker(QThread):
         """Publish an immutable snapshot; only run() consumes invalidation."""
         with QMutexLocker(self._mutex):
             mode_changed = self._settings.overlay_mode != settings.overlay_mode
-            lane_changed = self._uses_async(self._settings) != self._uses_async(settings)
             self._settings = settings
             self._revision += 1
             self._invalidated = True
             revision = self._revision
         self.revision_changed.emit(revision)
-        if ((mode_changed or lane_changed)
+        if (mode_changed
                 and (self.is_running() or self._restart_pending)
                 and (self.isRunning() or self._block_translator.isRunning())):
             self.stop_worker(preserve_translation_session=True)
@@ -262,9 +363,6 @@ class TranslationWorker(QThread):
         self._shutdown_pending = True
         self._block_translator.request_stop()
         self.revision_changed.emit(self.revision)
-        if not self._uses_async(self._settings) and not self._block_translator.isRunning():
-            self.wait(3000)
-            compact_memory()
         self._threads_finished()
 
     # Hỗ trợ trực tiếp các phương thức start() và stop()
@@ -287,11 +385,10 @@ class TranslationWorker(QThread):
             self._is_running = True
             self._revision += 1
             self._invalidated = True
-        if self._uses_async(self._settings):
-            old = self._block_translator
-            self._block_translator = self._new_block_translator()
-            old.deleteLater()
-            self._block_translator.start()
+        old = self._block_translator
+        self._block_translator = self._new_block_translator()
+        old.deleteLater()
+        self._block_translator.start()
         self.revision_changed.emit(self.revision)
         super().start(priority)
 
@@ -363,12 +460,7 @@ class TranslationWorker(QThread):
             invalidated, self._invalidated = self._invalidated, False
         if invalidated:
             # These fields belong to this worker, never to the settings UI.
-            self._prev_text = ""
             self._prev_frame_thumb = None
-            self._retry_not_before = 0.0
-            self._retry_state.reset()
-            self._retry_frame_only = False
-            self._stabilizer.reset()
             self._dialogue_last_ocr = float('-inf')
             self._dialogue_retry.reset()
             self._dialogue_due = 0.
@@ -376,12 +468,6 @@ class TranslationWorker(QThread):
             self._scan_id = 0
         return snapshot
 
-    def retry_current(self) -> None:
-        """Ask the worker to reprocess the current frame as a new revision."""
-        with QMutexLocker(self._mutex):
-            self._revision += 1
-            self._invalidated = True
-        self.revision_changed.emit(self.revision)
 
     def retry_translation(self):
         with QMutexLocker(self._mutex):
@@ -410,22 +496,6 @@ class TranslationWorker(QThread):
             self._last_translation_status = status
             self._emit_current(revision, self.translation_status_updated, status)
 
-    def _schedule_retry(self, error: EngineError, settings: RuntimeSettings) -> None:
-        retry_error = error
-        # Keep the provider's existing cooldown floor while enforcing the shared
-        # three-retry budget and honoring any larger Retry-After value.
-        if settings.provider.name == "Google Gemini":
-            minimum = 5.0 if error.code == "rate_limit" else 2.0
-            retry_error = replace(
-                error,
-                retry_after_s=max(error.retry_after_s or 0.0, minimum),
-            )
-        due = self._retry_state.next_due(time.monotonic(), retry_error)
-        self._retry_not_before = due or 0.0
-        self._retry_frame_only = due is None
-        if due is not None:
-            # Force OCR again after the deadline even when the capture is static.
-            self._prev_frame_thumb = None
 
     def _process_dialogue_frame(self, img_gray, settings, revision, geometry=None, *, captured_at_s=None):
         if not self._is_current(revision): return False
@@ -452,70 +522,32 @@ class TranslationWorker(QThread):
             now if captured_at_s is None else captured_at_s,completed,settings,result,geometry))
         return False
 
-    def _process_frame(self, img_gray, settings: RuntimeSettings, revision: int, service: TranslationService) -> bool:
-        """Legacy direct-call helper. Runtime run() always uses the async coordinator.
 
-        Retained for existing embedding/tests; not used for game dialogue dispatch.
-        """
-        if not self._is_current(revision):
-            return False
-        if time.monotonic() < self._retry_not_before:
-            return True
-        frame_changed = self._is_frame_changed(img_gray)
-        if not frame_changed and (not self._stabilizer.has_pending or self._retry_frame_only):
-            if self._prev_text:
-                self._emit_current(revision, self.text_unchanged)
-            return True
-        result = self._read_ocr(img_gray, settings.source_lang)
-        if not self._is_current(revision):
-            return False
-        if result.error is not None:
-            self._schedule_retry(result.error, settings)
-            self._emit_current(revision, self.error_occurred, result.error)
-            return False
-        decision = self._stabilizer.observe(result.text, time.monotonic())
-        if decision.action == 'wait':
-            # A fresh candidate still needs its second observation even if the
-            # previous source exhausted retries or failed permanently.
-            self._retry_frame_only = False
-            if not self._stabilizer.has_pending:
-                self._retry_state.reset()
-                self._retry_not_before = 0.0
-            return False
-        if decision.action == 'unchanged':
-            self._emit_current(revision, self.text_unchanged)
-            return False
-        text = decision.text
-        translated = service.translate(text, settings)
-        if not self._is_current(revision):
-            return False
-        if translated.error is not None:
-            self._schedule_retry(translated.error, settings)
-            self._emit_current(revision, self.error_occurred, translated.error)
-        elif translated.text:
-            # Commit atomically with respect to settings/region publication.
-            with QMutexLocker(self._mutex):
-                if (self._revision != revision or not self._is_running
-                        or self.isInterruptionRequested()):
-                    return False
-                self._retry_not_before = 0.0
-                self._retry_frame_only = False
-                self._retry_state.reset()
-                self._stabilizer.commit(text)
-                self._prev_text = text
-            self._emit_current(revision, self.text_translated, translated.text)
-            self._emit_current(revision, self.subtitle_updated, SubtitleFrame(revision, 0, text, translated.text))
-        return False
-
-    def _read_ocr(self, image, source_name):
-        lang = SUPPORTED_LANGUAGES.get(source_name)
+    def _read_ocr(self, image, source_name, settings=None):
+        lang = SUPPORTED_LANGUAGES.get(source_name) or (source_name if source_name in SUPPORTED_LANGUAGES.values() else None)
         if lang is None:
             from core.contracts import OcrResult
             return OcrResult(error=EngineError('ocr_model_missing', 'Ngôn ngữ nguồn không được hỗ trợ.', False))
-        return (self._ocr_reader or ocr_image)(image, lang=lang)
+        if settings is None:
+            with QMutexLocker(self._mutex):
+                settings = self._settings
+        from core.config import resolve_ocr_threads
+        perf_mode = getattr(settings, 'ocr_performance_mode', 'high')
+        auto_threads = getattr(settings, 'ocr_auto_threads', True)
+        custom_threads = getattr(settings, 'ocr_threads', 4)
+        enable_mkldnn = (perf_mode == 'high')
+        threads = resolve_ocr_threads(auto_threads, custom_threads)
+        reader = self._ocr_reader or ocr_image
+        try:
+            return reader(image, lang=lang, enable_mkldnn=enable_mkldnn, cpu_threads=threads)
+        except TypeError:
+            return reader(image, lang=lang)
 
     def run(self):
         # Construction, use and cleanup all happen on this thread. UI only publishes settings.
+        if self.capture_profile is not None:
+            self._run_capture()
+            return
         revision = None
         idle_counter = 0
         try:
@@ -569,8 +601,79 @@ class TranslationWorker(QThread):
                                EngineError("capture", "Không thể mở bộ chụp màn hình.", True))
         finally:
             self._block_translator.request_stop()
-            self._stabilizer.reset()
             release_ocr_engine()
             with QMutexLocker(self._mutex):
                 self._is_running = False
             compact_memory()
+
+    def _run_capture(self):
+        source = None
+        source_key = scanner_revision = None
+        scanner = None
+        last_status = None
+        revision = self.revision
+        try:
+            while True:
+                snapshot = self._take_snapshot()
+                if snapshot is None:
+                    break
+                settings, revision, _, overlay_rect = snapshot
+                with QMutexLocker(self._mutex):
+                    profile, context = self._capture_profile, self._capture_context
+                    forced = self._force_regions
+                started = time.monotonic()
+                key = (profile, context.binding_epoch)
+                if key != source_key:
+                    if source is not None:
+                        source.close()
+                    source = None
+                    # The callback only emits immutable data. Qt delivers the
+                    # terminal event to the GUI even while Paddle is blocked.
+                    source = create_capture_source(context, on_terminal=self.capture_terminal_status.emit)
+                    source.open(context, roi_rects_px=tuple(resolve_region_crops(profile, context.geometry.image_size_px).values()))
+                    source_key = key
+                    last_status = None
+                if scanner_revision != revision:
+                    scanner = RegionScanner(profile, ocr_reader=lambda img, lang: self._read_ocr(img, lang, settings=settings), clock=time.monotonic)
+                    scanner_revision = revision
+                frame = source.read_latest(now_s=started)
+                status = source.status()
+                current_status = CaptureStatus(revision, status.binding_epoch, status.phase, status.error)
+                if current_status != last_status:
+                    self._emit_current(revision, self.capture_status_updated, current_status)
+                    last_status = current_status
+                if status.phase in ('unavailable', 'error'):
+                    self.capture_terminal_status.emit(status)
+                    break
+                masks = ()
+                if context.source_kind == 'desktop' and overlay_rect:
+                    x, y, width, height = overlay_rect
+                    if width > 0 and height > 0:
+                        origin = context.geometry.region_px
+                        masks = (Rect(x-origin.x-6, y-origin.y-6, width+12, height+12),)
+                if frame is not None:
+                    batch = scanner.observe(frame, settings=settings, context=context,
+                        revision=revision, force_regions=forced, dynamic_masks_px=masks,
+                        is_current=lambda: self._is_current(revision))
+                    if batch is not None:
+                        self._emit_current(revision, self.capture_observation_ready, batch)
+                # Interruption is checked frequently without involving the GUI.
+                deadline = started + settings.interval_ms / 1000
+                while self._is_current(revision) and time.monotonic() < deadline:
+                    self.msleep(20)
+        except Exception:
+            with QMutexLocker(self._mutex):
+                context = self._capture_context
+            if context is not None:
+                self.capture_terminal_status.emit(SourceStatus(context.binding_epoch, 'error',
+                    EngineError('capture', 'Không thể mở hoặc xử lý nguồn chụp. Chọn nguồn hoặc thử lại.', True)))
+        finally:
+            try:
+                if source is not None:
+                    source.close()
+            finally:
+                self._block_translator.request_stop()
+                release_ocr_engine()
+                with QMutexLocker(self._mutex):
+                    self._is_running = False
+                compact_memory()

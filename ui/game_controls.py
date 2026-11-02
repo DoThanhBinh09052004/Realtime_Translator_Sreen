@@ -17,7 +17,7 @@ from ui.capture_exclusion import set_capture_excluded
 from ui.game_toolbar import GameToolbar
 from ui.global_hotkeys import GlobalHotkeys
 from ui.icons import get_lucide_icon
-from ui.styles import CYBER_PALETTE
+from ui.styles import get_palette
 
 _TRAY_TOOLTIP = "Translate HUD - Điều khiển game"
 _TEXT_START = "Bắt đầu (Ctrl+Alt+F8)"
@@ -99,8 +99,14 @@ class GameControls(QObject):
     # -- Event filter (WinIdChange monitoring) ------------------------------
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if watched is self.toolbar and event.type() == QEvent.WinIdChange:
+        if getattr(self, "toolbar", None) is not None and watched is self.toolbar and event.type() == QEvent.WinIdChange:
             self.apply_capture_exclusion()
+        elif getattr(self, "_controller", None) is not None and watched is self._controller and event.type() in (
+            QEvent.Show,
+            QEvent.Hide,
+            QEvent.WindowStateChange,
+        ):
+            self.refresh_toolbar_visibility()
         return super().eventFilter(watched, event)
 
     # -- Toolbar initialization & localization -----------------------------
@@ -159,7 +165,7 @@ class GameControls(QObject):
 
         if self.tray_icon is None:
             tray_icon = get_lucide_icon(
-                "languages", color=CYBER_PALETTE.get("neon_indigo", "#6366f1"), size=22
+                "languages", color=get_palette("dark")["focus"], size=22
             )
             self.tray_icon = QSystemTrayIcon(tray_icon, self)
 
@@ -199,9 +205,21 @@ class GameControls(QObject):
                 )
                 return
 
-            if not self.toolbar.isVisible():
-                self.toolbar.show()
-            self.toolbar.raise_()
+            # If controller is open (visible and not minimized), single click should not show toolbar over app
+            controller_open = False
+            if self._controller is not None:
+                is_vis = getattr(self._controller, "isVisible", None)
+                is_min = getattr(self._controller, "isMinimized", None)
+                if callable(is_vis):
+                    if callable(is_min):
+                        controller_open = bool(is_vis() and not is_min())
+                    else:
+                        controller_open = bool(is_vis())
+
+            if not controller_open:
+                if not self.toolbar.isVisible():
+                    self.toolbar.show()
+                self.toolbar.raise_()
         elif reason == QSystemTrayIcon.DoubleClick:
             # Double click opens main application
             self.open_main_app()
@@ -229,12 +247,15 @@ class GameControls(QObject):
                 worker.revision_changed.connect(self._queue_state_sync)
 
     def _bind_controller(self) -> None:
-        if self._controller is not None and hasattr(self._controller, "starting_translation"):
-            try:
-                self._controller.starting_translation.disconnect(self._on_pre_start)
-            except (TypeError, RuntimeError):
-                pass
-            self._controller.starting_translation.connect(self._on_pre_start)
+        if self._controller is not None:
+            if hasattr(self._controller, "starting_translation"):
+                try:
+                    self._controller.starting_translation.disconnect(self._on_pre_start)
+                except (TypeError, RuntimeError):
+                    pass
+                self._controller.starting_translation.connect(self._on_pre_start)
+            if isinstance(self._controller, QObject):
+                self._controller.installEventFilter(self)
 
     def _on_pre_start(self) -> None:
         """Emitted before worker.start_worker launches capture.
@@ -258,6 +279,54 @@ class GameControls(QObject):
         self._bind_worker()
         self.sync_state()
 
+    def refresh_toolbar_visibility(self) -> None:
+        """Central decision function for toolbar visibility.
+
+        High priority conditions (shutdown, selection, capture exclusion safety)
+        override normal display.
+        When normal, hides toolbar if main window is open (visible and not minimized);
+        shows toolbar if main window is minimized or hidden.
+        """
+        if self._is_shutdown or self._is_quitting:
+            if self.toolbar is not None and self.toolbar.isVisible():
+                self.toolbar.hide()
+            return
+
+        if self._is_selecting:
+            if self.toolbar is not None and self.toolbar.isVisible():
+                self.toolbar.hide()
+            return
+
+        worker = self._worker or getattr(self._controller, "worker", None)
+        is_running = (
+            bool(worker.is_running() or getattr(worker, "restart_pending", False))
+            if worker is not None
+            else bool(self._last_running_state)
+        )
+
+        if not self._capture_excluded and is_running:
+            if self.toolbar is not None and self.toolbar.isVisible():
+                self.toolbar.hide()
+            return
+
+        # Main controller visibility check
+        controller_open = False
+        if self._controller is not None:
+            is_vis = getattr(self._controller, "isVisible", None)
+            is_min = getattr(self._controller, "isMinimized", None)
+            if callable(is_vis):
+                if callable(is_min):
+                    controller_open = bool(is_vis() and not is_min())
+                else:
+                    controller_open = bool(is_vis())
+
+        if controller_open:
+            if self.toolbar is not None and self.toolbar.isVisible():
+                self.toolbar.hide()
+        else:
+            if self.toolbar is not None and not self.toolbar.isVisible():
+                self.toolbar.show()
+
     def sync_state(self) -> None:
         """Synchronize UI with worker state without resetting running animations."""
         if self._is_shutdown or self._is_quitting:
@@ -275,13 +344,7 @@ class GameControls(QObject):
             self._localize_toolbar(is_running)
             self._update_tray_state(is_running)
 
-            # Automatic capture exclusion fallback:
-            # Hide floating toolbar during active capture if unexcluded; restore when stopped.
-            if not self._capture_excluded:
-                if is_running:
-                    self.toolbar.hide()
-                elif not self._is_quitting and not self._is_shutdown and not self._is_selecting:
-                    self.toolbar.show()
+        self.refresh_toolbar_visibility()
 
     # -- Action Dispatchers -------------------------------------------------
 
@@ -301,17 +364,27 @@ class GameControls(QObject):
         self._is_selecting = active
         if self.toolbar is not None:
             if active:
-                self.toolbar.hide()
                 self.toolbar.set_busy(True)
             else:
                 self.toolbar.set_busy(False)
-                # If unexcluded and actively running, stay hidden; otherwise show
-                if self._capture_excluded or not self._last_running_state:
-                    self.toolbar.show()
+        self.refresh_toolbar_visibility()
 
     def toggle_translation(self) -> None:
         """Toggle translation on/off through canonical controller methods."""
         if self._is_quitting or self._is_shutdown or self._is_selecting:
+            return
+
+        if hasattr(self._controller, "toggle_daily_translation") and callable(self._controller.toggle_daily_translation):
+            self._controller.toggle_daily_translation()
+            self.sync_state()
+            worker_after = self._worker or getattr(self._controller, "worker", None)
+            now_running = (
+                bool(worker_after.is_running() or getattr(worker_after, "restart_pending", False))
+                if worker_after
+                else False
+            )
+            if not now_running:
+                self.open_main_app()
             return
 
         worker = self._worker or getattr(self._controller, "worker", None)
@@ -505,6 +578,12 @@ class GameControls(QObject):
             self.toolbar.removeEventFilter(self)
             self.toolbar.hide()
             self.toolbar.close()
+
+        if self._controller is not None and isinstance(self._controller, QObject):
+            try:
+                self._controller.removeEventFilter(self)
+            except Exception:
+                pass
 
         if self.hotkeys is not None:
             self.hotkeys.close()

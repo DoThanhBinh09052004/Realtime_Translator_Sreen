@@ -37,7 +37,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ui.icons import get_lucide_icon
-from ui.styles import CYBER_PALETTE
+from ui.styles import get_palette
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -51,11 +51,11 @@ _RING_RADIUS = 19            # ring drawn just inside button bounds
 _RING_WIDTH = 2.5
 _RING_ARC_SPAN = 270         # how much of the circle the arc covers (degrees)
 
-_BG_COLOR = QColor(CYBER_PALETTE["bg_card"])
+_BG_COLOR = QColor(get_palette("dark")["surface"])
 _BG_COLOR.setAlpha(230)
 
-_ICON_COLOR = CYBER_PALETTE["text_muted"]        # #8c90a4
-_ICON_COLOR_ACTIVE = CYBER_PALETTE["neon_green"]  # #10b981
+_ICON_COLOR = get_palette("dark")["muted"]        # #8c90a4
+_ICON_COLOR_ACTIVE = get_palette("dark")["positive"]  # #10b981
 
 # Minimum threshold for offscreen mode where startDragDistance can be 0
 _MIN_DRAG_DISTANCE = 5

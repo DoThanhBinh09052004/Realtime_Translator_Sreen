@@ -1,10 +1,12 @@
 import sys
 import os
 from pathlib import Path
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtGui import QPalette, QColor, QIcon
+from PyQt5.QtGui import QIcon
 
-from core.config import State, load_config, load_region, initialize_user_storage, ConfigError
+from core.config import (State, load_config, load_region, initialize_user_storage, ConfigError,
+                         load_capture_profile, recover_legacy_capture_profile)
 from core.worker import TranslationWorker
 from ui.overlay import Overlay
 from ui.controller import ControllerWindow
@@ -15,7 +17,6 @@ from ui.region_selection import RegionSelectionLifecycle
 from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
 
 
-from ui.styles import CYBER_PALETTE
 
 
 class ShutdownBarrier:
@@ -42,19 +43,9 @@ class ShutdownBarrier:
             self._on_ready()
 
 
-def setup_dark_theme(app: QApplication):
-    """Thiết lập giao diện Linear / Raycast Pro Dark Theme"""
-    app.setStyle("Fusion")
-    palette = QPalette()
-    palette.setColor(QPalette.Window, QColor(CYBER_PALETTE["bg_main"]))
-    palette.setColor(QPalette.WindowText, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Base, QColor(CYBER_PALETTE["bg_input"]))
-    palette.setColor(QPalette.Text, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Button, QColor(CYBER_PALETTE["bg_card"]))
-    palette.setColor(QPalette.ButtonText, QColor(CYBER_PALETTE["text_primary"]))
-    palette.setColor(QPalette.Highlight, QColor(CYBER_PALETTE["neon_indigo"]))
-    palette.setColor(QPalette.HighlightedText, QColor("#ffffff"))
-    app.setPalette(palette)
+def setup_app_style(app: QApplication):
+    """Use consistent native controls; each window owns its persisted palette."""
+    app.setStyle('Fusion')
 
 
 def apply_selected_region(controller, worker, new_region: dict) -> bool:
@@ -62,11 +53,24 @@ def apply_selected_region(controller, worker, new_region: dict) -> bool:
     return controller.apply_region_selection(new_region)
 
 
+def sync_capture_overlay_mask(worker, rect, legacy_geometry):
+    profile = worker.capture_profile
+    if profile is None:
+        geometry = legacy_geometry
+    elif profile.source_kind == 'desktop':
+        context = worker.capture_context
+        geometry = context.geometry if context is not None else None
+    else:
+        worker.set_overlay_rect(None)
+        return
+    worker.set_overlay_rect(subtitle_mask_rect(rect, geometry) if geometry is not None else (rect if profile is None else None))
+
+
 def main():
     app = QApplication(sys.argv)
     app.setOrganizationName('TranslateHUD')
     app.setApplicationName('TranslateHUD')
-    setup_dark_theme(app)
+    setup_app_style(app)
     try:
         initialize_user_storage()
     except ConfigError as error:
@@ -77,7 +81,20 @@ def main():
         app.setWindowIcon(QIcon(logo_path))
 
     # ===== 1. Cấu hình & Trạng thái =====
-    state = State()
+    try:
+        state = State()
+    except ConfigError as error:
+        choice = QMessageBox.warning(None, 'Nguồn chụp không hợp lệ',
+            f'{error}\nKhôi phục nguồn màn hình cũ để chọn lại vùng OCR? Cấu hình chỉ thay đổi khi chọn Khôi phục.',
+            QMessageBox.RestoreDefaults | QMessageBox.Cancel, QMessageBox.Cancel)
+        if choice != QMessageBox.RestoreDefaults:
+            return
+        try:
+            recover_legacy_capture_profile()
+            state = State()
+        except ConfigError as recovery_error:
+            QMessageBox.warning(None, 'Không thể khôi phục', str(recovery_error))
+            return
     region = load_region()
     from core.language_pack_catalog import load_pack_catalog
     from core.language_pack_store import PackStore
@@ -103,12 +120,15 @@ def main():
 
     # ===== 3. Khởi tạo Background Worker =====
     worker = TranslationWorker(state=state, region=region, interval_ms=load_config()["interval_ms"],
-                               ocr_reader=lambda image, lang: ocr_image(image, lang=lang, store=pack_store))
+                               ocr_reader=lambda image, lang, **kwargs: ocr_image(image, lang=lang, store=pack_store, **kwargs))
     geometry_provider = ScreenGeometryProvider(app)
     capture_geometry = None
 
     def sync_geometry():
         nonlocal capture_geometry
+        if worker.capture_profile is not None:
+            sync_mask(overlay.get_geometry_rect())
+            return
         selected = load_region()
         capture_geometry = resolve_capture_geometry(selected, geometry_provider.snapshot(), (selected['width'], selected['height']))
         revision = worker.set_capture_geometry(capture_geometry)
@@ -116,7 +136,7 @@ def main():
         sync_mask(overlay.get_geometry_rect())
 
     def sync_mask(rect):
-        worker.set_overlay_rect(subtitle_mask_rect(rect, capture_geometry) if capture_geometry is not None else rect)
+        sync_capture_overlay_mask(worker, rect, capture_geometry)
 
     overlay.capture_geometry_changed.connect(sync_mask)
     geometry_provider.changed.connect(sync_geometry)
@@ -126,7 +146,6 @@ def main():
     # Kết nối Signal giữa Worker Thread và UI Thread (Thread-safe)
     # Versioned frames prevent queued AI subtitles from resurfacing after a
     # switch to Google (or back); the legacy string signal stays public.
-    worker.text_unchanged.connect(overlay.refresh)
     worker.blocks_updated.connect(overlay.update_blocks)
     worker.subtitle_updated.connect(overlay.update_subtitle)
     worker.error_occurred.connect(lambda err: print(f"⚠️ Worker Error [{err.code}]: {err.user_message}"))
@@ -144,7 +163,6 @@ def main():
         app.quit()
 
     shutdown = ShutdownBarrier(finish_quit)
-    worker.shutdown_finished.connect(lambda: shutdown.finish('translation'))
     pack_manager.shutdown_finished.connect(lambda: shutdown.finish('language_packs'))
 
     def on_quit():
@@ -154,7 +172,8 @@ def main():
         quitting = True
         shutdown.begin()
         if region_lifecycle is not None:
-            region_lifecycle.close()
+            capture_binding.stop()
+            region_lifecycle.request_shutdown()
         if game_controls is not None:
             game_controls.shutdown()
         if controller is not None:
@@ -166,7 +185,7 @@ def main():
     controller = ControllerWindow(
         worker=worker,
         state=state,
-        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_select_region=lambda: region_lifecycle.start_quick_selection() if region_lifecycle else None,
         on_quit=on_quit,
         overlay=overlay,
         pack_manager=pack_manager
@@ -176,7 +195,7 @@ def main():
         controller=controller,
         worker=worker,
         app=app,
-        on_select_region=lambda: region_lifecycle.start_selection() if region_lifecycle else None,
+        on_select_region=lambda: region_lifecycle.start_quick_selection() if region_lifecycle else None,
         on_quit=on_quit
     )
     controller.set_game_controls(game_controls)
@@ -190,8 +209,22 @@ def main():
         on_sync_geometry=sync_geometry
     )
 
-    # Show toolbar floating HUD without auto-starting translation
-    game_controls.toolbar.show()
+    from ui.capture_binding import CaptureApplicationBinding
+    controller.manage_regions_requested.connect(region_lifecycle.start_selection)
+    capture_binding = CaptureApplicationBinding(controller, worker, overlay, geometry_provider, region_lifecycle, parent=app)
+    controller.ocr_page.capture_settings.set_sources(geometry_provider.snapshot)
+    controller.console_page.capture_settings.set_sources(geometry_provider.snapshot)
+    controller.daily_coordinator.attach_capture(capture_binding, region_lifecycle)
+    capture_binding.initialize(load_capture_profile(geometry_provider.snapshot()))
+    worker.capture_terminal_status.connect(region_lifecycle.on_capture_terminal, Qt.QueuedConnection)
+    region_lifecycle.shutdown_finished.connect(lambda: shutdown.finish('translation'))
+
+    region_lifecycle.dashboard_preview_ready.connect(controller.accept_capture_snapshot)
+    region_lifecycle.dashboard_preview_invalidated.connect(controller.clear_capture_snapshot)
+    region_lifecycle.dashboard_preview_error.connect(controller.show_capture_preview_error)
+    capture_binding.context_changed.connect(controller.capture_context_changed)
+    capture_binding.context_changed.connect(lambda ctx: region_lifecycle.cancel_dashboard_preview())
+
     def on_overlay_error(error):
         worker.stop_worker()
         overlay.clear()
@@ -203,6 +236,7 @@ def main():
     worker.error_occurred.connect(lambda error: on_overlay_error(error) if error.code == 'capture_geometry' else None)
     controller.settings_coordinator.settings_changed.connect(lambda snapshot, field: sync_geometry() if field == 'region' else None)
     controller.show()
+    game_controls.refresh_toolbar_visibility()
     pack_manager.refresh()
 
     sys.exit(app.exec_())

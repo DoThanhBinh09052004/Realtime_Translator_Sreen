@@ -8,6 +8,7 @@ from core.config import (
     load_runtime_settings, load_custom_api_base_url, save_custom_api_base_url,
     get_provider_capabilities,
     provider_key_storage, import_legacy_provider_key, remove_legacy_provider_key,
+    save_capture_profile,
 )
 from core.languages import language_by_config_name, language_by_id
 from ui.controller_state import (AiPageState, OcrPageState, SubtitlePageState, ControllerSnapshot,
@@ -15,6 +16,7 @@ from ui.controller_state import (AiPageState, OcrPageState, SubtitlePageState, C
 
 
 class SettingsCoordinator(QObject):
+    ui_theme_changed = pyqtSignal(str)
     settings_changed = pyqtSignal(object, str)
     save_failed = pyqtSignal(str)
     drag_mode_changed = pyqtSignal(bool)
@@ -46,10 +48,14 @@ class SettingsCoordinator(QObject):
                         PROVIDERS[provider]['placeholder'],
                         load_custom_api_base_url() if provider == 'Custom API' else '',
                         capabilities.requires_api_key, capabilities.supports_models, capabilities.supports_base_url,
-                        provider_key_storage(provider)),
+                        provider_key_storage(provider),getattr(self.state,'context_enabled',False),
+                        provider!='Google Translate' and self.state.overlay_mode=='subtitle'),
             OcrPageState(self.state.source, self.state.target, load_config()['interval_ms'],
                          tuple(region[key] for key in ('left', 'top', 'width', 'height')) if region else None,
-                         self._source_choices(), self._source_notice()),
+                         self._source_choices(), self._source_notice(),
+                         getattr(self.state, 'ocr_performance_mode', 'high'),
+                         getattr(self.state, 'ocr_auto_threads', True),
+                         getattr(self.state, 'ocr_threads', 4)),
             SubtitlePageState(self.state.bg_color, self.state.text_color, self.state.bg_opacity,
                               self.state.font_size, self.state.overlay_preset, self.state.overlay_x, self.state.overlay_y,
                               self.state.overlay_mode))
@@ -153,6 +159,16 @@ class SettingsCoordinator(QObject):
             return False
         return self._commit(lambda: self.state.update(overlay_mode=mode), field='overlay_mode', after_commit=self._configure_worker)
 
+    def set_context_enabled(self,enabled):
+        if type(enabled) is not bool:return False
+        return self._commit(lambda:self.state.update(context_enabled=enabled),field='context_enabled',after_commit=self._configure_worker)
+
+    def reset_dialogue_context(self):
+        state=self.snapshot().ai
+        if self.worker is None or not state.context_enabled or not state.context_supported:return False
+        self.worker.reset_dialogue_context()
+        return True
+
     def initialize_worker_interval(self) -> None:
         if not self._interval_initialized:
             if self.worker is not None:
@@ -161,6 +177,19 @@ class SettingsCoordinator(QObject):
 
     def set_overlay(self, overlay) -> None:
         self.overlay = overlay
+
+    def set_ui_theme(self, theme: str) -> bool:
+        if theme not in ('light', 'dark'):
+            return False
+        if theme == self.state.ui_theme:
+            return True
+        try:
+            self.state.update(ui_theme=theme)
+        except ConfigError as error:
+            self.save_failed.emit(str(error))
+            return False
+        self.ui_theme_changed.emit(theme)
+        return True
 
     def set_provider(self, name: str) -> bool:
         if name not in PROVIDERS:
@@ -226,6 +255,17 @@ class SettingsCoordinator(QObject):
     def set_target(self, language: str) -> bool:
         return self._commit(lambda: self.state.update(target=language), field='target', after_commit=self._configure_worker)
 
+    def set_ocr_performance_mode(self, mode: str) -> bool:
+        if mode not in ('high', 'eco'):
+            return False
+        return self._commit(lambda: self.state.update(ocr_performance_mode=mode), field='ocr_performance_mode', after_commit=self._configure_worker)
+
+    def set_ocr_auto_threads(self, auto: bool) -> bool:
+        return self._commit(lambda: self.state.update(ocr_auto_threads=bool(auto)), field='ocr_auto_threads', after_commit=self._configure_worker)
+
+    def set_ocr_threads(self, threads: int) -> bool:
+        return self._commit(lambda: self.state.update(ocr_threads=int(threads)), field='ocr_threads', after_commit=self._configure_worker)
+
     def set_interval(self, interval_ms: int) -> bool:
         return self._commit(lambda: save_config('interval_ms', interval_ms), field='interval', after_commit=self._configure_worker)
 
@@ -270,4 +310,25 @@ class SettingsCoordinator(QObject):
                 revision = self.worker.set_region(load_region())
                 if self.overlay is not None:
                     self.overlay.set_mode(self.state.overlay_mode, revision)
-        return self._commit(lambda: save_region(region), field='region', after_commit=apply)
+        def save():
+            try:
+                save_region(region, setup_complete=True)
+            except TypeError:
+                save_region(region)
+        return self._commit(save, field='region', after_commit=apply)
+
+    def apply_capture_profile(self, profile) -> bool:
+        context = self.worker.capture_context if self.worker is not None else None
+        if context is None or context.source_kind != profile.source_kind:
+            self.save_failed.emit('Hãy chọn nguồn chụp trước khi áp dụng vùng OCR.')
+            return False
+        def apply():
+            revision = self.worker.configure_capture(profile, context)
+            if self.overlay is not None:
+                self.overlay.set_mode(self.state.overlay_mode, revision)
+        def save():
+            try:
+                save_capture_profile(profile, setup_complete=True)
+            except TypeError:
+                save_capture_profile(profile)
+        return self._commit(save, field='capture_profile', after_commit=apply)

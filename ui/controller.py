@@ -1,27 +1,32 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QColorDialog, QMessageBox
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QMessageBox, QSizePolicy, QGraphicsOpacityEffect
+from PyQt5.QtCore import QObject, Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QIcon
-from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers
+from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
 from ui.pages.console_page import ConsolePage
 from ui.pages.ai_settings_page import AiSettingsPage
 from ui.pages.ocr_settings_page import OcrSettingsPage
 from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.widgets.sidebar import ControllerSidebar
-from ui.widgets.cards import ModernCard, MetricCard
 from ui.settings_coordinator import SettingsCoordinator
-from ui.styles import CYBER_PALETTE, get_app_stylesheet
+from ui.daily_control import DailyControlCoordinator
+from ui.styles import TOKENS, set_style, apply_widget_theme, get_app_stylesheet, header_text_style
 
 
 class ControllerWindow(QWidget):
     """Compose the four views around one settings coordinator."""
 
     starting_translation = pyqtSignal()
+    capture_stop_requested = pyqtSignal()
+    daily_state_changed = pyqtSignal()
+    capture_source_selected = pyqtSignal(object, object)
+    manage_regions_requested = pyqtSignal()
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
+        self._cleanup_theme_transition()
         event.ignore()
         if hasattr(self, "_game_controls") and self._game_controls is not None and getattr(self._game_controls, "tray_icon", None) is not None:
             self.hide()
@@ -30,6 +35,7 @@ class ControllerWindow(QWidget):
 
     def __init__(self, worker, state, on_select_region, on_quit, overlay=None, game_controls=None, *, pack_manager=None):
         super().__init__()
+        self.setObjectName('controllerWindow')
 
         self.worker = worker
         self.state = state
@@ -38,15 +44,24 @@ class ControllerWindow(QWidget):
         self.pack_manager = pack_manager
         self._language_packs_dialog = None
         self.settings_coordinator = SettingsCoordinator(state, worker, overlay, self, pack_manager=pack_manager)
+        self.ui_theme = state.ui_theme
+        self.daily_coordinator = DailyControlCoordinator(self.settings_coordinator, worker, self, parent=self)
         self.on_select_region_cb = on_select_region
         self.on_quit_cb = on_quit
         self._retry_pending = False
+        self.capture_run_requested = False
+        self._preview_snapshot = None
+        self._preview_captured_at = ""
+        self._capture_profile = None
+        self._capture_bound = True
+        self.ensure_capture_ready = None
 
         # Window and navigation shell
         self.setWindowTitle("Translate HUD - Realtime Screen Translator")
-        self.resize(740, 720)
+        available = self.screen().availableGeometry()
+        self.resize(min(1200, available.width()), min(800, available.height()))
         self.setMinimumSize(660, 480)
-        self.setStyleSheet(get_app_stylesheet())
+        set_style(self, get_app_stylesheet('tokens'))
 
         # Thiết lập Icon ứng dụng từ logo
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
@@ -65,7 +80,7 @@ class ControllerWindow(QWidget):
         self.nav_item_defs = [
             ("layout-dashboard", "Tổng quan", "Bảng điều khiển nhanh và trạng thái"),
             ("languages", "Công cụ dịch", "Chọn Google Translate hoặc công cụ AI"),
-            ("languages", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
+            ("scan", "Dịch thuật & OCR", "Ngôn ngữ nguồn, ngôn ngữ dịch và tần suất quét"),
             ("palette", "Giao diện Phụ đề", "Màu sắc, độ trong suốt và xem trước trực tiếp")
         ]
         self.sidebar = ControllerSidebar(tuple(self.nav_item_defs), logo_path, self)
@@ -75,6 +90,8 @@ class ControllerWindow(QWidget):
         self.status = self.sidebar.status
         self.sidebar.page_requested.connect(self._switch_to_page)
         self.sidebar.quit_requested.connect(self.on_quit_cb)
+        self.sidebar.theme_toggle_requested.connect(self._on_theme_toggle_requested)
+        self.settings_coordinator.ui_theme_changed.connect(self.apply_theme)
 
         main_h_layout.addWidget(self.sidebar_frame)
 
@@ -85,40 +102,49 @@ class ControllerWindow(QWidget):
         content_v_layout.setSpacing(12)
 
         # Page Header
-        header_row = QHBoxLayout()
+        self.header_container = QWidget()
+        header_row = QHBoxLayout(self.header_container)
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(10)
+
         header_text_box = QVBoxLayout()
-        header_text_box.setSpacing(2)
+        self.header_text_box = header_text_box
+        header_text_box.setSpacing(0)
 
         self.page_title_lbl = QLabel("Tổng quan")
-        self.page_title_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
-        self.page_desc_lbl = QLabel("Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực")
-        self.page_desc_lbl.setStyleSheet(f"font-size: 12px; color: {CYBER_PALETTE['text_muted']};")
+        set_style(self.page_title_lbl, header_text_style())
+        self.page_title_lbl.setWordWrap(True)
+        self.page_title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         header_text_box.addWidget(self.page_title_lbl)
-        header_text_box.addWidget(self.page_desc_lbl)
-        header_row.addLayout(header_text_box)
+        header_row.addLayout(header_text_box, 1)
         header_row.addStretch()
-        content_v_layout.addLayout(header_row)
+        content_v_layout.addWidget(self.header_container)
 
         # QStackedWidget chứa 4 trang
         self.pages = QStackedWidget()
-        self.metric_cards = {}
 
         # Khởi tạo 4 trang
         self.console_page = ConsolePage(self.settings_coordinator.snapshot(), self)
-        self.start_btn = self.console_page.start_btn
-        self.stop_btn = self.console_page.stop_btn
-        self.metric_cards = self.console_page.metric_cards
-        self.console_page.start_requested.connect(self.start_ocr)
+        header_row.addWidget(self.console_page.settings_btn, 0, Qt.AlignVCenter)
+        self.console_page.set_provider_choices(tuple(get_available_providers()))
+        self.console_page.provider_changed.connect(self.settings_coordinator.set_provider)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
         self.worker.log_updated.connect(self.console_page.append_log)
         self.worker.error_occurred.connect(self.show_worker_error)
         self.worker.finished.connect(self._on_worker_finished)
-        self.console_page.stop_requested.connect(self.stop_ocr)
         self.console_page.select_region_requested.connect(self._on_select_region_clicked)
+        self.console_page.manage_regions_requested.connect(self.manage_regions_requested.emit)
         self.console_page.subtitle_settings_requested.connect(lambda: self._switch_to_page(3))
+        self.console_page.source_changed.connect(self.settings_coordinator.set_source)
+        self.console_page.target_changed.connect(self.settings_coordinator.set_target)
+        self.console_page.toggle_requested.connect(self.toggle_daily_translation)
+        self.console_page.preview_requested.connect(self.daily_coordinator.request_preview)
+        self.console_page.settings_requested.connect(lambda: self._switch_to_page(1))
+        self.console_page.readiness_action_requested.connect(self._on_readiness_action)
+        self.console_page.capture_settings.source_selected.connect(self.capture_source_selected.emit)
+        self.daily_coordinator.state_changed.connect(self._on_daily_state_changed)
         self.page_console = self.console_page
         self.ai_page = AiSettingsPage(self.settings_coordinator.snapshot().ai, tuple(get_available_providers()), self)
-        self.provider_combo = self.ai_page.provider_combo
         self.model_combo = self.ai_page.model_combo
         self.api_key_input = self.ai_page.api_key_input
         self.toggle_key_btn = self.ai_page.toggle_key_btn
@@ -130,6 +156,10 @@ class ControllerWindow(QWidget):
         self.ai_page.api_key_delete_requested.connect(self.settings_coordinator.delete_api_key)
         self.ai_page.legacy_key_import_requested.connect(self._import_legacy_key)
         self.ai_page.base_url_changed.connect(self.settings_coordinator.set_custom_base_url)
+        self.ai_page.context_enabled_changed.connect(self.settings_coordinator.set_context_enabled)
+        self.ai_page.context_reset_requested.connect(self.settings_coordinator.reset_dialogue_context)
+        if hasattr(self.worker,'context_status_changed'):
+            self.worker.context_status_changed.connect(self._render_context_status)
         self.page_ai = self.ai_page
         snapshot = self.settings_coordinator.snapshot()
         self.settings_coordinator.initialize_worker_interval()
@@ -141,10 +171,16 @@ class ControllerWindow(QWidget):
         self.ocr_page.source_changed.connect(self.settings_coordinator.set_source)
         self.ocr_page.target_changed.connect(self.settings_coordinator.set_target)
         self.ocr_page.interval_changed.connect(self.settings_coordinator.set_interval)
+        self.ocr_page.performance_mode_changed.connect(self.settings_coordinator.set_ocr_performance_mode)
+        self.ocr_page.auto_threads_changed.connect(self.settings_coordinator.set_ocr_auto_threads)
+        self.ocr_page.threads_changed.connect(self.settings_coordinator.set_ocr_threads)
         self.ocr_page.select_region_requested.connect(self._on_select_region_clicked)
         self.ocr_page.manage_packs_requested.connect(self.open_language_packs)
+        self.ocr_page.capture_settings.source_selected.connect(self.capture_source_selected.emit)
         self.page_ocr = self.ocr_page
         self.subtitle_page = SubtitleSettingsPage(self.settings_coordinator.snapshot().subtitle, self)
+        self.ocr_page.preview_requested.connect(self.daily_coordinator.request_preview)
+        self.subtitle_page.preview_requested.connect(self.daily_coordinator.request_preview)
         self.bg_color_btn = self.subtitle_page.bg_color_btn
         self.text_color_btn = self.subtitle_page.text_color_btn
         self.font_size_slider = self.subtitle_page.font_size_slider
@@ -153,7 +189,6 @@ class ControllerWindow(QWidget):
         self.opacity_val_lbl = self.subtitle_page.opacity_val_lbl
         self.preset_combo = self.subtitle_page.preset_combo
         self.drag_toggle_btn = self.subtitle_page.drag_toggle_btn
-        self.live_preview_box = self.subtitle_page.live_preview_box
         self.subtitle_page.style_changed.connect(self.settings_coordinator.set_subtitle_style)
         self.subtitle_page.mode_changed.connect(self.settings_coordinator.set_overlay_mode)
         self.subtitle_page.preset_changed.connect(self.settings_coordinator.set_overlay_preset)
@@ -178,41 +213,131 @@ class ControllerWindow(QWidget):
 
         # Đồng bộ ban đầu
         self.console_page.render_summary(self.settings_coordinator.snapshot())
+        self.daily_coordinator.refresh()
         self.settings_coordinator.settings_changed.connect(self._render_snapshot)
         self.settings_coordinator.save_failed.connect(self._show_save_error)
         self.settings_coordinator.drag_mode_changed.connect(self.subtitle_page.set_drag_mode)
         self.settings_coordinator.pack_state_changed.connect(self._render_language_packs)
+        self._switch_to_page(0)
+        self.apply_theme(self.ui_theme)
+
+    def _on_theme_toggle_requested(self):
+        self.settings_coordinator.set_ui_theme('light' if self.ui_theme == 'dark' else 'dark')
+
+    def _cleanup_theme_transition(self):
+        if hasattr(self, '_theme_anim') and self._theme_anim is not None:
+            self._theme_anim.stop()
+            self._theme_anim = None
+        if hasattr(self, '_theme_overlay') and self._theme_overlay is not None:
+            self._theme_overlay.deleteLater()
+            self._theme_overlay = None
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if getattr(self, '_theme_overlay', None) is not None:
+            self._theme_overlay.setGeometry(self.rect())
+
+    def apply_theme(self, theme: str):
+        old_theme = getattr(self, 'ui_theme', None)
+        self.ui_theme = theme
+
+        should_fade = (
+            getattr(self, '_theme_initialized', False)
+            and self.isVisible()
+            and old_theme is not None
+            and old_theme != theme
+        )
+        overlay = None
+        if should_fade:
+            self._cleanup_theme_transition()
+            pixmap = self.grab()
+            if not pixmap.isNull():
+                overlay = QLabel(self)
+                overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+                overlay.setPixmap(pixmap)
+                overlay.setGeometry(self.rect())
+                overlay.show()
+                self._theme_overlay = overlay
+
+        apply_widget_theme(self, theme)
+        self.sidebar.apply_theme(theme)
+        self.ai_page.apply_theme(theme)
+        if self._language_packs_dialog is not None:
+            apply_widget_theme(self._language_packs_dialog, theme)
+
+        self._theme_initialized = True
+
+        if overlay is not None:
+            effect = QGraphicsOpacityEffect(overlay)
+            overlay.setGraphicsEffect(effect)
+            anim = QPropertyAnimation(effect, b"opacity")
+            anim.setDuration(200)
+            anim.setStartValue(1.0)
+            anim.setEndValue(0.0)
+            anim.setEasingCurve(QEasingCurve.Linear)
+
+            def _on_anim_finished():
+                if getattr(self, '_theme_overlay', None) is overlay:
+                    overlay.deleteLater()
+                    self._theme_overlay = None
+                self._theme_anim = None
+
+            anim.finished.connect(_on_anim_finished)
+            self._theme_anim = anim
+            anim.start()
+
+    def toggle_daily_translation(self):
+        self.daily_coordinator.toggle_translation()
+
+    def _on_daily_state_changed(self, readiness, run_state):
+        self.console_page.render_daily(self.settings_coordinator.snapshot(), readiness, run_state)
+        for page in (self.ocr_page, self.subtitle_page):
+            page.set_preview_state(run_state.preview_enabled, run_state.message)
+
+    def _on_readiness_action(self, action: str):
+        if action == 'select_source':
+            self.console_page.capture_settings.source_combo.setFocus()
+        elif action == 'select_regions':
+            self._on_select_region_clicked()
+        elif action == 'manage_packs':
+            self.open_language_packs()
+        elif action == 'configure_provider':
+            self._switch_to_page(1)
+
+    def _on_translation_presented(self, presentation):
+        labels = {r.id: r.name for r in getattr(self._capture_profile, 'regions', ())} if self._capture_profile else None
+        self.console_page.render_presented(presentation, labels)
+        self.subtitle_page.render_presented(presentation, labels)
 
     def _switch_to_page(self, index: int):
         self.pages.setCurrentIndex(index)
+        self.sidebar.show()
         self.sidebar.set_active_page(index)
-
-        titles = [
-            ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
-            ("Công cụ dịch", "Chọn Google Translate hoặc cấu hình công cụ AI"),
-            ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
-            ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
-        ]
+        self.header_container.show()
+        self.console_page.settings_btn.setVisible(index == 0)
+        titles = ('Tổng quan', 'Công cụ dịch', 'Dịch thuật & OCR', 'Giao diện phụ đề')
         if 0 <= index < len(titles):
-            title, desc = titles[index]
-            self.page_title_lbl.setText(title)
-            self.page_desc_lbl.setText(desc)
-
+            self.page_title_lbl.setText(titles[index])
 
     def _render_snapshot(self, snapshot, changed_field):
         if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback', 'language_packs'):
             self.clear_translation_status()
-        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback'):
+        if changed_field in ('provider', 'model', 'api_key', 'api_key_import', 'api_key_deleted', 'base_url', 'rollback','context_enabled','overlay_mode','source','target'):
             self.ai_page.render(snapshot.ai, changed_field=changed_field)
         if changed_field in ('source', 'target', 'interval', 'region', 'rollback', 'language_packs'):
             self.ocr_page.render(snapshot.ocr)
         if changed_field in ('subtitle_style', 'preset', 'overlay_position', 'overlay_mode', 'rollback'):
             self.subtitle_page.render(snapshot.subtitle)
         self.console_page.render_summary(snapshot)
+        self.daily_coordinator.refresh()
+
+    def _render_context_status(self,status):
+        if status.revision==self.worker.revision:self.ai_page.render_context_status(status)
 
 
     def _show_save_error(self, message):
-        self.sidebar.set_status(message, f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+        self.sidebar.set_status(message, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
+        self.daily_state_changed.emit()
 
     def _import_legacy_key(self, persist):
         if not self.settings_coordinator.import_legacy_key(persist):
@@ -239,13 +364,17 @@ class ControllerWindow(QWidget):
         if advice:
             message += f' Hướng xử lý: {advice}'
         self.console_page.append_log(message)
+        self.daily_state_changed.emit()
 
     def _on_worker_finished(self):
         # A queued finish can belong to the previous run. The backend may also
         # still be draining for an explicit Start or an internal mode restart.
         if self.worker.is_running() is True or self.worker.restart_pending is True:
+            self.daily_state_changed.emit()
             return
+        self.capture_run_requested = False
         self._show_stopped_status()
+        self.daily_state_changed.emit()
 
     def clear_translation_status(self):
         self.console_page.clear_translation_status()
@@ -294,27 +423,46 @@ class ControllerWindow(QWidget):
         self._game_controls = game_controls
 
     def start_ocr(self, preserve_translation_session=False):
+        if hasattr(self, "daily_coordinator") and self.daily_coordinator.lifecycle is not None:
+            if not getattr(self.daily_coordinator.lifecycle, "preview_is_drained", True):
+                self.daily_coordinator.lifecycle.queue_start_intent()
+                return
+            if getattr(self.daily_coordinator.lifecycle, "is_active", False):
+                return
+        if not self._capture_bound:
+            self._show_save_error('Hãy chọn lại nguồn cửa sổ trước khi Bắt đầu.')
+            if self.pages.currentIndex() != 0:
+                self._switch_to_page(2)
+            return
+        if hasattr(self, "daily_coordinator") and self.daily_coordinator.binding is not None:
+            if not load_capture_setup_complete() and not (self._capture_profile and getattr(self._capture_profile, "regions", None)):
+                self._show_save_error('Chưa chọn vùng đọc chữ.')
+                if self.pages.currentIndex() != 0:
+                    self._switch_to_page(2)
+                return
+        if callable(self.ensure_capture_ready) and not self.ensure_capture_ready():
+            return
         if self.worker is not None and self.worker.is_running() is True:
             return
         if not self.settings_coordinator.source_ready():
             self._show_save_error(self.settings_coordinator.snapshot().ocr.source_notice)
-            self._switch_to_page(2)
+            if self.pages.currentIndex() != 0:
+                self._switch_to_page(2)
             self.open_language_packs()
             return
         ai = self.settings_coordinator.snapshot().ai
         provider = ai.provider
         if ai.requires_api_key and not ai.api_key.strip():
             self.status.setText(f"Lỗi: Thiếu API Key ({provider})")
-            self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+            set_style(self.status, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
             
-            # Chuyển người dùng sang tab AI Engine
             self._switch_to_page(1)
-            
-            # Cảnh báo viền thẻ API Key
             self.ai_page.highlight_missing_key()
             return
 
+        self.capture_run_requested = True
         self.starting_translation.emit()
+        self._on_translation_presented(None)
 
         if self.worker:
             if preserve_translation_session:
@@ -323,16 +471,65 @@ class ControllerWindow(QWidget):
                 self.worker.start_worker()
         
         self.status.setText("Đang hoạt động")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_green']}; font-size: 11.5px; font-weight: 600;")
+        set_style(self.status, f"color: {TOKENS['positive']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đang hoạt động")
+        self.daily_state_changed.emit()
 
 
     def stop_ocr(self):
+        self.capture_run_requested = False
+        self.capture_stop_requested.emit()
         self._retry_pending = False
         self.clear_translation_status()
+        self._on_translation_presented(None)
         if self.worker:
             self.worker.stop_worker()
         self._show_stopped_status()
+        self.daily_state_changed.emit()
+
+    def set_capture_profile_state(self, profile, *, bound):
+        if not bound or profile != self._capture_profile:
+            self.clear_capture_snapshot()
+            self._on_translation_presented(None)
+        self._capture_profile, self._capture_bound = profile, bound
+        self.ocr_page.capture_settings.set_profile(profile, bound=bound)
+        self.console_page.capture_settings.set_profile(profile, bound=bound)
+        self.daily_state_changed.emit()
+
+    def accept_capture_snapshot(self, image, context) -> bool:
+        current = getattr(self.worker, 'capture_context', None)
+        if not self._capture_bound or self._capture_profile is None or context is None or current != context:
+            return False
+        self._preview_snapshot = (image, self._capture_profile, context)
+        self._preview_captured_at = time.strftime('%H:%M:%S')
+        self.console_page.set_capture_snapshot(image, self._capture_profile, context, captured_at=self._preview_captured_at)
+        for page in (self.ocr_page, self.subtitle_page):
+            page.set_capture_snapshot(image, self._capture_profile, context, captured_at=self._preview_captured_at)
+        return True
+
+    def clear_capture_snapshot(self, message=''):
+        self._preview_snapshot = None
+        self._preview_captured_at = ''
+        self._on_translation_presented(None)
+        self.console_page.clear_capture_snapshot(message or 'Chọn nguồn, sau đó bấm Làm mới ảnh.')
+        self.ocr_page.clear_capture_snapshot(message)
+        self.subtitle_page.clear_capture_snapshot(message)
+
+    def show_capture_preview_error(self, error):
+        self.clear_capture_snapshot(getattr(error, 'user_message', str(error)))
+
+    def capture_context_changed(self, context):
+        if self._preview_snapshot is not None and self._preview_snapshot[2] != context:
+            self.clear_capture_snapshot()
+            self._on_translation_presented(None)
+
+    def show_capture_waiting(self, error=None):
+        message = error.user_message if error is not None else 'Đang chờ nguồn chụp. Chọn nguồn hoặc thử lại.'
+        self.status.setText(message)
+        self.console_page.set_run_status(message)
+        self.ocr_page.capture_settings.status_label.setText(message)
+        self.console_page.capture_settings.status_label.setText(message)
+        self.daily_state_changed.emit()
 
     def _show_stopped_status(self):
         self._retry_pending = False
@@ -340,7 +537,7 @@ class ControllerWindow(QWidget):
         if self.overlay is not None:
             self.overlay.clear()
         self.status.setText("Đã dừng")
-        self.status.setStyleSheet(f"color: {CYBER_PALETTE['neon_rose']}; font-size: 11.5px; font-weight: 600;")
+        set_style(self.status, f"color: {TOKENS['negative']}; font-size: 11.5px; font-weight: 600;")
         self.console_page.set_run_status("Đã dừng")
 
     @property
@@ -353,10 +550,17 @@ class ControllerWindow(QWidget):
             return
         if isinstance(self._overlay, QObject):
             self._overlay.position_changed.disconnect(self._on_overlay_position_changed)
+            if hasattr(self._overlay, "translation_presented"):
+                try:
+                    self._overlay.translation_presented.disconnect(self._on_translation_presented)
+                except (TypeError, RuntimeError):
+                    pass
         self._overlay = overlay
         self.settings_coordinator.set_overlay(overlay)
         if isinstance(overlay, QObject):
             overlay.position_changed.connect(self._on_overlay_position_changed)
+            if hasattr(overlay, "translation_presented"):
+                overlay.translation_presented.connect(self._on_translation_presented)
 
     def apply_region_selection(self, region: dict) -> bool:
         return self.settings_coordinator.apply_region_selection(region)

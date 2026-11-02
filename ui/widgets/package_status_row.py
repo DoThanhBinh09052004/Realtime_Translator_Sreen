@@ -2,8 +2,8 @@
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton
 from ui.controller_state import PackageRowState
-from ui.icons import get_lucide_icon
-from ui.styles import CYBER_PALETTE, SECONDARY_BUTTON_STYLE, PACK_ACTION_STYLE
+from ui.icons import set_theme_icon
+from ui.styles import set_style, apply_widget_theme, button_style, pack_action_style
 from ui.widgets.cards import ModernCard
 
 
@@ -34,7 +34,7 @@ class PackageStatusRow(ModernCard):
         self.action_button.setMinimumWidth(104)
         self.action_button.setCursor(Qt.PointingHandCursor)
         self.action_button.setIconSize(QSize(15, 15))
-        self.action_button.setStyleSheet(SECONDARY_BUTTON_STYLE + PACK_ACTION_STYLE)
+        set_style(self.action_button, button_style('secondary', 'tokens') + pack_action_style('tokens'))
         self.action_button.clicked.connect(self._request_action)
         header.addWidget(self.action_button, 0, Qt.AlignTop)
         self.layout.addLayout(header)
@@ -83,8 +83,11 @@ class PackageStatusRow(ModernCard):
         self.action_button.style().unpolish(self.action_button)
         self.action_button.style().polish(self.action_button)
         if state.action:
-            self.action_button.setIcon(get_lucide_icon(icons[state.action], color=CYBER_PALETTE['text_secondary'], size=15))
+            set_theme_icon(self.action_button, icons[state.action], 'muted', 15)
 
     def _request_action(self) -> None:
         if self.state.action and self.state.action_enabled:
             self.action_requested.emit(self.state.language_id, self.state.action)
+
+    def apply_theme(self, theme: str):
+        apply_widget_theme(self, theme)

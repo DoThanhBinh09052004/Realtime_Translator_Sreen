@@ -12,11 +12,27 @@ from core.contracts import EngineError, OcrResult, OcrSpan
 from core.ocr_models import OcrModelError, resolve_ocr_models
 
 
+def normalize_ocr_crop(img, bucket_step: int = 32):
+    """Pad image width to the nearest multiple of bucket_step to stabilize oneDNN tensor cache."""
+    if not isinstance(img, np.ndarray) or img.ndim < 2:
+        return img
+    h, w = img.shape[:2]
+    if h <= 0 or w <= 0:
+        return img
+    remainder = w % bucket_step
+    if remainder == 0:
+        return img
+    pad_right = bucket_step - remainder
+    return cv2.copyMakeBorder(img, 0, 0, 0, pad_right, cv2.BORDER_CONSTANT, value=0)
+
+
 class SimplePaddleOCR:
-    """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh với cấu hình RAM tối thiểu"""
-    def __init__(self, lang='en', *, store=None):
+    """Wrapper bao bọc PaddleOCR xử lý trích xuất văn bản từ hình ảnh với cấu hình hiệu năng linh hoạt"""
+    def __init__(self, lang='en', *, enable_mkldnn: bool = False, cpu_threads: int = 2, store=None):
         self._lease = None
         self.ocr = None
+        self.enable_mkldnn = bool(enable_mkldnn)
+        self.cpu_threads = int(cpu_threads)
         if store is None:
             models = resolve_ocr_models(lang)
         else:
@@ -34,10 +50,17 @@ class SimplePaddleOCR:
                 lang=lang,
                 use_angle_cls=False,
                 show_log=False,
-                enable_mkldnn=False,
-                cpu_threads=2,
+                enable_mkldnn=self.enable_mkldnn,
+                cpu_threads=self.cpu_threads,
                 **model_options
             )
+            if hasattr(self.ocr, 'text_recognizer') and hasattr(self.ocr.text_recognizer, '__call__'):
+                orig_rec = self.ocr.text_recognizer.__call__
+                def _bucketed_rec(img_list, *args, **kwargs):
+                    if isinstance(img_list, list):
+                        img_list = [normalize_ocr_crop(c) for c in img_list]
+                    return orig_rec(img_list, *args, **kwargs)
+                self.ocr.text_recognizer.__call__ = _bucketed_rec
         except Exception:
             self.close()
             if store is not None:
@@ -97,7 +120,7 @@ class SimplePaddleOCR:
             return OcrResult(error=EngineError("ocr", "Không thể nhận diện chữ trong ảnh.", True))
 
 
-# Single active engine cache: chỉ giữ 1 model đang sử dụng, giải phóng model cũ khi đổi ngôn ngữ
+# Single active engine cache: chỉ giữ 1 model đang sử dụng, giải phóng model cũ khi đổi ngôn ngữ hoặc cấu hình
 _current_engine = None
 _current_lang = None
 _current_identity = None
@@ -116,33 +139,37 @@ def release_ocr_engine():
         gc.collect()
 
 
-def get_ocr_engine(lang='en', *, store=None):
-    """Lấy OCR engine cho ngôn ngữ chỉ định; tự động giải phóng ngôn ngữ trước đó để tiết kiệm RAM"""
+def get_ocr_engine(lang='en', *, enable_mkldnn: bool = True, cpu_threads: int = 4, store=None):
+    """Lấy OCR engine cho ngôn ngữ chỉ định; tự động giải phóng ngôn ngữ/cấu hình trước đó để tiết kiệm RAM"""
     global _current_engine, _current_lang, _current_identity
     if store is None:
-        identity = (None, lang)
+        identity = (None, lang, bool(enable_mkldnn), int(cpu_threads))
     else:
         from core.languages import language_by_ocr_code
-        identity = (id(store), *store.identity(language_by_ocr_code(lang).id))
+        identity = (id(store), *store.identity(language_by_ocr_code(lang).id), bool(enable_mkldnn), int(cpu_threads))
     if _current_engine is not None and _current_identity == identity:
         return _current_engine
 
     if _current_engine is not None:
         release_ocr_engine()
 
-    _current_engine = SimplePaddleOCR(lang=lang) if store is None else SimplePaddleOCR(lang=lang, store=store)
+    _current_engine = (
+        SimplePaddleOCR(lang=lang, enable_mkldnn=enable_mkldnn, cpu_threads=cpu_threads)
+        if store is None
+        else SimplePaddleOCR(lang=lang, enable_mkldnn=enable_mkldnn, cpu_threads=cpu_threads, store=store)
+    )
     _current_lang = lang
     _current_identity = identity
 
     return _current_engine
 
 
-def ocr_image(img, lang='en', *, store=None) -> OcrResult:
+def ocr_image(img, lang='en', *, enable_mkldnn: bool = True, cpu_threads: int = 4, store=None) -> OcrResult:
     """Hàm giao tiếp chính để nhận diện chữ trong ảnh"""
     if img is None:
         return OcrResult(error=EngineError("invalid_input", "Ảnh nhận diện không hợp lệ.", False))
     try:
-        engine = get_ocr_engine(lang=lang) if store is None else get_ocr_engine(lang=lang, store=store)
+        engine = get_ocr_engine(lang=lang, enable_mkldnn=enable_mkldnn, cpu_threads=cpu_threads, store=store)
         return engine.extract_text(img)
     except OcrModelError as exc:
         return OcrResult(error=EngineError("ocr_model_missing", str(exc), False))

@@ -6,6 +6,11 @@ import tempfile
 import threading
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.blocks.models import ScreenMapping
+    from core.capture.models import CaptureProfile
 
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 from core.paths import get_app_paths
@@ -54,8 +59,19 @@ DEFAULT_REGION = {
     "height": 600
 }
 
+DEFAULT_OCR_PERFORMANCE_MODE = "high"
+DEFAULT_OCR_AUTO_THREADS = True
+DEFAULT_OCR_THREADS = 4
 
-def _read_config(strict: bool = False) -> dict:
+
+def resolve_ocr_threads(auto: bool, custom_threads: int) -> int:
+    total_cores = max(1, os.cpu_count() or 4)
+    if not auto:
+        return _bounded_int(custom_threads, DEFAULT_OCR_THREADS, 1, total_cores)
+    return max(2, min(6, total_cores // 2))
+
+
+def _read_config(strict: bool = False, *, changes: dict | None = None) -> dict:
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             raw = json.load(f)
@@ -65,6 +81,9 @@ def _read_config(strict: bool = False) -> dict:
         if strict:
             raise ConfigError("Không thể đọc cấu hình để lưu thiết lập.") from None
         raw = {}
+    if changes is not None:
+        raw = dict(raw) if isinstance(raw, dict) else {}
+        raw.update(changes)
     return normalize_config(raw)
 
 
@@ -101,8 +120,8 @@ def _atomic_write(path: str, content: str) -> None:
 def save_config_values(changes: dict) -> None:
     """Serialize a read/modify/write transaction, including multi-field updates."""
     with _config_lock:
-        data = _read_config(strict=True)
-        data.update(changes)
+        # An explicit replacement can repair a malformed existing field.
+        data = _read_config(strict=True, changes=changes)
         try:
             content = json.dumps(normalize_config(data), ensure_ascii=False, indent=2, allow_nan=False)
         except (ValueError, TypeError):
@@ -153,9 +172,16 @@ def normalize_config(raw: object) -> dict:
         ("current_provider", PROVIDERS, DEFAULT_PROVIDER),
         ("overlay_preset", ("bottom_center", "top_center", "bottom_left", "custom"), DEFAULT_OVERLAY_PRESET),
         ("overlay_mode", ("subtitle", "blocks"), "subtitle"),
+        ("ocr_performance_mode", ("high", "eco"), DEFAULT_OCR_PERFORMANCE_MODE),
+        ("ui_theme", ("light", "dark"), "light"),
     ):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and value in choices else default
+    auto_threads = cfg.get("ocr_auto_threads")
+    cfg["ocr_auto_threads"] = auto_threads if isinstance(auto_threads, bool) else DEFAULT_OCR_AUTO_THREADS
+    cfg['context_enabled'] = cfg.get('context_enabled') if type(cfg.get('context_enabled')) is bool else False
+    max_cores = max(1, os.cpu_count() or 4)
+    cfg["ocr_threads"] = _bounded_int(cfg.get("ocr_threads"), DEFAULT_OCR_THREADS, 1, max_cores)
     for field, default in (("bg_color", DEFAULT_BG_COLOR), ("text_color", DEFAULT_TEXT_COLOR)):
         value = cfg.get(field)
         cfg[field] = value if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value) else default
@@ -182,6 +208,22 @@ def normalize_config(raw: object) -> dict:
         )
     except ConfigError:
         cfg["custom_api_base_url"] = ""
+    if 'capture_profile' in cfg:
+        from core.capture.profile import parse_capture_profile, serialize_capture_profile
+        cfg['capture_profile'] = serialize_capture_profile(parse_capture_profile(cfg['capture_profile']))
+    if isinstance(raw, dict) and isinstance(raw.get("capture_setup_complete"), bool):
+        cfg["capture_setup_complete"] = raw["capture_setup_complete"]
+    else:
+        raw_dict = raw if isinstance(raw, dict) else {}
+        has_legacy_profile = "capture_profile" in raw_dict
+        raw_region = raw_dict.get("region")
+        has_legacy_region = (
+            isinstance(raw_region, dict)
+            and all(type(raw_region.get(k)) is int for k in DEFAULT_REGION)
+            and raw_region.get("width", 0) > 0
+            and raw_region.get("height", 0) > 0
+        )
+        cfg["capture_setup_complete"] = bool(has_legacy_profile or has_legacy_region)
     return cfg
 
 
@@ -199,12 +241,20 @@ class State:
         self.overlay_x = cfg.get("overlay_x", None)
         self.overlay_y = cfg.get("overlay_y", None)
         self.overlay_mode = cfg.get("overlay_mode", "subtitle")
+        self.ocr_performance_mode = cfg.get("ocr_performance_mode", DEFAULT_OCR_PERFORMANCE_MODE)
+        self.ocr_auto_threads = cfg.get("ocr_auto_threads", DEFAULT_OCR_AUTO_THREADS)
+        self.ocr_threads = int(cfg.get("ocr_threads", DEFAULT_OCR_THREADS))
+        self.context_enabled = cfg['context_enabled']
+        self.ui_theme = cfg['ui_theme']
 
     def update(self, **kwargs) -> None:
         names = {"source": "source_lang", "target": "target_lang"}
         names.update({k: k for k in (
             "bg_color", "bg_opacity", "text_color", "font_size",
             "overlay_preset", "overlay_x", "overlay_y", "overlay_mode",
+            "ocr_performance_mode", "ocr_auto_threads", "ocr_threads",
+            "context_enabled",
+            "ui_theme",
         )})
         if any(k not in names for k in kwargs):
             raise ConfigError("Trường thiết lập không hợp lệ.")
@@ -215,14 +265,40 @@ class State:
             setattr(self, k, changes[names[k]])
 
 
+def load_capture_setup_complete() -> bool:
+    """True if the user has explicitly confirmed/committed an OCR region or capture profile."""
+    return bool(load_config().get("capture_setup_complete", False))
+
+
 def load_region() -> dict:
     """Đọc tọa độ vùng chụp từ file config.json"""
     return load_config().get("region", DEFAULT_REGION.copy())
 
 
-def save_region(region: dict):
+def save_region(region: dict, *, setup_complete: bool | None = None):
     """Lưu tọa độ vùng chụp vào file config.json"""
-    save_config("region", region)
+    changes = {"region": region}
+    if setup_complete is not None:
+        changes["capture_setup_complete"] = bool(setup_complete)
+    save_config_values(changes)
+
+
+def load_capture_profile(screens: tuple['ScreenMapping', ...]) -> 'CaptureProfile | None':
+    """Load a validated profile or resolve legacy pixels without persisting migration."""
+    from core.capture.profile import migrate_legacy_region, parse_capture_profile
+    data = load_config()
+    if 'capture_profile' in data:
+        return parse_capture_profile(data['capture_profile'])
+    return migrate_legacy_region(data['region'], screens)
+
+
+def save_capture_profile(profile: 'CaptureProfile', *, setup_complete: bool | None = None) -> None:
+    """Commit the profile once, preserving legacy region and protected credentials."""
+    from core.capture.profile import serialize_capture_profile
+    changes = {'capture_profile': serialize_capture_profile(profile)}
+    if setup_complete is not None:
+        changes['capture_setup_complete'] = bool(setup_complete)
+    save_config_values(changes)
 
 
 ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -439,6 +515,10 @@ def load_runtime_settings(state: State, interval_ms: int) -> RuntimeSettings:
             provider=load_provider_settings(),
             interval_ms=_bounded_int(interval_ms, 500, 100, 3000),
             overlay_mode=state.overlay_mode,
+            ocr_performance_mode=getattr(state, 'ocr_performance_mode', DEFAULT_OCR_PERFORMANCE_MODE),
+            ocr_auto_threads=getattr(state, 'ocr_auto_threads', DEFAULT_OCR_AUTO_THREADS),
+            ocr_threads=getattr(state, 'ocr_threads', DEFAULT_OCR_THREADS),
+            context_enabled=getattr(state, 'context_enabled', False),
         )
 
 
@@ -461,3 +541,16 @@ def load_model_id() -> str:
 def save_model_id(model_id: str):
     """[Alias] Lưu model ID cho active provider"""
     save_provider_model_id(load_active_provider(), model_id)
+
+def recover_legacy_capture_profile() -> None:
+    """Explicit user recovery only: atomically remove the invalid nested profile."""
+    with _config_lock:
+        try:
+            raw = json.loads(Path(CONFIG_PATH).read_text(encoding='utf-8'))
+            if not isinstance(raw, dict):
+                raise ValueError('Expected configuration object')
+            raw.pop('capture_profile', None)
+            data = normalize_config(raw)
+        except (OSError, ValueError, UnicodeError):
+            raise ConfigError('Không thể khôi phục cấu hình nguồn chụp.') from None
+        _atomic_write(CONFIG_PATH, json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False))
