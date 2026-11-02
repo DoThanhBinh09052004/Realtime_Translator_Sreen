@@ -41,3 +41,6 @@ docs/
 .superpowers/
 pytest.ini
 requirements-dev.txt
+AGENTS.md
+requirements-build.txt
+requirements-build.lock
