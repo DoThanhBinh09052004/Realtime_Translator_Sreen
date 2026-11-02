@@ -34,4 +34,8 @@ def bundle_data(project_root: Path, model_root: Path) -> list[tuple[str, str]]:
     for resource in catalog.resources.values():
         if resource.path not in manifest['files']:
             entries.append((str(model_root/resource.path), (Path('assets/ocr')/Path(resource.path).parent).as_posix()))
+    fonts = project_root / 'ui/assets/fonts'
+    for name in ('Inter.ttf', 'OFL.txt'):
+        if (fonts / name).is_file():
+            entries.append((str(fonts / name), 'ui/assets/fonts'))
     return entries+[(str(model_root/'manifest.json'),'assets/ocr'),(str(model_root/'language-packs.json'),'assets/ocr'),(str(logo),'ui')]

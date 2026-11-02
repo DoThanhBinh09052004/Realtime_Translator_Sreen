@@ -12,7 +12,7 @@ from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.widgets.sidebar import ControllerSidebar
 from ui.settings_coordinator import SettingsCoordinator
 from ui.daily_control import DailyControlCoordinator
-from ui.styles import TOKENS, set_style, apply_widget_theme, get_app_stylesheet
+from ui.styles import TOKENS, set_style, apply_widget_theme, get_app_stylesheet, header_text_style
 
 
 class ControllerWindow(QWidget):
@@ -108,17 +108,13 @@ class ControllerWindow(QWidget):
 
         header_text_box = QVBoxLayout()
         self.header_text_box = header_text_box
-        header_text_box.setSpacing(2)
+        header_text_box.setSpacing(0)
 
         self.page_title_lbl = QLabel("Tổng quan")
-        set_style(self.page_title_lbl, "font-size: 16px; font-weight: 700;")
-        self.page_desc_lbl = QLabel("Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực")
-        set_style(self.page_desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
-        for label in (self.page_title_lbl, self.page_desc_lbl):
-            label.setWordWrap(True)
-            label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        set_style(self.page_title_lbl, header_text_style())
+        self.page_title_lbl.setWordWrap(True)
+        self.page_title_lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         header_text_box.addWidget(self.page_title_lbl)
-        header_text_box.addWidget(self.page_desc_lbl)
         header_row.addLayout(header_text_box, 1)
         header_row.addStretch()
         content_v_layout.addWidget(self.header_container)
@@ -128,6 +124,7 @@ class ControllerWindow(QWidget):
 
         # Khởi tạo 4 trang
         self.console_page = ConsolePage(self.settings_coordinator.snapshot(), self)
+        header_row.addWidget(self.console_page.settings_btn, 0, Qt.AlignVCenter)
         self.console_page.set_provider_choices(tuple(get_available_providers()))
         self.console_page.provider_changed.connect(self.settings_coordinator.set_provider)
         self.console_page.retry_translation_requested.connect(self.retry_translation)
@@ -261,35 +258,11 @@ class ControllerWindow(QWidget):
         self.pages.setCurrentIndex(index)
         self.sidebar.show()
         self.sidebar.set_active_page(index)
-        if index == 0:
-            if hasattr(self, "header_container"):
-                self.header_container.hide()
-        else:
-            self.sidebar.show()
-            if hasattr(self, "header_container"):
-                self.header_container.show()
-            self.sidebar.set_active_page(index)
-
-            titles = [
-                ("Tổng quan", "Điều khiển tiến trình quét OCR và theo dõi thông số theo thời gian thực"),
-                ("Công cụ dịch", "Chọn Google Translate hoặc cấu hình công cụ AI"),
-                ("Dịch thuật & Vùng quét OCR", "Thiết lập ngôn ngữ dịch thuật và khu vực theo dõi màn hình"),
-                ("Tùy biến Phụ đề", "Tùy chỉnh phong cách hiển thị và xem trước hộp phụ đề trực tiếp")
-            ]
-            if 0 <= index < len(titles):
-                title, desc = titles[index]
-                self.page_title_lbl.setText(title)
-                self.page_desc_lbl.setText(desc)
-                self.header_text_box.removeWidget(self.page_desc_lbl)
-                if index == 1:
-                    self.header_text_box.insertWidget(0, self.page_desc_lbl)
-                    self.page_desc_lbl.setText('Translate HUD')
-                    set_style(self.page_title_lbl, 'font-size:22px;font-weight:700;')
-                else:
-                    self.header_text_box.addWidget(self.page_desc_lbl)
-                    set_style(self.page_title_lbl, 'font-size:16px;font-weight:700;')
-
-
+        self.header_container.show()
+        self.console_page.settings_btn.setVisible(index == 0)
+        titles = ('Tổng quan', 'Công cụ dịch', 'Dịch thuật & OCR', 'Giao diện phụ đề')
+        if 0 <= index < len(titles):
+            self.page_title_lbl.setText(titles[index])
 
     def _render_snapshot(self, snapshot, changed_field):
         if changed_field not in ('subtitle_style', 'preset', 'overlay_position', 'rollback', 'language_packs'):

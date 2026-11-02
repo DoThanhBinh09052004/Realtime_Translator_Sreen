@@ -138,3 +138,21 @@ def get_app_stylesheet(theme: str = 'light') -> str:
         QProgressBar {{background:{p['input']};color:{p['text']};border:1px solid {p['border_control']};border-radius:4px;}}
         QProgressBar::chunk {{background:{p['focus']};}}
         {button_style('secondary', theme)} {card_style(theme)}'''
+
+
+_header_font_loaded = False
+
+def header_text_style(*, brand: bool = False) -> str:
+    """Shared Inter typography for every main page header."""
+    global _header_font_loaded
+    if not _header_font_loaded:
+        from pathlib import Path
+        from PyQt5.QtGui import QFontDatabase
+        font_path = Path(__file__).parent / 'assets' / 'fonts' / 'Inter.ttf'
+        if QFontDatabase.addApplicationFont(str(font_path)) < 0:
+            raise RuntimeError('Không tải được font Inter cho tiêu đề.')
+        _header_font_loaded = True
+    size = 11 if brand else 26
+    color = TOKENS['muted'] if brand else TOKENS['text']
+    tracking = 'letter-spacing:1.2px;' if brand else ''
+    return f'font-family:"Inter";font-size:{size}px;font-weight:500;color:{color};{tracking}'
