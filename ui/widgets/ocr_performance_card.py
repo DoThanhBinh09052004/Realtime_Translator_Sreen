@@ -1,8 +1,4 @@
 import os
-try:
-    import sip
-except ImportError:
-    from PyQt5 import sip
 from PyQt5.QtCore import (
     Qt, QSize, QSignalBlocker, pyqtSignal, QRectF,
     QEasingCurve, QPropertyAnimation, QParallelAnimationGroup
@@ -44,42 +40,38 @@ class RadioIndicator(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        # Keep the owning window alive if Python GC runs inside a paint callback.
+        owner = self.window()
         painter = QPainter(self)
-        try:
-            if sip.isdeleted(self):
-                return
-            painter = QPainter(self)
-            if not painter.isActive():
-                return
-            painter.setRenderHint(QPainter.Antialiasing)
-
-            # Viền ngoài
-            rect = QRectF(1.2, 1.2, self._size - 2.4, self._size - 2.4)
-
-            if self._selected:
-                # Đường tròn viền ngoài màu nhấn
-                pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
-                painter.setPen(pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawEllipse(rect)
-
-                # Chấm tròn đặc ở tâm (filled circle)
-                inner_size = self._size * 0.44  # ~8px cho size 18
-                inner_offset = (self._size - inner_size) / 2.0
-                inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
-                painter.setPen(Qt.NoPen)
-                painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
-                painter.drawEllipse(inner_rect)
-            else:
-                # Đường tròn rỗng mảnh
-                dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
-                painter.setPen(dim_pen)
-                painter.setBrush(Qt.NoBrush)
-                painter.drawEllipse(rect)
-
-            painter.end()
-        except RuntimeError:
+        if not painter.isActive():
             return
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Viền ngoài
+        rect = QRectF(1.2, 1.2, self._size - 2.4, self._size - 2.4)
+
+        if self._selected:
+            # Đường tròn viền ngoài màu nhấn
+            pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(rect)
+
+            # Chấm tròn đặc ở tâm (filled circle)
+            inner_size = self._size * 0.44  # ~8px cho size 18
+            inner_offset = (self._size - inner_size) / 2.0
+            inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
+            painter.drawEllipse(inner_rect)
+        else:
+            # Đường tròn rỗng mảnh
+            dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
+            painter.setPen(dim_pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawEllipse(rect)
+
+        painter.end()
 
 
 class SelectableOptionCard(QFrame):

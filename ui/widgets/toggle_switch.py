@@ -22,6 +22,8 @@ class ToggleSwitch(QCheckBox):
         return self.rect().contains(pos)
 
     def paintEvent(self, event) -> None:
+        # A child reference alone does not keep its Python-owned window alive.
+        owner = self.window()
         painter = QPainter(self)
         if not painter.isActive():
             return
