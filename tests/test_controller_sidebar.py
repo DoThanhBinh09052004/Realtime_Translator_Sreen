@@ -45,3 +45,32 @@ def test_sidebar_collapse_and_theme_keep_navigation(qtbot):
     spy = QSignalSpy(sidebar.theme_toggle_requested)
     sidebar.theme_button.click()
     assert len(spy) == 1
+
+
+def test_sidebar_animation_reversing_and_solid_icons(qtbot):
+    from ui.widgets.sidebar import ControllerSidebar
+    sidebar = ControllerSidebar((
+        ('layout-dashboard', 'Tổng quan', 'Dashboard'),
+        ('bot', 'Công cụ dịch', 'AI Tools'),
+    ), None)
+    qtbot.addWidget(sidebar)
+    sidebar.show()
+
+    # Active icon should be solid
+    sidebar.set_active_page(0)
+    assert sidebar.nav_buttons[0]._theme_icon[0] == 'layout-dashboard-solid'
+    assert sidebar.nav_buttons[1]._theme_icon[0] == 'bot'
+
+    # Switch active page
+    sidebar.set_active_page(1)
+    assert sidebar.nav_buttons[0]._theme_icon[0] == 'layout-dashboard'
+    assert sidebar.nav_buttons[1]._theme_icon[0] == 'bot-solid'
+
+    # Animation expand and mid-flight reverse
+    sidebar.set_collapsed(False)
+    assert sidebar.is_collapsed() is False
+    # Reversing while running
+    sidebar.set_collapsed(True)
+    assert sidebar.is_collapsed() is True
+    qtbot.waitUntil(lambda: sidebar.width() == 64, timeout=1000)
+    assert sidebar.width() == 64

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton, QSlider, QBoxLayout, QLayout
+from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QSpinBox, QPushButton, QSlider, QBoxLayout, QLayout, QToolButton, QAbstractSpinBox, QFrame
 from PyQt5.QtCore import Qt, QSize, QSignalBlocker, pyqtSignal
 from ui.widgets.capture_snapshot import CaptureSnapshotWidget
 from ui.widgets.cards import ModernCard
@@ -84,13 +84,18 @@ class OcrSettingsPage(QScrollArea):
         # Card 2: OCR Timing & Interval
         ocr_timing_card = ModernCard("Tần suất quét OCR (Interval)", "Thời gian chờ giữa mỗi lần chụp màn hình nhận diện chữ")
         timing_row = QHBoxLayout()
-        timing_row.setSpacing(12)
+        timing_row.setSpacing(16)
 
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(100, 3000)
         self.interval_spin.setSingleStep(50)
         self.interval_spin.setSuffix(" ms")
-        self.interval_spin.setFixedWidth(130)
+        self.interval_spin.setFixedWidth(78)
+        self.interval_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.interval_spin.setFixedHeight(30)
+        set_style(self.interval_spin, f"""
+            QSpinBox {{ color:{TOKENS['text']}; background:transparent; border:0; padding:4px 8px; font-size:14px; }}
+        """)
 
         saved_interval = state.interval_ms
         self.interval_spin.setValue(saved_interval)
@@ -104,12 +109,40 @@ class OcrSettingsPage(QScrollArea):
         self.interval_slider.setAccessibleName('Chu kỳ quét OCR')
         self.interval_slider.valueChanged.connect(self._on_interval_slider_changed)
         self.interval_slider.sliderReleased.connect(self._commit_interval_slider)
-        timing_row.addWidget(self.interval_slider, 1)
-        timing_row.addWidget(self.interval_spin)
+        self.interval_slider.setFixedHeight(30)
+        set_style(self.interval_slider, f"""
+            QSlider::groove:horizontal {{ height:6px; background:{TOKENS['border']}; border-radius:2px; }}
+            QSlider::sub-page:horizontal {{ background:{TOKENS['focus']}; border-radius:2px; }}
+            QSlider::handle:horizontal {{ width:16px; margin:-7px 0;
+                border-radius:10px; background:{TOKENS['surface']}; border:2px solid {TOKENS['focus']}; }}
+            QSlider::handle:horizontal:hover {{ background:{TOKENS['selection_bg']}; }}
+        """)
+        timing_row.addWidget(self.interval_slider, 2)
+        stepper = QFrame()
+        stepper.setFixedHeight(34)
+        set_style(stepper, f"QFrame {{background:{TOKENS['input']};border:1px solid {TOKENS['border_control']};border-radius:8px;}}")
+        stepper_row = QHBoxLayout(stepper)
+        stepper_row.setContentsMargins(4, 0, 3, 0)
+        stepper_row.setSpacing(0)
+        stepper_row.addWidget(self.interval_spin)
+        step_buttons = QVBoxLayout()
+        step_buttons.setContentsMargins(2, 1, 0, 1)
+        step_buttons.setSpacing(1)
+        for label, step in (('▲', 50), ('▼', -50)):
+            button = QToolButton()
+            button.setText(label)
+            button.setFixedSize(18, 14)
+            button.setAccessibleName(('Tăng' if step > 0 else 'Giảm') + ' chu kỳ quét OCR')
+            set_style(button, f"QToolButton {{color:{TOKENS['muted']};background:transparent;border:0;font-size:10px;}} QToolButton:hover {{color:{TOKENS['focus']};background:{TOKENS['raised']};border-radius:4px;}}")
+            button.clicked.connect(lambda checked=False, amount=step: self.interval_spin.setValue(self.interval_spin.value() + amount))
+            step_buttons.addWidget(button)
+        stepper_row.addLayout(step_buttons)
+        timing_row.addWidget(stepper)
 
         timing_info = QLabel("Khuyến nghị: 500ms cho đối thoại game thông thường, 300ms cho game nhịp độ nhanh")
         set_style(timing_info, f"color: {TOKENS['muted']}; font-size: 12px;")
         timing_info.setWordWrap(True)
+        timing_info.setMinimumWidth(140)
         timing_row.addWidget(timing_info, stretch=1)
 
         ocr_timing_card.layout.addLayout(timing_row)

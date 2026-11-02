@@ -25,6 +25,10 @@ LUCIDE_ICONS = {
     "cpu": '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
     "languages": '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
     "palette": '<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>',
+    "layout-dashboard-solid": '<rect width="7" height="9" x="3" y="3" rx="1.5" fill="currentColor"/><rect width="7" height="5" x="14" y="3" rx="1.5" fill="currentColor"/><rect width="7" height="9" x="14" y="12" rx="1.5" fill="currentColor"/><rect width="7" height="5" x="3" y="16" rx="1.5" fill="currentColor"/>',
+    "bot-solid": '<path d="M12 8V4H8" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/><path d="M2 14h2M20 14h2" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/><path fill-rule="evenodd" fill="currentColor" d="M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2zm3 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>',
+    "languages-solid": '<path fill="currentColor" d="m5 8 6 6"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="m5 8 6 6m-7 0 6-6 2-3M2 5h12M7 2h1"/><path fill="currentColor" fill-rule="evenodd" d="M17 11.5 11.5 22h3.2l1.1-2.4h4.4l1.1 2.4h3.2L19 11.5h-2zm1 3 1.4 3.2h-2.8L18 14.5z"/>',
+    "palette-solid": '<path fill-rule="evenodd" fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.12 0-.92.75-1.67 1.67-1.67h2c3.05 0 5.56-2.5 5.56-5.55C22 6.01 17.52 2 12 2zm1.5 4.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm4 4a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-9-3a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/>',
     "play": '<polygon points="6 3 20 12 6 21 6 3"/>',
     "square": '<rect width="18" height="18" x="3" y="3" rx="2"/>',
     "scan": '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>',
@@ -43,9 +47,10 @@ LUCIDE_ICONS = {
 
 def get_lucide_svg(name: str, color: str = "#8c90a4", stroke_width: float = 1.85) -> str:
     """Trả về chuỗi SVG chuẩn của icon Lucide"""
-    body = LUCIDE_ICONS.get(name, LUCIDE_ICONS["zap"])
+    body = LUCIDE_ICONS.get(name, LUCIDE_ICONS["zap"]).replace("currentColor", color)
     fill_color = "none" if name not in ("play", "square") else color
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="{fill_color}" stroke="{color}" stroke-width="{stroke_width}" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"""
+    stroke = 'none' if name.endswith('-solid') else color
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="{fill_color}" stroke="{stroke}" stroke-width="{stroke_width}" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"""
 
 
 def get_lucide_icon(name: str, color: str = "#8c90a4", size: int = 18, stroke_width: float = 1.85) -> QIcon:
@@ -60,10 +65,11 @@ def get_lucide_icon(name: str, color: str = "#8c90a4", size: int = 18, stroke_wi
     return QIcon(pixmap)
 
 
-def set_theme_icon(widget, name: str, role: str = 'muted', size: int = 18) -> None:
+def set_theme_icon(widget, name: str, role: str = 'muted', size: int = 18, filled: bool = False) -> None:
     from ui.styles import palette_for
-    widget._theme_icon = (name, role, size)
-    icon = get_lucide_icon(name, color=palette_for(widget)[role], size=size)
+    actual_name = f"{name}-solid" if (filled and f"{name}-solid" in LUCIDE_ICONS) else name
+    widget._theme_icon = (actual_name, role, size)
+    icon = get_lucide_icon(actual_name, color=palette_for(widget)[role], size=size)
     if hasattr(widget, 'setIcon'):
         widget.setIcon(icon)
     else:

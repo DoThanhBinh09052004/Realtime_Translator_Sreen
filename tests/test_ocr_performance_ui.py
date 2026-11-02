@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import QApplication
 from ui.widgets.ocr_performance_card import OcrPerformanceCard
 
 
-@pytest.mark.parametrize('paint_module', ['ocr_performance_card', 'toggle_switch'])
+@pytest.mark.parametrize('paint_module', ['toggle_switch'])
 def test_paint_keeps_owning_window_alive_during_collection(paint_module):
     # A native crash must fail this test without terminating the test runner.
     script = textwrap.dedent('''
@@ -52,10 +52,8 @@ def test_ocr_performance_card_initialization(qtbot):
     assert card.threads == 4
 
     # High card is selected, Eco card is not
-    assert card.high_card.property("selected") is True
-    assert card.eco_card.property("selected") is False
-    assert card.high_card.radio_indicator._selected is True
-    assert card.eco_card.radio_indicator._selected is False
+    assert card.high_button.isChecked() is True
+    assert card.eco_button.isChecked() is False
 
     # Checkbox is checked, custom threads container is hidden, SpinBox is disabled
     assert card.auto_checkbox.isChecked() is True
@@ -71,22 +69,18 @@ def test_ocr_performance_card_mode_click(qtbot):
     card.mode_changed.connect(emitted_modes.append)
 
     # Click Eco card
-    qtbot.mouseClick(card.eco_card, Qt.LeftButton)
+    qtbot.mouseClick(card.eco_button, Qt.LeftButton)
     assert emitted_modes == ["eco"]
     assert card.performance_mode == "eco"
-    assert card.high_card.property("selected") is False
-    assert card.eco_card.property("selected") is True
-    assert card.high_card.radio_indicator._selected is False
-    assert card.eco_card.radio_indicator._selected is True
+    assert card.high_button.isChecked() is False
+    assert card.eco_button.isChecked() is True
 
     # Click High card
-    qtbot.mouseClick(card.high_card, Qt.LeftButton)
+    qtbot.mouseClick(card.high_button, Qt.LeftButton)
     assert emitted_modes == ["eco", "high"]
     assert card.performance_mode == "high"
-    assert card.high_card.property("selected") is True
-    assert card.eco_card.property("selected") is False
-    assert card.high_card.radio_indicator._selected is True
-    assert card.eco_card.radio_indicator._selected is False
+    assert card.high_button.isChecked() is True
+    assert card.eco_button.isChecked() is False
 
 
 def test_ocr_performance_card_auto_threads_toggle(qtbot):

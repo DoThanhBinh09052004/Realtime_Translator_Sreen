@@ -1,15 +1,14 @@
 import os
 from PyQt5.QtCore import (
-    Qt, QSize, QSignalBlocker, pyqtSignal, QRectF,
+    Qt, QSignalBlocker, pyqtSignal,
     QEasingCurve, QPropertyAnimation, QParallelAnimationGroup
 )
-from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPen, QBrush
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QSpinBox, QWidget,
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton, QButtonGroup,
     QGraphicsOpacityEffect, QBoxLayout
 )
 
-from ui.styles import TOKENS, set_style, apply_widget_theme, palette_for
+from ui.styles import TOKENS, set_style, apply_widget_theme
 from ui.icons import set_theme_icon
 from ui.widgets.toggle_switch import ToggleSwitch
 
@@ -18,138 +17,6 @@ def resolve_display_threads(auto: bool, custom_threads: int, total_cores: int) -
     if not auto:
         return max(1, min(total_cores, custom_threads))
     return max(2, min(6, total_cores // 2))
-
-
-class RadioIndicator(QWidget):
-    """
-    Radio indicator vẽ sắc nét bằng QPainter:
-    - Chưa chọn: Đường tròn rỗng mảnh (hollow circle / ring) màu xám trung tính.
-    - Đã chọn: Đường tròn viền màu nhấn + chấm tròn đặc ở tâm (filled inner circle).
-    """
-    def __init__(self, size: int = 18, parent=None):
-        super().__init__(parent)
-        self._size = size
-        self._selected = False
-        self._role = 'focus'
-        self.setFixedSize(size, size)
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-
-    def set_state(self, selected: bool, role: str = 'focus'):
-        self._selected = selected
-        self._role = role
-        self.update()
-
-    def paintEvent(self, event):
-        # Keep the owning window alive if Python GC runs inside a paint callback.
-        owner = self.window()
-        painter = QPainter(self)
-        if not painter.isActive():
-            return
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Viền ngoài
-        rect = QRectF(1.2, 1.2, self._size - 2.4, self._size - 2.4)
-
-        if self._selected:
-            # Đường tròn viền ngoài màu nhấn
-            pen = QPen(QColor(palette_for(self)[self._role]), 1.8)
-            painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(rect)
-
-            # Chấm tròn đặc ở tâm (filled circle)
-            inner_size = self._size * 0.44  # ~8px cho size 18
-            inner_offset = (self._size - inner_size) / 2.0
-            inner_rect = QRectF(inner_offset, inner_offset, inner_size, inner_size)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QBrush(QColor(palette_for(self)[self._role])))
-            painter.drawEllipse(inner_rect)
-        else:
-            # Đường tròn rỗng mảnh
-            dim_pen = QPen(QColor(palette_for(self)['muted']), 1.5)
-            painter.setPen(dim_pen)
-            painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(rect)
-
-        painter.end()
-
-
-class SelectableOptionCard(QFrame):
-    clicked = pyqtSignal()
-
-    def __init__(self, title: str, desc: str, icon_name: str, icon_color: str, parent=None):
-        super().__init__(parent)
-        self.setCursor(Qt.PointingHandCursor)
-        self._selected = False
-        self.setProperty("selected", False)
-        self._active_role = 'focus' if icon_color == TOKENS['focus'] else 'positive'
-        self._active_color = TOKENS[self._active_role]
-        self._active_bg = TOKENS['selection_bg'] if self._active_role == 'focus' else TOKENS['positive_bg']
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(6)
-
-        # Header row: [Icon] [Title] ... [Radio Indicator]
-        header_row = QHBoxLayout()
-        header_row.setSpacing(10)
-
-        self.icon_lbl = QLabel()
-        set_theme_icon(self.icon_lbl, icon_name, self._active_role, 20)
-        header_row.addWidget(self.icon_lbl)
-
-        self.title_lbl = QLabel(title)
-        set_style(self.title_lbl, f"""
-            font-size: 13.5px;
-            font-weight: 700;
-            color: {TOKENS['text']};
-        """)
-        header_row.addWidget(self.title_lbl)
-        header_row.addStretch()
-
-        self.radio_indicator = RadioIndicator(size=18, parent=self)
-        header_row.addWidget(self.radio_indicator)
-        layout.addLayout(header_row)
-
-        self.desc_lbl = QLabel(desc)
-        set_style(self.desc_lbl, f"""
-            font-size: 11.5px;
-            color: {TOKENS['muted']};
-            line-height: 1.35;
-        """)
-        self.desc_lbl.setWordWrap(True)
-        layout.addWidget(self.desc_lbl)
-
-        self.update_selection(False)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit()
-        super().mousePressEvent(event)
-
-    def update_selection(self, selected: bool):
-        self._selected = selected
-        self.setProperty("selected", selected)
-        self.radio_indicator.set_state(selected, self._active_role)
-        if selected:
-            set_style(self, f"""
-                SelectableOptionCard {{
-                    background-color: {self._active_bg};
-                    border: 1.5px solid {self._active_color};
-                    border-radius: 10px;
-                }}
-            """)
-        else:
-            set_style(self, f"""
-                SelectableOptionCard {{
-                    background-color: {TOKENS['surface']};
-                    border: 1px solid {TOKENS['border']};
-                    border-radius: 10px;
-                }}
-                SelectableOptionCard:hover {{
-                    border: 1px solid {TOKENS['border_control']};
-                }}
-            """)
 
 
 class OcrPerformanceCard(QFrame):
@@ -185,50 +52,50 @@ class OcrPerformanceCard(QFrame):
         header_row = QHBoxLayout()
         header_row.setSpacing(10)
 
-        header_icon = QLabel()
-        set_theme_icon(header_icon, 'zap', 'focus', 20)
-        header_row.addWidget(header_icon, alignment=Qt.AlignTop)
-
         header_texts = QVBoxLayout()
-        header_texts.setSpacing(2)
-        title_lbl = QLabel("Hiệu năng OCR & Tài nguyên máy")
-        set_style(title_lbl, f"font-size: 15px; font-weight: 700; color: {TOKENS['text']};")
+        header_texts.setSpacing(4)
+        title_lbl = QLabel("Hiệu năng OCR & tài nguyên máy")
+        set_style(title_lbl, f"font-size: 16px; font-weight: 600; color: {TOKENS['text']};")
         desc_lbl = QLabel("Điều chỉnh tốc độ nhận diện và mức sử dụng CPU/RAM")
         set_style(desc_lbl, f"font-size: 12px; color: {TOKENS['muted']};")
         title_lbl.setWordWrap(True)
         desc_lbl.setWordWrap(True)
         header_texts.addWidget(title_lbl)
         header_texts.addWidget(desc_lbl)
-        header_row.addLayout(header_texts)
-        header_row.addStretch()
+        header_row.addLayout(header_texts, 1)
         main_layout.addLayout(header_row)
 
-        # ===== 2. Hai thẻ lựa chọn (High vs Eco) =====
-        cards_row = QBoxLayout(QBoxLayout.LeftToRight)
-        self.cards_row = cards_row
-        cards_row.setSpacing(16)
-
-        self.high_card = SelectableOptionCard(
-            title="Hiệu năng cao",
-            desc="OCR nhanh, dùng nhiều\ntài nguyên hơn",
-            icon_name="zap",
-            icon_color=TOKENS['focus'],
-            parent=self
-        )
-        self.high_card.clicked.connect(lambda: self._select_mode("high"))
-        cards_row.addWidget(self.high_card)
-
-        self.eco_card = SelectableOptionCard(
-            title="Tiết kiệm RAM",
-            desc="OCR chậm hơn, sử dụng\nít tài nguyên hơn",
-            icon_name="leaf",
-            icon_color=TOKENS['positive'],
-            parent=self
-        )
-        self.eco_card.clicked.connect(lambda: self._select_mode("eco"))
-        cards_row.addWidget(self.eco_card)
-
-        main_layout.addLayout(cards_row)
+        # Two mutually exclusive modes in one segmented control.
+        mode_bar = QFrame()
+        mode_bar.setObjectName('performanceModeBar')
+        set_style(mode_bar, "QFrame#performanceModeBar {background:@raised@;border:0;border-radius:10px;}")
+        mode_row = QHBoxLayout(mode_bar)
+        mode_row.setContentsMargins(3, 3, 3, 3)
+        mode_row.setSpacing(3)
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        self.high_button = QPushButton('Hiệu năng cao')
+        self.eco_button = QPushButton('Tiết kiệm RAM')
+        for button, mode, tip in (
+            (self.high_button, 'high', 'OCR nhanh, dùng nhiều tài nguyên hơn'),
+            (self.eco_button, 'eco', 'OCR chậm hơn, sử dụng ít tài nguyên hơn'),
+        ):
+            button.setCheckable(True)
+            button.setMinimumHeight(30)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setToolTip(tip)
+            set_style(button, """
+                QPushButton {background:transparent;color:@muted@;border:1px solid transparent;
+                    border-radius:7px;font-size:12px;padding:4px 8px;}
+                QPushButton:hover {color:@text@;}
+                QPushButton:checked {background:@selection_bg@;color:@selection_text@;
+                    border:1px solid @focus@;font-weight:600;}
+                QPushButton:focus {border:1px solid @focus@;}
+            """)
+            self.mode_group.addButton(button)
+            button.clicked.connect(lambda checked=False, selected=mode: self._select_mode(selected))
+            mode_row.addWidget(button, 1)
+        main_layout.addWidget(mode_bar)
 
         # ===== 3. Đường kẻ phân cách =====
         divider = QFrame()
@@ -350,13 +217,12 @@ class OcrPerformanceCard(QFrame):
         self._anim_group.finished.connect(self._on_anim_finished)
 
         # Khởi tạo trạng thái ban đầu
-        self._sync_cards()
+        self._sync_mode_buttons()
         self._sync_badge()
         self._toggle_custom_threads(not self.auto_threads, animated=False)
 
     def set_compact(self, compact: bool):
         direction = QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight
-        self.cards_row.setDirection(direction)
         self.cpu_row.setDirection(direction)
 
     def _toggle_custom_threads(self, show: bool, animated: bool = True):
@@ -389,9 +255,9 @@ class OcrPerformanceCard(QFrame):
         else:
             self.custom_threads_container.setMaximumHeight(16777215)
 
-    def _sync_cards(self):
-        self.high_card.update_selection(self.performance_mode == "high")
-        self.eco_card.update_selection(self.performance_mode == "eco")
+    def _sync_mode_buttons(self):
+        self.high_button.setChecked(self.performance_mode == "high")
+        self.eco_button.setChecked(self.performance_mode == "eco")
 
     def _sync_badge(self):
         active_threads = resolve_display_threads(self.auto_threads, self.threads, self.total_cores)
@@ -400,7 +266,7 @@ class OcrPerformanceCard(QFrame):
     def _select_mode(self, mode: str):
         if mode != self.performance_mode:
             self.performance_mode = mode
-            self._sync_cards()
+            self._sync_mode_buttons()
             self.mode_changed.emit(mode)
 
     def _on_auto_toggled(self, checked: bool):
@@ -428,7 +294,7 @@ class OcrPerformanceCard(QFrame):
         self.threads_spin.setValue(self.threads)
         self.threads_spin.setEnabled(not self.auto_threads)
         self._toggle_custom_threads(not self.auto_threads, animated=False)
-        self._sync_cards()
+        self._sync_mode_buttons()
         self._sync_badge()
         del blockers
 

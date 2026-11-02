@@ -43,3 +43,19 @@ def test_replacing_qobject_overlay_disconnects_old_signal(ui_window, monkeypatch
     new.position_changed.emit(-200, 40)
     assert replace.call_count == 1
     assert (ui_window.state.overlay_x, ui_window.state.overlay_y) == (-200, 40)
+
+
+def test_theme_crossfade_overlay_lifecycle(ui_window, qtbot):
+    ui_window.show()
+    assert getattr(ui_window, '_theme_overlay', None) is None
+
+    # Toggle theme from light to dark while visible
+    ui_window.apply_theme('dark')
+    overlay = getattr(ui_window, '_theme_overlay', None)
+    if overlay is not None:
+        qtbot.waitUntil(lambda: getattr(ui_window, '_theme_overlay', None) is None, timeout=1000)
+    assert ui_window.ui_theme == 'dark'
+
+    # Close cleanup
+    ui_window._cleanup_theme_transition()
+    assert getattr(ui_window, '_theme_overlay', None) is None

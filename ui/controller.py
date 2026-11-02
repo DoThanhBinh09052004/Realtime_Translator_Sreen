@@ -1,8 +1,8 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QMessageBox, QSizePolicy
-from PyQt5.QtCore import QObject, Qt, pyqtSignal
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QMessageBox, QSizePolicy, QGraphicsOpacityEffect
+from PyQt5.QtCore import QObject, Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
 from ui.pages.console_page import ConsolePage
@@ -26,6 +26,7 @@ class ControllerWindow(QWidget):
 
     def closeEvent(self, event):
         # Keep widgets alive until the application has drained its worker threads.
+        self._cleanup_theme_transition()
         event.ignore()
         if hasattr(self, "_game_controls") and self._game_controls is not None and getattr(self._game_controls, "tray_icon", None) is not None:
             self.hide()
@@ -223,13 +224,67 @@ class ControllerWindow(QWidget):
     def _on_theme_toggle_requested(self):
         self.settings_coordinator.set_ui_theme('light' if self.ui_theme == 'dark' else 'dark')
 
+    def _cleanup_theme_transition(self):
+        if hasattr(self, '_theme_anim') and self._theme_anim is not None:
+            self._theme_anim.stop()
+            self._theme_anim = None
+        if hasattr(self, '_theme_overlay') and self._theme_overlay is not None:
+            self._theme_overlay.deleteLater()
+            self._theme_overlay = None
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if getattr(self, '_theme_overlay', None) is not None:
+            self._theme_overlay.setGeometry(self.rect())
+
     def apply_theme(self, theme: str):
+        old_theme = getattr(self, 'ui_theme', None)
         self.ui_theme = theme
+
+        should_fade = (
+            getattr(self, '_theme_initialized', False)
+            and self.isVisible()
+            and old_theme is not None
+            and old_theme != theme
+        )
+        overlay = None
+        if should_fade:
+            self._cleanup_theme_transition()
+            pixmap = self.grab()
+            if not pixmap.isNull():
+                overlay = QLabel(self)
+                overlay.setAttribute(Qt.WA_TransparentForMouseEvents)
+                overlay.setPixmap(pixmap)
+                overlay.setGeometry(self.rect())
+                overlay.show()
+                self._theme_overlay = overlay
+
         apply_widget_theme(self, theme)
         self.sidebar.apply_theme(theme)
         self.ai_page.apply_theme(theme)
         if self._language_packs_dialog is not None:
             apply_widget_theme(self._language_packs_dialog, theme)
+
+        self._theme_initialized = True
+
+        if overlay is not None:
+            effect = QGraphicsOpacityEffect(overlay)
+            overlay.setGraphicsEffect(effect)
+            anim = QPropertyAnimation(effect, b"opacity")
+            anim.setDuration(200)
+            anim.setStartValue(1.0)
+            anim.setEndValue(0.0)
+            anim.setEasingCurve(QEasingCurve.Linear)
+
+            def _on_anim_finished():
+                if getattr(self, '_theme_overlay', None) is overlay:
+                    overlay.deleteLater()
+                    self._theme_overlay = None
+                self._theme_anim = None
+
+            anim.finished.connect(_on_anim_finished)
+            self._theme_anim = anim
+            anim.start()
 
     def toggle_daily_translation(self):
         self.daily_coordinator.toggle_translation()
