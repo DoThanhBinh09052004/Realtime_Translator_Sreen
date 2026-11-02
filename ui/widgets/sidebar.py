@@ -37,9 +37,6 @@ class ControllerSidebar(QFrame):
         self.collapse_button = QPushButton()
         self.collapse_button.clicked.connect(lambda: self.set_collapsed(not self._collapsed))
         layout.addWidget(self.collapse_button)
-        self.back_button = QPushButton('Quay lại dịch')
-        self.back_button.clicked.connect(lambda: self.page_requested.emit(0))
-        layout.addWidget(self.back_button)
         self.nav_buttons = []
         for i, (icon, label, tooltip) in enumerate(nav_items):
             button = QPushButton()
@@ -76,7 +73,6 @@ class ControllerSidebar(QFrame):
         self._collapsed = collapsed
         self.setFixedWidth(64 if collapsed else 212)
         self.brand_title.setVisible(not collapsed)
-        self.back_button.setVisible(not collapsed)
         self.status.setVisible(not collapsed)
         self.status_dot.setVisible(collapsed)
         self.collapse_button.setToolTip('Mở rộng thanh bên' if collapsed else 'Thu gọn thanh bên')

@@ -1,7 +1,7 @@
 """Controller composition, navigation and application commands."""
 import os
 import time
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QStackedWidget, QMessageBox, QSizePolicy
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QMessageBox, QSizePolicy
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 from core.config import SUPPORTED_LANGUAGES, SUPPORTED_TARGETS, get_available_providers, load_capture_setup_complete
@@ -12,7 +12,7 @@ from ui.pages.subtitle_settings_page import SubtitleSettingsPage
 from ui.widgets.sidebar import ControllerSidebar
 from ui.settings_coordinator import SettingsCoordinator
 from ui.daily_control import DailyControlCoordinator
-from ui.styles import TOKENS, set_style, apply_widget_theme, button_style, get_app_stylesheet
+from ui.styles import TOKENS, set_style, apply_widget_theme, get_app_stylesheet
 
 
 class ControllerWindow(QWidget):
@@ -103,16 +103,8 @@ class ControllerWindow(QWidget):
         # Page Header
         self.header_container = QWidget()
         header_row = QHBoxLayout(self.header_container)
-        self.header_row = header_row
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(10)
-
-        self.back_btn = QPushButton("← Quay lại dịch")
-        set_style(self.back_btn, button_style('secondary', 'tokens'))
-        self.back_btn.setCursor(Qt.PointingHandCursor)
-        self.back_btn.setFixedHeight(32)
-        self.back_btn.clicked.connect(lambda: self._switch_to_page(0))
-        header_row.addWidget(self.back_btn)
 
         header_text_box = QVBoxLayout()
         self.header_text_box = header_text_box
@@ -288,15 +280,12 @@ class ControllerWindow(QWidget):
                 title, desc = titles[index]
                 self.page_title_lbl.setText(title)
                 self.page_desc_lbl.setText(desc)
-                self.header_row.removeWidget(self.back_btn)
                 self.header_text_box.removeWidget(self.page_desc_lbl)
                 if index == 1:
-                    self.header_row.addWidget(self.back_btn)
                     self.header_text_box.insertWidget(0, self.page_desc_lbl)
                     self.page_desc_lbl.setText('Translate HUD')
                     set_style(self.page_title_lbl, 'font-size:22px;font-weight:700;')
                 else:
-                    self.header_row.insertWidget(0, self.back_btn)
                     self.header_text_box.addWidget(self.page_desc_lbl)
                     set_style(self.page_title_lbl, 'font-size:16px;font-weight:700;')
 

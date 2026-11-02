@@ -22,8 +22,8 @@ def test_settings_returns_without_changing_run_intent(qtbot):
     assert window.pages.currentIndex() == 1
     assert not window.sidebar.isHidden()
 
-    # Return using back button
-    window.back_btn.click()
+    # Return using the overview navigation item
+    window.nav_buttons[0].click()
     assert window.pages.currentIndex() == 0
     assert not window.sidebar.isHidden()
     assert window.capture_run_requested is True
