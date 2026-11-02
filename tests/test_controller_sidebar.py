@@ -30,6 +30,30 @@ def test_sidebar_signals_logo_and_status(qtbot, tmp_path, logo):
     assert any(label.pixmap() and not label.pixmap().isNull() for label in sidebar.findChildren(QLabel))
 
 
+def test_sidebar_labels_fade_and_icons_stay_anchored(qtbot):
+    from ui.widgets.sidebar import ControllerSidebar
+    sidebar = ControllerSidebar((('bot', 'Công cụ dịch', 'AI'),), None)
+    qtbot.addWidget(sidebar)
+    sidebar.show()
+    button = sidebar.nav_buttons[0]
+    icon_before = button.grab().toImage().copy(12, 10, 19, 19)
+    sidebar.set_collapsed(False)
+    qtbot.waitUntil(lambda: 0.1 < button.label_opacity < 0.9, timeout=1000)
+    assert 64 < sidebar.width() < 212
+    assert not button.isHidden()
+    assert button.grab().toImage().copy(12, 10, 19, 19) == icon_before
+    sidebar.apply_theme('dark')
+    sidebar.set_active_page(0)
+    sidebar.set_collapsed(True)
+    qtbot.waitUntil(lambda: sidebar.width() == 64 and button.text() == '', timeout=1000)
+    assert button.label_opacity == 0.0
+    assert button.text() == ''
+    sidebar.set_collapsed(False)
+    qtbot.waitUntil(lambda: sidebar.expansion == 1.0, timeout=1000)
+    assert button.label_opacity == 1.0
+    assert button.text() == 'Công cụ dịch'
+
+
 def test_sidebar_collapse_and_theme_keep_navigation(qtbot):
     from ui.widgets.sidebar import ControllerSidebar
     sidebar = ControllerSidebar((('languages', 'Công cụ dịch', 'Chọn công cụ'),), None)

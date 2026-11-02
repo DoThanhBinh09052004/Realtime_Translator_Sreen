@@ -49,6 +49,7 @@ def test_theme_crossfade_overlay_lifecycle(ui_window, qtbot):
     ui_window.show()
     assert getattr(ui_window, '_theme_overlay', None) is None
 
+
     # Toggle theme from light to dark while visible
     ui_window.apply_theme('dark')
     overlay = getattr(ui_window, '_theme_overlay', None)
@@ -59,3 +60,17 @@ def test_theme_crossfade_overlay_lifecycle(ui_window, qtbot):
     # Close cleanup
     ui_window._cleanup_theme_transition()
     assert getattr(ui_window, '_theme_overlay', None) is None
+
+def test_dark_theme_first_show_matches_theme_roundtrip(ui_window, qtbot):
+    from PyQt5.QtGui import QPalette
+    from ui.styles import get_palette
+    ui_window.apply_theme('dark')
+    ui_window.show()
+    qtbot.wait(10)
+    palette = get_palette('dark')
+    assert ui_window.palette().color(QPalette.Window).name() == palette['ground']
+    assert ui_window.src_combo.palette().color(QPalette.Base).name() == palette['input']
+    startup = ui_window.src_combo.palette().color(QPalette.Base)
+    ui_window.apply_theme('light')
+    ui_window.apply_theme('dark')
+    assert ui_window.src_combo.palette().color(QPalette.Base) == startup

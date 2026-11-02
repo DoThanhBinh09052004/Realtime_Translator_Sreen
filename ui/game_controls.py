@@ -16,8 +16,6 @@ from core.contracts import EngineError
 from ui.capture_exclusion import set_capture_excluded
 from ui.game_toolbar import GameToolbar
 from ui.global_hotkeys import GlobalHotkeys
-from ui.icons import get_lucide_icon
-from ui.styles import get_palette
 
 _TRAY_TOOLTIP = "Translate HUD - Điều khiển game"
 _TEXT_START = "Bắt đầu (Ctrl+Alt+F8)"
@@ -164,9 +162,7 @@ class GameControls(QObject):
             return
 
         if self.tray_icon is None:
-            tray_icon = get_lucide_icon(
-                "languages", color=get_palette("dark")["focus"], size=22
-            )
+            tray_icon = QApplication.windowIcon()
             self.tray_icon = QSystemTrayIcon(tray_icon, self)
 
         self.tray_icon.setToolTip(_TRAY_TOOLTIP)

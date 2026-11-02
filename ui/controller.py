@@ -65,11 +65,9 @@ class ControllerWindow(QWidget):
 
         # Thiết lập Icon ứng dụng từ logo
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
-        if not os.path.exists(logo_path):
-            logo_path = os.path.join(os.path.dirname(__file__), "clever-negative-space-logo-design--minimalist-tech.png")
 
         if os.path.exists(logo_path):
-            self.setWindowIcon(QIcon(logo_path))
+            self.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "logo.ico")))
 
         # Layout chính dạng ngang: [Sidebar 205px] + [Main Content Stack]
         main_h_layout = QHBoxLayout(self)
@@ -223,6 +221,16 @@ class ControllerWindow(QWidget):
 
     def _on_theme_toggle_requested(self):
         self.settings_coordinator.set_ui_theme('light' if self.ui_theme == 'dark' else 'dark')
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, '_startup_theme_polished', False):
+            self._startup_theme_polished = True
+            # Native controls are polished on first show. Apply their saved
+            # palette afterwards so startup matches a subsequent theme toggle.
+            for widget in self.findChildren(QWidget):
+                widget.ensurePolished()
+            self.apply_theme(self.ui_theme)
 
     def _cleanup_theme_transition(self):
         if hasattr(self, '_theme_anim') and self._theme_anim is not None:

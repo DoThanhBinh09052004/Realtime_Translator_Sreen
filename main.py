@@ -5,20 +5,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtGui import QIcon
 
-from core.config import (State, load_config, load_region, initialize_user_storage, ConfigError,
-                         load_capture_profile, recover_legacy_capture_profile)
-from core.worker import TranslationWorker
-from ui.overlay import Overlay
-from ui.controller import ControllerWindow
-from ui.selector import RegionSelector
-from ui.screen_geometry import ScreenGeometryProvider
-from ui.game_controls import GameControls
-from ui.region_selection import RegionSelectionLifecycle
-from core.blocks.geometry import resolve_capture_geometry, subtitle_mask_rect
-
-
-
-
 class ShutdownBarrier:
     """Quit only after both owners have asynchronously drained their threads."""
     def __init__(self, on_ready):
@@ -54,6 +40,7 @@ def apply_selected_region(controller, worker, new_region: dict) -> bool:
 
 
 def sync_capture_overlay_mask(worker, rect, legacy_geometry):
+    from core.blocks.geometry import subtitle_mask_rect
     profile = worker.capture_profile
     if profile is None:
         geometry = legacy_geometry
@@ -66,17 +53,22 @@ def sync_capture_overlay_mask(worker, rect, legacy_geometry):
     worker.set_overlay_rect(subtitle_mask_rect(rect, geometry) if geometry is not None else (rect if profile is None else None))
 
 
-def main():
-    app = QApplication(sys.argv)
-    app.setOrganizationName('TranslateHUD')
-    app.setApplicationName('TranslateHUD')
-    setup_app_style(app)
+def _start_application(app):
+    from core.config import (State, load_config, load_region, initialize_user_storage, ConfigError,
+                             load_capture_profile, recover_legacy_capture_profile)
+    from core.worker import TranslationWorker
+    from ui.overlay import Overlay
+    from ui.controller import ControllerWindow
+    from ui.screen_geometry import ScreenGeometryProvider
+    from ui.game_controls import GameControls
+    from ui.region_selection import RegionSelectionLifecycle
+    from core.blocks.geometry import resolve_capture_geometry
     try:
         initialize_user_storage()
     except ConfigError as error:
         QMessageBox.warning(None, 'Không thể lưu thiết lập', str(error))
 
-    logo_path = os.path.join(os.path.dirname(__file__), "ui", "logo.png")
+    logo_path = os.path.join(os.path.dirname(__file__), "ui", "logo.ico")
     if os.path.exists(logo_path):
         app.setWindowIcon(QIcon(logo_path))
 
@@ -239,8 +231,49 @@ def main():
     game_controls.refresh_toolbar_visibility()
     pack_manager.refresh()
 
-    sys.exit(app.exec_())
+    return controller, overlay, worker, game_controls, region_lifecycle, pack_manager, capture_binding
+
+
+def main():
+    # Keep this entry path small: show feedback before importing Paddle/NumPy.
+    from PyQt5.QtCore import QTimer
+    from ui.startup import StartupSplash, StartupLoader, saved_startup_theme
+    app = QApplication(sys.argv)
+    app.setOrganizationName('TranslateHUD')
+    app.setApplicationName('TranslateHUD')
+    setup_app_style(app)
+    app.setQuitOnLastWindowClosed(False)
+    app.setWindowIcon(QIcon(str(Path(__file__).parent / 'ui' / 'logo.ico')))
+    splash = StartupSplash(saved_startup_theme())
+    loader = StartupLoader(app)
+    loader.stage.connect(splash.set_stage)
+
+    def finish_startup():
+        try:
+            if loader.error:
+                raise RuntimeError('Startup import failed')
+            splash.set_stage('Đang tải giao diện…')
+            app._runtime = _start_application(app)
+            if app._runtime is None:
+                app.quit()
+                return
+            splash.set_stage('Sẵn sàng')
+        except Exception:
+            splash.hide()
+            QMessageBox.critical(None, 'Không thể khởi động',
+                'Không thể chuẩn bị ứng dụng. Vui lòng kiểm tra bộ cài và thử mở lại. '
+                'Nếu lỗi vẫn xuất hiện, hãy tải lại và giải nén toàn bộ bản portable.')
+            app.quit()
+        finally:
+            splash.hide()
+            splash.deleteLater()
+            loader.deleteLater()
+
+    loader.finished.connect(finish_startup)
+    splash.show()
+    QTimer.singleShot(0, loader.start)
+    return app.exec_()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
