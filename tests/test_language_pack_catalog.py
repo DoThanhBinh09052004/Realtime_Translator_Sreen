@@ -16,7 +16,7 @@ def catalog_raw():
 
 
 def test_catalog_is_pure_and_has_bounded_locked_artifacts(monkeypatch):
-    from core.language_pack_catalog import validate_pack_catalog
+    from core.language_packs.catalog import validate_pack_catalog
     import socket
     monkeypatch.setattr(socket, 'socket', lambda *a, **k: pytest.fail('network forbidden'))
     catalog=validate_pack_catalog(catalog_raw())
@@ -26,8 +26,8 @@ def test_catalog_is_pure_and_has_bounded_locked_artifacts(monkeypatch):
 
 @pytest.mark.parametrize('damage', ['version','missing_component','missing_dict','duplicate_id','http','digest','traversal','root','negative','unbounded'])
 def test_catalog_rejects_untrusted_metadata(damage):
-    from core.language_pack_catalog import validate_pack_catalog
-    from core.language_pack_contracts import PackOperationError
+    from core.language_packs.catalog import validate_pack_catalog
+    from core.language_packs.contracts import PackOperationError
     raw=catalog_raw(); c=raw['components']['rec-ko']
     if damage=='version': raw['paddleocr_version']='3.0'
     elif damage=='missing_component': del raw['components']['det-ch']

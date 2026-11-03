@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 from core import config
 from core.contracts import OcrResult
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
 def test_google_pause_retry_uses_current_capture_and_never_self_heals(qtbot,monkeypatch,capture_geometry,span_factory,mode):
-    import core.worker as module
+    import core.runtime.worker as module
     import ui.block_overlay as block_module
     from engines.google_translate import GoogleTranslateClient
     from engines.translator import TranslationService

@@ -225,7 +225,7 @@ def test_logs_redact_all_get_queries_and_never_log_batch_source(caplog):
 def test_real_adapter_queue_respects_429_after_stale_source_and_pauses_after_four(qtbot, runtime_settings):
     from core.blocks.models import BlockJob
     from core.blocks.translation_worker import BlockTranslationWorker
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     from engines.google_translate import GoogleTranslateClient
     from engines.translator import TranslationService
     now, ticks, calls = [0.], [0], []
@@ -288,7 +288,7 @@ def test_real_adapter_queue_respects_429_after_stale_source_and_pauses_after_fou
 
 
 def test_facade_cache_hit_keeps_fallback_route_and_service_failure_budget(google_batch_response, runtime_settings):
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     from engines.google_translate import GoogleTranslateClient
     from engines.translator import TranslationService
     calls = []

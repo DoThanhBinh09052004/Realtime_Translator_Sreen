@@ -5,12 +5,12 @@ import numpy as np
 import pytest
 from core import config
 from core.contracts import OcrResult, TranslationResult, EngineError
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('change', ['provider', 'mode'])
 def test_configure_after_stop_does_not_restart_draining_google(qtbot, monkeypatch, runtime_settings, change):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release = Event(), Event()
     shutdown = []
     class Service:
@@ -51,7 +51,7 @@ def test_configure_after_stop_does_not_restart_draining_google(qtbot, monkeypatc
 
 
 def test_start_during_internal_restart_preserves_google_session(qtbot, monkeypatch, runtime_settings, capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release = Event(), Event()
     class Service:
         def __init__(self, **kwargs): pass
@@ -92,7 +92,7 @@ def test_start_during_internal_restart_preserves_google_session(qtbot, monkeypat
 
 
 def test_google_pause_survives_reconfiguration_and_preserved_stop(qtbot,monkeypatch,runtime_settings,capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     class Capture:
         def __enter__(self): return self
         def __exit__(self,*a): pass

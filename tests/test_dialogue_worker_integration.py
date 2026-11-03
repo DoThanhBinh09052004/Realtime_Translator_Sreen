@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 from core import config
 from core.contracts import TranslationResult, OcrResult, SubtitleFrame
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
 @pytest.mark.parametrize('provider',['Google Translate','OpenAI','Google Gemini','DeepSeek','Custom API'])
 def test_all_provider_mode_combinations_keep_capture_running(qtbot,monkeypatch,runtime_settings,capture_geometry,span_factory,mode,provider):
-    import core.worker as module
+    import core.runtime.worker as module
     entered,release=Event(),Event();calls=[];captures=[]
     class Service:
         def __init__(self,**kwargs):pass
@@ -39,7 +39,7 @@ def test_all_provider_mode_combinations_keep_capture_running(qtbot,monkeypatch,r
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
 @pytest.mark.parametrize('provider',['Google Translate','OpenAI'])
 def test_complete_path_result_does_not_wait_for_capture(qtbot,monkeypatch,runtime_settings,capture_geometry,span_factory,mode,provider):
-    import core.worker as module
+    import core.runtime.worker as module
     from ui.overlay import Overlay
     import ui.block_overlay as block_module
     ocr_held,release_ocr,entered,release_api=Event(),Event(),Event(),Event();scans=[]
@@ -86,7 +86,7 @@ def test_old_legacy_refresh_cannot_revive_managed_subtitle(qtbot):
 
 @pytest.mark.parametrize('change',['provider','model','key','source','target','region','mode','stop'])
 def test_hard_invalidation_clears_held_presentation(qtbot,monkeypatch,runtime_settings,dialogue_observation,dialogue_result,change):
-    import core.worker as module
+    import core.runtime.worker as module
     from ui.overlay import Overlay
     now=[0.];monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
     w=TranslationWorker(config.State(),config.DEFAULT_REGION)

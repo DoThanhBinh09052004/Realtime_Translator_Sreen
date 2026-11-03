@@ -17,13 +17,14 @@ def forbidden_imports(source, package, forbidden):
 
 
 @pytest.mark.parametrize('source,expected', [
-    ('import core.config', True), ('from core import worker', True),
+    ('import core.config', True), ('from core.runtime import worker', True),
+    ('from core.runtime.runner import CaptureOcrRunner', True),
     ('from .. import controller', True), ('from ..controller import ControllerWindow', True),
     ('import engines.ocr', True), ('from engines import translator', True),
     ('from ..controller_state import AiPageState', False),
 ])
 def test_boundary_detector_resolves_absolute_and_relative_imports(source, expected):
-    assert bool(forbidden_imports(source, 'ui.pages', {'ui.controller', 'core.config', 'core.worker', 'engines'})) == expected
+    assert bool(forbidden_imports(source, 'ui.pages', {'ui.controller', 'core.config', 'core.runtime', 'engines'})) == expected
 
 
 def test_view_and_coordinator_dependency_boundaries():
@@ -32,7 +33,7 @@ def test_view_and_coordinator_dependency_boundaries():
     for folder in ('pages', 'widgets'):
         for path in Path('ui', folder).glob('*.py'):
             assert not forbidden_imports(path.read_text(encoding='utf-8-sig'), f'ui.{folder}',
-                                         {'ui.controller', 'core.config', 'core.worker', 'engines'}), path
+                                         {'ui.controller', 'core.config', 'core.runtime', 'engines'}), path
     assert not forbidden_imports(Path('ui/settings_coordinator.py').read_text(encoding='utf-8-sig'), 'ui',
                                  {'ui.controller', 'ui.pages'})
 

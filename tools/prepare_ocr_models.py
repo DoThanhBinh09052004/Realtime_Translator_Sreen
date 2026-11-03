@@ -11,9 +11,9 @@ import os
 
 if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.ocr_models import MODEL_SOURCES, MESSAGE, OcrModelError, validate_ocr_assets
-from core.language_pack_catalog import load_pack_catalog
-from core.language_pack_contracts import PackOperationError
+from core.ocr.models import MODEL_SOURCES, MESSAGE, OcrModelError, validate_ocr_assets
+from core.language_packs.catalog import load_pack_catalog
+from core.language_packs.contracts import PackOperationError
 
 
 def prepare_pack_resources(output: Path, dictionary_root: Path, catalog_path: Path) -> None:

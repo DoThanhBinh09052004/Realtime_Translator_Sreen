@@ -6,7 +6,7 @@ import pytest
 from core import config
 from core.capture.models import CaptureProfile, CaptureRegion, NormalizedRect, CaptureContext, CapturedFrame, SourceStatus, WindowIdentity
 from core.contracts import OcrResult, TranslationResult, EngineError
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 def capture_values(geometry, kind='desktop'):
@@ -19,7 +19,7 @@ def capture_values(geometry, kind='desktop'):
 @pytest.mark.parametrize('kind', ['desktop', 'window'])
 @pytest.mark.parametrize('mode', ['subtitle', 'blocks'])
 def test_capture_runtime_routes_to_real_overlay(qtbot, monkeypatch, runtime_settings, capture_geometry, span_factory, kind, mode):
-    import core.worker as module
+    import core.runtime.worker as module
     from ui.overlay import Overlay
     import ui.block_overlay as block_module
     owners = []; opened = []
@@ -53,7 +53,7 @@ def test_capture_runtime_routes_to_real_overlay(qtbot, monkeypatch, runtime_sett
 
 
 def test_terminal_signal_arrives_while_ocr_held(qtbot, monkeypatch, capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release = Event(), Event(); callbacks = []; terminal = []
     profile, context = capture_values(capture_geometry)
     class Source:
@@ -77,7 +77,7 @@ def test_terminal_signal_arrives_while_ocr_held(qtbot, monkeypatch, capture_geom
 
 def test_terminal_lifecycle_clears_and_drops_ocr_held_result(qtbot, monkeypatch, capture_geometry):
     import time
-    import core.worker as module
+    import core.runtime.worker as module
     from ui.overlay import Overlay
     from ui.region_selection import RegionSelectionLifecycle
     from PyQt5.QtCore import Qt
@@ -118,7 +118,7 @@ def test_terminal_lifecycle_clears_and_drops_ocr_held_result(qtbot, monkeypatch,
 
 
 def test_move_while_ocr_held_keeps_latest_block_geometry(qtbot, monkeypatch, runtime_settings, capture_geometry, span_factory):
-    import core.worker as module
+    import core.runtime.worker as module
     from core.blocks.models import Rect
     entered, release = Event(), Event(); frames = []; translated = []
     profile, context = capture_values(capture_geometry, 'window')
@@ -155,7 +155,7 @@ def test_move_while_ocr_held_keeps_latest_block_geometry(qtbot, monkeypatch, run
 def test_desktop_mask_from_main_reaches_both_rois(qtbot, monkeypatch, runtime_settings):
     from main import sync_capture_overlay_mask
     from core.blocks.models import Rect, ScreenMapping, CaptureGeometry
-    import core.worker as module
+    import core.runtime.worker as module
     screen = ScreenMapping('left', Rect(-1000, 0, 1000, 600), Rect(-1500, 0, 1500, 900))
     geometry = CaptureGeometry(screen.physical_rect, screen, (1500, 900))
     regions = (CaptureRegion(str(uuid4()), 'left', NormalizedRect(0, 0, .5, 1), True),

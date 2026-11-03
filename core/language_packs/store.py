@@ -15,10 +15,10 @@ from uuid import uuid4
 
 from PyQt5.QtCore import QLockFile
 
-from core.language_pack_catalog import ARCHIVE_METADATA_FILES
-from core.language_pack_contracts import InstallPlan, PackState, RemovalResult, PackOperationError, pack_error
+from core.language_packs.catalog import ARCHIVE_METADATA_FILES
+from core.language_packs.contracts import InstallPlan, PackState, RemovalResult, PackOperationError, pack_error
 from core.languages import language_by_id, source_languages
-from core.ocr_models import OcrModelPaths
+from core.ocr.models import OcrModelPaths
 
 BUNDLED_COMPONENT_PATHS = {'det-en':'det/en', 'det-ml':'det/ml', 'rec-en':'rec/en', 'rec-ja':'rec/japan', 'cls':'cls'}
 

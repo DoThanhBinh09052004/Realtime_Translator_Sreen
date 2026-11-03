@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from ocr_asset_helpers import make_assets
-from core.ocr_models import resolve_ocr_models
+from core.ocr.models import resolve_ocr_models
 from engines import ocr
 
 @pytest.fixture(autouse=True)
@@ -57,23 +57,23 @@ def test_explicit_root_does_not_depend_on_cwd(tmp_path,monkeypatch):
     assert before=={p:(p.read_bytes(),p.stat().st_mtime_ns) for p in before}
 
 def test_default_source_staging_keeps_unbundled_languages(tmp_path,monkeypatch):
-    import core.ocr_models as models
+    import core.ocr.models as models
     make_assets(tmp_path/'assets/ocr')
     monkeypatch.setattr(sys,'frozen',False,raising=False)
-    monkeypatch.setattr(models,'__file__',str(tmp_path/'core/ocr_models.py'))
+    monkeypatch.setattr(models,'__file__',str(tmp_path/'core/ocr/models.py'))
     assert models.resolve_ocr_models('ch') is None
     assert models.resolve_ocr_models('korean') is None
 
 @pytest.mark.parametrize('lang', ['en', 'japan'])
 @pytest.mark.parametrize('mode', ['source', 'frozen', 'explicit'])
 def test_metadata_only_staging_preserves_only_default_source(tmp_path, monkeypatch, lang, mode):
-    import core.ocr_models as models
+    import core.ocr.models as models
     root = make_assets(tmp_path/'assets/ocr')
     for path in root.rglob('inference.*'):
         path.unlink()
     monkeypatch.setattr(sys, 'frozen', mode == 'frozen', raising=False)
     monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
-    monkeypatch.setattr(models, '__file__', str(tmp_path/'core/ocr_models.py'))
+    monkeypatch.setattr(models, '__file__', str(tmp_path/'core/ocr/models.py'))
     if mode == 'source':
         assert models.resolve_ocr_models(lang) is None
     else:
@@ -82,7 +82,7 @@ def test_metadata_only_staging_preserves_only_default_source(tmp_path, monkeypat
 
 @pytest.mark.parametrize('damage', ['partial', 'empty', 'corrupt'])
 def test_default_source_rejects_damaged_weight_payload(tmp_path, monkeypatch, damage):
-    import core.ocr_models as models
+    import core.ocr.models as models
     root = make_assets(tmp_path/'assets/ocr')
     if damage == 'partial':
         for path in root.rglob('inference.*'):
@@ -91,6 +91,6 @@ def test_default_source_rejects_damaged_weight_payload(tmp_path, monkeypatch, da
     else:
         (root/'cls/inference.pdmodel').write_bytes(b'' if damage == 'empty' else b'corrupt')
     monkeypatch.setattr(sys, 'frozen', False, raising=False)
-    monkeypatch.setattr(models, '__file__', str(tmp_path/'core/ocr_models.py'))
+    monkeypatch.setattr(models, '__file__', str(tmp_path/'core/ocr/models.py'))
     with pytest.raises(models.OcrModelError):
         models.resolve_ocr_models('en')

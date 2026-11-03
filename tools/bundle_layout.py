@@ -1,9 +1,9 @@
 """Explicit application data allowlist for the one-folder release."""
 from pathlib import Path
 import hashlib
-from core.ocr_models import validate_ocr_assets
-from core.language_pack_catalog import load_pack_catalog
-from core.language_pack_contracts import pack_error
+from core.ocr.models import validate_ocr_assets
+from core.language_packs.catalog import load_pack_catalog
+from core.language_packs.contracts import pack_error
 
 
 def validate_pack_resources(model_root: Path):

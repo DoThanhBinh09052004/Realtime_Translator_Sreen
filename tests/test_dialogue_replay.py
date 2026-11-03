@@ -29,7 +29,7 @@ def test_live_keeps_owner_alive_until_backend_drained(qtbot,monkeypatch,tmp_path
     from PyQt5.QtWidgets import QApplication
     from threading import Event
     from types import SimpleNamespace
-    import core.worker as module
+    import core.runtime.worker as module
     from tools import replay_dialogue_video as tool
     drained=Event()
     class Worker(QObject):

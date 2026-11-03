@@ -28,7 +28,7 @@ def test_daily_view_renders_without_runtime_imports():
         assert target.exists(), f"File {target} must exist"
         source = target.read_text(encoding='utf-8-sig')
         pkg = 'ui.pages' if 'pages' in target.parts else 'ui.widgets'
-        bad = forbidden_imports(source, pkg, {'ui.controller', 'core.config', 'core.worker', 'engines'})
+        bad = forbidden_imports(source, pkg, {'ui.controller', 'core.config', 'core.runtime', 'engines'})
         assert not bad, f"Forbidden imports in {target}: {bad}"
 
 

@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 from core.contracts import EngineError, OcrResult, OcrSpan
-from core.ocr_models import OcrModelError, resolve_ocr_models
+from core.ocr.models import OcrModelError, resolve_ocr_models
 
 
 def normalize_ocr_crop(img, bucket_step: int = 32):

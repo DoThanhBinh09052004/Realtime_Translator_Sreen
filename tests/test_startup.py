@@ -6,7 +6,7 @@ from ui.startup import StartupLoader
 
 def test_entry_import_does_not_load_ocr_runtime():
     result = subprocess.run([sys.executable, '-c',
-        "import main, sys; assert 'paddleocr' not in sys.modules; assert 'core.worker' not in sys.modules"],
+        "import main, sys; assert 'paddleocr' not in sys.modules; assert 'core.runtime.worker' not in sys.modules"],
         capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
 

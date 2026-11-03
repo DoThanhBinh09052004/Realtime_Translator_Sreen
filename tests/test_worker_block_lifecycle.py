@@ -3,11 +3,11 @@ from threading import Event, get_ident
 import numpy as np
 from core import config
 from core.contracts import TranslationResult
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 def test_moving_blocks_update_while_translation_is_in_flight(qtbot, monkeypatch, runtime_settings, capture_geometry, span_factory):
-    import core.worker as module
+    import core.runtime.worker as module
     from core.contracts import OcrResult
     entered, release = Event(), Event()
     counts = {'capture': 0, 'request': 0}
@@ -57,7 +57,7 @@ def test_moving_blocks_update_while_translation_is_in_flight(qtbot, monkeypatch,
 
 
 def test_mode_switch_waits_for_active_request_before_subtitle_request(qtbot, monkeypatch, runtime_settings, capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release = Event(), Event()
     calls = []
     class Service:
@@ -94,7 +94,7 @@ def test_mode_switch_waits_for_active_request_before_subtitle_request(qtbot, mon
 
 
 def test_stop_is_nonblocking_and_restart_waits_for_both_threads(qtbot, monkeypatch, runtime_settings, capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release, closed = Event(), Event(), Event()
     threads, capture_count = [], []
     class Service:
@@ -144,7 +144,7 @@ def test_stop_is_nonblocking_and_restart_waits_for_both_threads(qtbot, monkeypat
 
 
 def test_window_close_waits_for_held_translation_before_shutdown_finished(qtbot, monkeypatch, runtime_settings, capture_geometry):
-    import core.worker as module
+    import core.runtime.worker as module
     from ui.controller import ControllerWindow
     entered, release = Event(), Event()
     shutdown, close_calls = [], []

@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 from core import config
 from core.contracts import TranslationResult, EngineError
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 @pytest.mark.parametrize('mode',['subtitle','blocks'])
 def test_google_capture_continues_while_http_is_held(qtbot,monkeypatch,runtime_settings,capture_geometry,mode):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release=Event(),Event()
     calls, captures, threads=[],[],[]
     class Service:
@@ -45,7 +45,7 @@ def test_google_capture_continues_while_http_is_held(qtbot,monkeypatch,runtime_s
 
 
 def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime_settings,qtbot):
-    import core.worker as module
+    import core.runtime.worker as module
     from core.contracts import OcrResult
     w=TranslationWorker(config.State(),config.DEFAULT_REGION)
     settings=replace(runtime_settings,provider=replace(runtime_settings.provider,name='Google Translate',api_key='',model_id=''))
@@ -67,7 +67,7 @@ def test_manual_retry_observes_new_capture_before_submitting(monkeypatch,runtime
 
 
 def test_ai_also_publishes_revision_bound_subtitle_for_safe_switching(monkeypatch,runtime_settings,qtbot):
-    import core.worker as module
+    import core.runtime.worker as module
     from core.contracts import OcrResult
     monkeypatch.setattr(module,'ocr_image',lambda *a,**kw:OcrResult('Hello'))
     w=TranslationWorker(config.State(),config.DEFAULT_REGION)

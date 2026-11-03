@@ -17,7 +17,7 @@ from core import config
     ('https://b\u00fccher.example/v1', 'https://xn--bcher-kva.example/v1'),
 ])
 def test_normalizes_allowed_endpoint_without_dns(value, expected):
-    from core.endpoint_policy import normalize_custom_api_endpoint
+    from core.translation.endpoint_policy import normalize_custom_api_endpoint
     assert normalize_custom_api_endpoint(value) == expected
 
 
@@ -36,7 +36,7 @@ def test_normalizes_allowed_endpoint_without_dns(value, expected):
     'https://[::1/v1', 'file:///tmp/api', 'https:///v1', '', None, 12, {},
 ])
 def test_rejects_unsafe_or_ambiguous_endpoint(value):
-    from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+    from core.translation.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
     with pytest.raises(EndpointPolicyError) as error:
         normalize_custom_api_endpoint(value)
     assert 'fake-key' not in str(error.value)
@@ -44,7 +44,7 @@ def test_rejects_unsafe_or_ambiguous_endpoint(value):
 
 
 def test_empty_endpoint_only_allowed_for_config_default():
-    from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+    from core.translation.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
     assert normalize_custom_api_endpoint('', allow_empty=True) == ''
     with pytest.raises(EndpointPolicyError):
         normalize_custom_api_endpoint(None, allow_empty=True)

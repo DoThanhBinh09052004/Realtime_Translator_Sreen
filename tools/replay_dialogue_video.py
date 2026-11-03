@@ -167,9 +167,9 @@ def record_video(video, *, crop, size, out_dir):
 
 def run_live(video, *, provider, mode, crop, size, out_dir):
     import cv2
-    import core.worker as module
+    import core.runtime.worker as module
     from core import config
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     app=application();info=clip_info(video);events=[];gate=GoogleRecoveryGate()
     settings=config.load_provider_settings(provider)
     # The opt-in selects a provider explicitly; no active-provider settings are saved.

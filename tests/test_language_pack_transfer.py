@@ -9,7 +9,7 @@ from language_pack_helpers import make_pack_store, archive_for, make_component_a
 
 
 def run_transfer(store, *, handler=None, cancelled=lambda:False, progress=lambda p:None, operation_id='fixture'):
-    from core.language_pack_transfer import install_pack
+    from core.language_packs.transfer import install_pack
     requests=[]; clients=[]; threads=[]
     def default(request):
         requests.append(request)
@@ -38,7 +38,7 @@ def test_transfer_only_downloads_missing_component_and_publishes_marker_last(tmp
 
 @pytest.mark.parametrize('failure', ['offline','404','redirect','truncated','oversized','length','digest'])
 def test_network_or_integrity_failure_never_installs(tmp_path,failure):
-    from core.language_pack_contracts import PackOperationError
+    from core.language_packs.contracts import PackOperationError
     store=make_pack_store(tmp_path); data=archive_for(store,'rec-ko')
     def handler(request):
         if failure=='offline': raise httpx.ConnectError('fixture',request=request)
@@ -54,7 +54,7 @@ def test_network_or_integrity_failure_never_installs(tmp_path,failure):
 
 
 def test_cancel_before_marker_and_retry_reuses_validated_component(tmp_path):
-    from core.language_pack_contracts import PackOperationError
+    from core.language_packs.contracts import PackOperationError
     store=make_pack_store(tmp_path); cancel=False
     def progress(event):
         nonlocal cancel
@@ -70,8 +70,8 @@ def test_cancel_before_marker_and_retry_reuses_validated_component(tmp_path):
 
 @pytest.mark.parametrize('malice',['traversal','absolute','symlink','hardlink','duplicate','extra','oversize'])
 def test_extraction_rejects_non_allowlisted_or_unsafe_members(tmp_path,malice):
-    from core.language_pack_transfer import extract_component
-    from core.language_pack_contracts import PackOperationError
+    from core.language_packs.transfer import extract_component
+    from core.language_packs.contracts import PackOperationError
     store=make_pack_store(tmp_path); artifact=store.catalog.components['rec-ko']; members=[]
     for file in artifact.files:
         content=('rec-ko '+file.path).encode(); member=tarfile.TarInfo('rec-ko/'+file.path); member.size=len(content)
@@ -91,8 +91,8 @@ def test_extraction_rejects_non_allowlisted_or_unsafe_members(tmp_path,malice):
 
 
 def test_disk_space_and_permission_errors_are_actionable(tmp_path,monkeypatch):
-    import core.language_pack_transfer as transfer
-    from core.language_pack_contracts import PackOperationError
+    import core.language_packs.transfer as transfer
+    from core.language_packs.contracts import PackOperationError
     store=make_pack_store(tmp_path)
     monkeypatch.setattr(transfer.shutil,'disk_usage',lambda p:type('Usage',(),{'free':1})())
     with pytest.raises(PackOperationError) as caught: run_transfer(store)

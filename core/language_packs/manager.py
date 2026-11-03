@@ -6,9 +6,9 @@ from uuid import uuid4
 import httpx
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
-from core.language_pack_contracts import PackSnapshot, PackState, PackOperationError, pack_error
+from core.language_packs.contracts import PackSnapshot, PackState, PackOperationError, pack_error
 from core.languages import source_languages, language_by_id
-from core.language_pack_transfer import install_pack
+from core.language_packs.transfer import install_pack
 
 
 def _client():
@@ -37,7 +37,7 @@ class _PackWorker(QThread):
                 self.store.remove(self.language_id)
         except PackOperationError as exc: error=exc.error
         except OSError as exc:
-            from core.language_pack_store import filesystem_error
+            from core.language_packs.store import filesystem_error
             error=filesystem_error(exc).error
         except Exception:
             # Keep a damaged package store from killing the app. No raw paths,

@@ -7,7 +7,7 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.language_pack_store import PackStore
+    from core.language_packs.store import PackStore
 
 MODEL_SOURCES = {
     'det/en': 'whl/det/en/en_PP-OCRv3_det_infer',
@@ -66,7 +66,7 @@ def resolve_ocr_models(lang: str, *, root: Path | None = None, store: 'PackStore
     explicit = root is not None
     frozen = bool(getattr(sys, 'frozen', False))
     if root is None:
-        base = Path(sys._MEIPASS) if frozen else Path(__file__).resolve().parents[1]
+        base = Path(sys._MEIPASS) if frozen else Path(__file__).resolve().parents[2]
         root = base/'assets'/'ocr'
     root = Path(root).resolve()
     if not explicit and not frozen:

@@ -2,7 +2,7 @@ from dataclasses import replace
 from threading import Event
 from core.contracts import TranslationResult, EngineError
 from core.blocks.models import BlockJob
-from core.google_recovery import GoogleRecoveryGate
+from core.translation.google_recovery import GoogleRecoveryGate
 
 
 def google_settings(settings):

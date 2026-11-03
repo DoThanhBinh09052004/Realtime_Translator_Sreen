@@ -50,7 +50,7 @@ def test_one_hundred_native_rebinds_release_buffers_and_ignore_retired_callbacks
 
 def test_one_hundred_runtime_start_stop_cycles_drain_both_owners(qtbot, monkeypatch, capture_geometry, runtime_settings):
     from core import config
-    import core.worker as module
+    import core.runtime.worker as module
     from core.capture.models import CapturedFrame, SourceStatus
     from core.contracts import OcrResult
     from test_capture_app_integration import capture_values

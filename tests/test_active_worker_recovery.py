@@ -2,11 +2,11 @@
 import numpy as np
 from core import config
 from core.contracts import EngineError, OcrResult
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 def test_static_frame_ocr_error_retries_after_deadline(monkeypatch):
-    from core import worker as module
+    from core.runtime import worker as module
     worker = TranslationWorker(config.State(), config.DEFAULT_REGION)
     worker._is_running = True
     settings, revision, _, _ = worker._take_snapshot()
@@ -31,7 +31,7 @@ def test_static_frame_ocr_error_retries_after_deadline(monkeypatch):
 
 
 def test_old_revision_does_not_publish_ocr_observation(monkeypatch):
-    from core import worker as module
+    from core.runtime import worker as module
     worker = TranslationWorker(config.State(), config.DEFAULT_REGION)
     worker._is_running = True
     settings, revision, _, _ = worker._take_snapshot()

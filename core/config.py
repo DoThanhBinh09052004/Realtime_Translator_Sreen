@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 from core.contracts import ProviderSettings, RuntimeSettings, ProviderCapabilities
 from core.paths import get_app_paths
 from core.secrets import SecretStore, SecretStoreError
-from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from core.translation.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
 from core.languages import source_languages, target_languages
 
 _config_lock = threading.RLock()

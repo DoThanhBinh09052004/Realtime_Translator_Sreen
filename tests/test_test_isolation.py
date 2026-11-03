@@ -7,7 +7,7 @@ import pytest
 
 # Collection-time imports must already be safe, before any fixture is executed.
 from core import config
-from core import worker
+from core.runtime import worker
 
 _REPO = Path(__file__).resolve().parents[1]
 assert not Path(config.CONFIG_PATH).is_relative_to(_REPO)
@@ -69,7 +69,8 @@ def test_config_persistence_uses_only_temporary_files(isolated_config):
 
 
 def test_engine_calls_use_fakes(isolated_config, fake_translator, fake_ocr):
-    from core import config, worker
+    from core import config
+    from core.runtime import worker
     config.save_active_provider('Google Gemini')
     from engines import translator, ocr
     import numpy as np

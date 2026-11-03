@@ -8,7 +8,7 @@ from time import perf_counter
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from core.contracts import EngineError, ProviderSettings, RuntimeSettings, TranslationResult
-from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from core.translation.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
 from engines.custom_api_http import build_custom_api_http_client
 from engines.google_translate import GoogleTranslateClient, GOOGLE_ADAPTER_VERSION
 from engines.context_protocol import build_context_messages, parse_context_response

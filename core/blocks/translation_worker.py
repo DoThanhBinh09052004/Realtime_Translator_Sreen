@@ -8,7 +8,7 @@ from core.blocks.models import BlockTranslationResult
 from core.contracts import EngineError, TranslationResult
 from core.retry import RetryState
 from engines.translator import TranslationService
-from core.google_recovery import GoogleRecoveryGate
+from core.translation.google_recovery import GoogleRecoveryGate
 
 
 class BlockTranslationWorker(QThread):

@@ -21,8 +21,8 @@ def make_component_archive(component_id='rec-ko', files=None, *, members=None):
 
 
 def make_pack_store(tmp_path: Path):
-    from core.language_pack_catalog import validate_pack_catalog
-    from core.language_pack_store import PackStore, BUNDLED_COMPONENT_PATHS
+    from core.language_packs.catalog import validate_pack_catalog
+    from core.language_packs.store import PackStore, BUNDLED_COMPONENT_PATHS
     bundled=tmp_path/'bundle'; bundled.mkdir(parents=True)
     raw=dict(schema=1,paddleocr_version='2.10.0',ocr_version='PP-OCRv4',components={},resources={})
     manifest_files={}

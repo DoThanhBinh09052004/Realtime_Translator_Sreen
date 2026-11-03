@@ -17,7 +17,7 @@ import httpx
 
 if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.language_pack_catalog import ALLOWED_ARCHIVE_FILES, MAX_ARCHIVE_BYTES, safe_relative, validate_pack_catalog
+from core.language_packs.catalog import ALLOWED_ARCHIVE_FILES, MAX_ARCHIVE_BYTES, safe_relative, validate_pack_catalog
 
 _MODELS = {'det-en':('det','en'), 'det-ml':('det','ml'), 'det-ch':('det','ch'),
            'rec-en':('rec','en'), 'rec-ja':('rec','japan'), 'rec-ch':('rec','ch'),

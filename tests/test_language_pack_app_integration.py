@@ -5,7 +5,7 @@ import pytest
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtTest import QSignalSpy
 from core import config
-from core.language_pack_contracts import PackError, PackSnapshot, PackState
+from core.language_packs.contracts import PackError, PackSnapshot, PackState
 
 
 def pack(language_id, state='installed', **changes):

@@ -6,13 +6,13 @@ import pytest
 
 from core import config
 from core.contracts import EngineError, TranslationResult, TranslationStatus
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 from ui.controller import ControllerWindow
 
 
 @pytest.fixture
 def worker_window(qtbot, monkeypatch):
-    import core.worker as module
+    import core.runtime.worker as module
     monkeypatch.setattr(module, 'compact_memory', lambda: None)
     worker = TranslationWorker(config.State(), config.DEFAULT_REGION, 100)
     window = ControllerWindow(worker, worker.state, lambda: None, lambda: None)
@@ -52,7 +52,7 @@ def test_ocr_error_is_visible_without_erasing_google_pause(worker_window):
 @pytest.mark.parametrize('restart', ['start', 'mode'])
 def test_old_capture_finish_does_not_stop_requested_restart(
         qtbot, monkeypatch, worker_window, runtime_settings, capture_geometry, restart):
-    import core.worker as module
+    import core.runtime.worker as module
     entered, release = Event(), Event()
 
     class Service:

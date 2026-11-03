@@ -5,8 +5,8 @@ from ocr_asset_helpers import make_assets
 from pack_resource_helpers import make_pack_resources
 from tools import prepare_ocr_models
 from tools.bundle_layout import bundle_data
-from core.ocr_models import OcrModelError
-from core.language_pack_contracts import PackOperationError
+from core.ocr.models import OcrModelError
+from core.language_packs.contracts import PackOperationError
 
 
 def test_prepare_additional_dictionaries_preserves_legacy_bundle(tmp_path):

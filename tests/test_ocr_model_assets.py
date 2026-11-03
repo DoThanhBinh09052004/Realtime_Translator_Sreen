@@ -1,7 +1,7 @@
 import json
 import pytest
 from ocr_asset_helpers import make_assets, make_source_cache
-from core.ocr_models import OcrModelError, validate_ocr_assets
+from core.ocr.models import OcrModelError, validate_ocr_assets
 from tools.prepare_ocr_models import prepare_models
 
 def test_prepare_copies_only_en_japan_models(tmp_path):

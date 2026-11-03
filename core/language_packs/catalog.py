@@ -4,7 +4,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 from urllib.parse import urlsplit
 
-from core.language_pack_contracts import ArtifactDefinition, ArtifactFile, PackCatalog, ResourceDefinition, pack_error
+from core.language_packs.contracts import ArtifactDefinition, ArtifactFile, PackCatalog, ResourceDefinition, pack_error
 from core.languages import source_languages
 
 MODEL_FILES = frozenset(('inference.pdmodel', 'inference.pdiparams', 'inference.pdiparams.info'))

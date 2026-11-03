@@ -7,7 +7,7 @@ import threading
 import numpy as np
 import pytest
 
-from core.ocr_models import OcrModelError, OcrModelPaths
+from core.ocr.models import OcrModelError, OcrModelPaths
 from engines import ocr
 
 
@@ -105,7 +105,7 @@ def test_managed_native_failure_releases_lease_and_does_not_retry(tmp_path, monk
 def test_injected_reader_preserves_stopped_worker_and_source_revision(tmp_path, monkeypatch):
     from core.config import State
     from core.contracts import OcrResult
-    from core.worker import TranslationWorker
+    from core.runtime.worker import TranslationWorker
     reader_calls = []
     worker = TranslationWorker(State(), {'left': 0, 'top': 0, 'width': 20, 'height': 20}, ocr_reader=lambda image, lang: reader_calls.append(lang) or OcrResult('hello'))
     worker._is_running = True

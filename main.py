@@ -56,7 +56,7 @@ def sync_capture_overlay_mask(worker, rect, legacy_geometry):
 def _start_application(app):
     from core.config import (State, load_config, load_region, initialize_user_storage, ConfigError,
                              load_capture_profile, recover_legacy_capture_profile)
-    from core.worker import TranslationWorker
+    from core.runtime.worker import TranslationWorker
     from ui.overlay import Overlay
     from ui.controller import ControllerWindow
     from ui.screen_geometry import ScreenGeometryProvider
@@ -88,9 +88,9 @@ def _start_application(app):
             QMessageBox.warning(None, 'Không thể khôi phục', str(recovery_error))
             return
     region = load_region()
-    from core.language_pack_catalog import load_pack_catalog
-    from core.language_pack_store import PackStore
-    from core.language_pack_manager import LanguagePackManager
+    from core.language_packs.catalog import load_pack_catalog
+    from core.language_packs.store import PackStore
+    from core.language_packs.manager import LanguagePackManager
     from core.paths import get_language_pack_root
     from engines.ocr import ocr_image
     resource_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent)) / 'assets' / 'ocr'

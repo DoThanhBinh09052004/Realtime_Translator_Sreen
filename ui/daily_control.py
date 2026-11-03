@@ -5,7 +5,7 @@ from core.config import (
     load_capture_setup_complete, load_active_provider, get_provider_capabilities,
     load_provider_api_key, load_provider_model_id, load_custom_api_base_url,
 )
-from core.endpoint_policy import normalize_custom_api_endpoint, EndpointPolicyError
+from core.translation.endpoint_policy import normalize_custom_api_endpoint, EndpointPolicyError
 from ui.controller_state import DailyReadiness, DailyRunState
 
 

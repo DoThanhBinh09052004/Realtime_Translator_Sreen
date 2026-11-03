@@ -2,11 +2,11 @@ from dataclasses import replace
 import numpy as np
 from core import config
 from core.contracts import OcrResult
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 def test_static_thumbnail_still_refreshes_small_block_geometry(qtbot,monkeypatch,runtime_settings,capture_geometry,span_factory,dialogue_result):
-    import core.worker as module
+    import core.runtime.worker as module
     now,calls=[0.],[]
     monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
     monkeypatch.setattr(module,'ocr_image',lambda *a,**k:calls.append(1) or OcrResult('Hello',spans=(span_factory(),)))
@@ -27,7 +27,7 @@ def test_static_thumbnail_still_refreshes_small_block_geometry(qtbot,monkeypatch
 
 
 def test_confirmed_missing_source_rejects_late_translation(qtbot,monkeypatch,runtime_settings,capture_geometry,span_factory,dialogue_result):
-    import core.worker as module
+    import core.runtime.worker as module
     now,source=[0.],['Hello']
     monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
     monkeypatch.setattr(module,'ocr_image',lambda *a,**k:OcrResult(source[0],spans=(span_factory(),) if source[0] else ()))

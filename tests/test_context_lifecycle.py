@@ -1,7 +1,7 @@
 from dataclasses import replace
 import pytest
 from core import config
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 from core.dialogue.context_models import *
 from tests.context_helpers import stable
 

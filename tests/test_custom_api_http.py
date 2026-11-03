@@ -22,7 +22,7 @@ def test_allowed_https_and_loopback_dispatch(url):
 @pytest.mark.parametrize('target', ['https://other.example.test/v1', 'http://127.0.0.1/v1',
                                   'http://api.example.test/v1', 'https://api.example.test:8443/v1'])
 def test_origin_change_is_blocked_before_transport(target):
-    from core.endpoint_policy import EndpointPolicyError
+    from core.translation.endpoint_policy import EndpointPolicyError
     received = []
     def respond(request):
         received.append(request)
@@ -38,7 +38,7 @@ def test_origin_change_is_blocked_before_transport(target):
                                     'https://other.example.test/fake-location-secret',
                                     'https://api.example.test/fake-location-secret', '/fake-location-secret'])
 def test_all_redirects_are_terminal(status, location):
-    from core.endpoint_policy import EndpointPolicyError
+    from core.translation.endpoint_policy import EndpointPolicyError
     received, responses = [], []
     def respond(request):
         received.append(request)
@@ -80,7 +80,7 @@ def test_custom_client_closes_transport():
 
 
 def test_redirect_cleanup_error_cannot_mask_policy_failure():
-    from core.endpoint_policy import EndpointPolicyError
+    from core.translation.endpoint_policy import EndpointPolicyError
     class Stream(httpx.SyncByteStream):
         reads = 0
         closes = 0

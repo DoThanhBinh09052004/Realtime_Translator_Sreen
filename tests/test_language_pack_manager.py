@@ -5,7 +5,7 @@ from language_pack_helpers import make_pack_store, archive_for, install_fixture
 
 
 def make_manager(tmp_path,qtbot):
-    from core.language_pack_manager import LanguagePackManager
+    from core.language_packs.manager import LanguagePackManager
     store=make_pack_store(tmp_path)
     manager=LanguagePackManager(store,client_factory=lambda:httpx.Client(transport=httpx.MockTransport(
         lambda request:httpx.Response(200,content=archive_for(store,request.url.path.split('/')[-1].removesuffix('.tar'))))))
@@ -72,7 +72,7 @@ def test_removing_is_published_synchronously_and_shutdown_waits_without_blocking
 
 
 def test_cancelled_install_rescans_and_late_progress_cannot_override_snapshot(tmp_path,qtbot):
-    from core.language_pack_contracts import PackProgress
+    from core.language_packs.contracts import PackProgress
     manager,store=make_manager(tmp_path,qtbot)
     entered=threading.Event(); release=threading.Event()
     def factory():

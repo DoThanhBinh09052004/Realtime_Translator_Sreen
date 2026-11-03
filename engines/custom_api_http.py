@@ -1,7 +1,7 @@
 """Pinned-origin transport policy for Custom API only."""
 import httpx
 
-from core.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
+from core.translation.endpoint_policy import EndpointPolicyError, normalize_custom_api_endpoint
 
 
 def _origin(url: httpx.URL) -> tuple[str, str, int]:

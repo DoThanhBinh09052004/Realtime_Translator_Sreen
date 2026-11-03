@@ -8,9 +8,9 @@ import tarfile
 import httpx
 from PyQt5.QtCore import QLockFile
 
-from core.language_pack_catalog import safe_relative
-from core.language_pack_contracts import PackProgress, PackOperationError, pack_error
-from core.language_pack_store import _is_link, filesystem_error
+from core.language_packs.catalog import safe_relative
+from core.language_packs.contracts import PackProgress, PackOperationError, pack_error
+from core.language_packs.store import _is_link, filesystem_error
 
 CHUNK_SIZE=64*1024
 

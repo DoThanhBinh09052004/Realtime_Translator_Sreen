@@ -8,7 +8,7 @@ def failure(code='network', delay=None, retryable=True):
 
 
 def test_four_consecutive_failures_pause_globally():
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     g = GoogleRecoveryGate()
     generation = g.snapshot(now_s=0).generation
     for now, due in [(0,1),(1,3),(3,7),(7,7)]:
@@ -22,7 +22,7 @@ def test_four_consecutive_failures_pause_globally():
 
 
 def test_cache_and_input_do_not_heal_but_network_success_resets_budget():
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     g = GoogleRecoveryGate()
     generation = g.snapshot(now_s=0).generation
     g.record_result(failure(),generation=generation,now_s=0)
@@ -34,7 +34,7 @@ def test_cache_and_input_do_not_heal_but_network_success_resets_budget():
 
 
 def test_rate_limit_deadline_survives_pause_retry_and_new_session():
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     for header, due in [(None,30),(12,12),(90,90)]:
         g = GoogleRecoveryGate()
         generation = g.snapshot(now_s=0).generation
@@ -58,7 +58,7 @@ def test_rate_limit_deadline_survives_pause_retry_and_new_session():
 
 
 def test_old_generation_and_concurrent_snapshots_are_safe():
-    from core.google_recovery import GoogleRecoveryGate
+    from core.translation.google_recovery import GoogleRecoveryGate
     g = GoogleRecoveryGate()
     old = g.snapshot(now_s=0).generation
     g.invalidate_requests()

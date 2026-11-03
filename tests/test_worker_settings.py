@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from core import config
-from core.worker import TranslationWorker
+from core.runtime.worker import TranslationWorker
 
 
 def make_worker():
@@ -17,7 +17,7 @@ def make_worker():
 
 
 def install_capture(monkeypatch, worker, on_frame=lambda count: None, frames=5, changing=False, continuous=False):
-    from core import worker as module
+    from core.runtime import worker as module
 
     class Capture:
         count = 0
@@ -226,7 +226,7 @@ def test_worker_shutdown_clears_untranslated_pending_candidate(monkeypatch, fake
 
 @pytest.mark.parametrize("changing,source,expected", [(False, "", 2), (True, "fake source", 1)])
 def test_memory_compaction_still_depends_on_idle_frames(monkeypatch, fake_ocr, changing, source, expected):
-    from core import worker as module
+    from core.runtime import worker as module
     worker = make_worker()
     fake_ocr.return_value = source
     install_capture(monkeypatch, worker, changing=changing)

@@ -80,10 +80,10 @@ class StartupLoader(QThread):
         try:
             for message, modules in (
                 ('Đang tải thiết lập…', ('core.config',)),
-                ('Đang chuẩn bị OCR…', ('engines.ocr', 'core.worker')),
+                ('Đang chuẩn bị OCR…', ('engines.ocr', 'core.runtime.worker')),
                 ('Đang tải giao diện…', ('ui.overlay', 'ui.controller', 'ui.game_controls',
                     'ui.region_selection', 'ui.capture_binding', 'ui.screen_geometry',
-                    'core.language_pack_manager')),
+                    'core.language_packs.manager')),
             ):
                 self.stage.emit(message)
                 for module in modules:
