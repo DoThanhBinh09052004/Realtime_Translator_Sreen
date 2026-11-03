@@ -33,38 +33,46 @@ Mặc định dùng **Google Translate, không cần API key**. Bạn cũng có 
 
 ### Bảng điều khiển
 
-Màn hình dịch hằng ngày tập trung ngôn ngữ, nguồn chụp, vùng đọc chữ, ảnh xem trước và bản dịch đang hiển thị. Nút **Bắt đầu dịch / Dừng dịch** cùng trạng thái luôn ở phía dưới; mở **Thiết lập** khi cần đổi công cụ dịch hoặc tùy chỉnh nâng cao.
+Trang **Tổng quan** tập trung ngôn ngữ, nguồn chụp, công cụ dịch, vùng đọc chữ và **Bản dịch mới nhất**. Bạn có thể đổi công cụ dịch ngay tại đây; nút **Bắt đầu dịch / Dừng dịch** cùng trạng thái luôn ở phía dưới.
+
+Sidebar bên trái dẫn tới bốn trang: **Tổng quan**, **Công cụ dịch**, **Dịch thuật & OCR** và **Giao diện Phụ đề**. Có thể thu gọn sidebar thành biểu tượng và chuyển giao diện sáng/tối bằng nút ở gần cuối thanh.
 
 <p align="center">
   <a href="assets/readme/dashboard.png">
-    <img src="assets/readme/dashboard.png" alt="Bảng điều khiển Translate HUD với Google Translate, English sang Vietnamese và vùng quét 1280 × 240 px" width="920">
+    <img src="assets/readme/dashboard.png" alt="Trang Tổng quan hiện tại với sidebar, ngôn ngữ, nguồn chụp, Google Translate, vùng đọc chữ và bản dịch mới nhất" width="1100">
   </a>
 </p>
 
 <details>
-<summary><strong>Xem công cụ dịch, thiết lập OCR và tùy biến phụ đề</strong></summary>
+<summary><strong>Xem giao diện tối, công cụ dịch, thiết lập OCR và phụ đề</strong></summary>
+
+### Giao diện tối
+
+Chuyển sáng/tối từ sidebar; lựa chọn được lưu cho lần mở sau.
+
+![Trang Tổng quan trong giao diện tối](assets/readme/dashboard-dark.png)
 
 ### Công cụ dịch
 
-Chọn Google Translate hoặc nhà cung cấp AI. Các trường model và API key thay đổi theo công cụ đã chọn.
+Chọn Google Translate hoặc nhà cung cấp AI bằng các thẻ công cụ. Các trường model, API key và base URL thay đổi theo công cụ đã chọn; phần hướng dẫn bên cạnh giải thích cách thiết lập.
 
 ![Trang chọn công cụ dịch với Google Translate không cần API key](assets/readme/translation.png)
 
 ### Dịch thuật & OCR
 
-Thiết lập ngôn ngữ nguồn, ngôn ngữ đích, chu kỳ quét và vùng màn hình cần theo dõi.
+Thiết lập ngôn ngữ, chu kỳ quét, nguồn chụp và vùng màn hình cần theo dõi. Thẻ **Hiệu năng OCR & tài nguyên máy** cho phép chọn **Hiệu năng cao / Tiết kiệm RAM**, tự động tối ưu hoặc tự đặt số luồng CPU.
 
-![Trang thiết lập OCR với cặp English sang Vietnamese và chu kỳ quét 500 ms](assets/readme/ocr.png)
+![Trang Dịch thuật & OCR với ngôn ngữ, chu kỳ 500 ms, hiệu năng OCR và nguồn chụp](assets/readme/ocr.png)
 
 ### Tùy biến phụ đề
 
-Chỉnh màu nền, màu chữ, cỡ chữ, độ trong suốt và vị trí; xem trước ngay trong ứng dụng.
+Chọn **Phụ đề nổi** hoặc **Theo vị trí chữ**. Chỉnh màu nền, màu chữ, cỡ chữ, độ trong suốt và vị trí; xem trước ngay trong ứng dụng.
 
 ![Trang tùy biến phụ đề nổi với bộ chọn màu, cỡ chữ, độ trong suốt và khung xem trước](assets/readme/subtitles.png)
 
 </details>
 
-*Ảnh minh họa giao diện thiết lập trước đây với cấu hình mẫu, ở trạng thái dừng; màn hình dịch hằng ngày hiện tại có bố cục khác. Banner minh họa luồng dịch.*
+*Ảnh được dựng từ các widget của phiên bản mã nguồn hiện tại với cấu hình và danh sách nguồn mẫu, ở trạng thái dừng; không chụp nội dung màn hình hay gọi dịch vụ dịch. Banner và sơ đồ minh họa luồng dịch.*
 
 ## Tính năng
 
@@ -72,11 +80,13 @@ Chỉnh màu nền, màu chữ, cỡ chữ, độ trong suốt và vị trí; xe
 | :--- | :--- |
 | **Nguồn chụp linh hoạt** | Chọn màn hình hoặc cửa sổ game, rồi khoanh vùng chứa hội thoại hay chữ cần dịch. |
 | **Điều khiển hằng ngày** | Đổi ngôn ngữ, xem ảnh chụp theo yêu cầu và theo dõi bản dịch đã hiển thị trên một màn hình. |
+| **Giao diện sáng/tối** | Chuyển theme, thu gọn sidebar và điều hướng giữa bốn trang; bố cục tự sắp xếp theo kích thước cửa sổ. |
 | **Ngữ cảnh hội thoại tùy chọn** | Công cụ AI có thể dùng hội thoại gần đây và trí nhớ nhân vật giới hạn trong RAM; mặc định tắt, chỉ dành cho chế độ phụ đề. |
 | **Nhiều công cụ dịch** | Chọn Google Translate, Google Gemini, OpenAI, DeepSeek hoặc Custom API. |
 | **Hai cách hiển thị** | Dùng phụ đề nổi hoặc bản dịch theo vị trí chữ gốc. |
 | **Tùy biến phụ đề** | Điều chỉnh màu sắc, cỡ chữ 14–36 px, độ trong suốt và vị trí. |
 | **Chủ động tần suất quét** | Đặt chu kỳ 100–3000 ms; mặc định 500 ms. Đây là chu kỳ quét, không phải cam kết độ trễ dịch. |
+| **Điều chỉnh tài nguyên OCR** | Chọn hiệu năng cao hoặc tiết kiệm RAM, tự động tối ưu số luồng CPU hoặc cấu hình thủ công. |
 | **Điều khiển khi chơi game** | Dùng phím tắt toàn hệ thống, thanh điều khiển nổi và biểu tượng khay hệ thống. |
 | **Quản lý gói OCR** | Kiểm tra trạng thái các gói; tải thêm bộ nhận diện tiếng Trung và tiếng Hàn. |
 | **Lưu API key** | Lưu bằng Windows DPAPI hoặc chỉ dùng trong phiên hiện tại. |
@@ -100,7 +110,7 @@ OCR xử lý ảnh trên máy sau khi có đủ model. Phần dịch gửi **vă
 
 ### Bản portable Windows x64
 
-Gói kiểm thử ngày **01/11/2026** được tạo tại `dist/release-2026-11-01/TranslateHUD-2026.11.01-windows-x64.zip`. Đây là đường dẫn đầu ra cục bộ khi đóng gói, không phải liên kết tải trên GitHub.
+README này mô tả **mã nguồn hiện tại trên nhánh `develop`**. Gói kiểm thử ngày **01/11/2026** được tạo tại `dist/release-2026-11-01/TranslateHUD-2026.11.01-windows-x64.zip`; gói cũ có thể chưa có các thay đổi giao diện mới nhất. Đây là đường dẫn đầu ra cục bộ khi đóng gói, không phải liên kết tải trên GitHub. Để dùng giao diện trong ảnh, chạy mã nguồn hiện tại hoặc đóng gói lại theo hướng dẫn bên dưới.
 
 1. Giải nén **toàn bộ** ZIP vào một thư mục; không chạy trực tiếp trong ZIP.
 2. Mở `main.exe`, giữ thư mục `_internal` bên cạnh EXE. Không cần cài Python để dùng bản này.
@@ -155,11 +165,13 @@ Chỉ chạy lệnh sao chép khi công cụ chuẩn bị model hoàn tất thà
 
 ## Sử dụng
 
-1. Trên màn hình dịch hằng ngày, chọn **Ngôn ngữ nguồn** và **Dịch sang**. English/Japanese đã có model trong bản portable; Chinese/Korean cần cài thêm gói OCR trong thiết lập.
-2. Trong **Nguồn chụp**, chọn **Màn hình** hoặc **Cửa sổ**, chọn nguồn rồi bấm **Dùng màn hình này / Dùng cửa sổ này** để xác nhận. Cập nhật danh sách nếu vừa mở game.
-3. Bấm **Khoanh vùng đọc**, chọn vùng chứa chữ. Dùng **Quản lý vùng nâng cao** nếu cần nhiều vùng OCR; **Làm mới ảnh** cập nhật ảnh xem trước theo yêu cầu, không phải video liên tục.
-4. Giữ Google Translate để bắt đầu không cần key. Muốn dùng AI, mở **Thiết lập → Công cụ dịch**, chọn nhà cung cấp và nhập API key; Custom API cần thêm base URL tương thích OpenAI. Mở **Tùy chỉnh** để chọn phụ đề nổi hoặc hiển thị theo vị trí chữ và chỉnh kiểu hiển thị.
-5. Bấm **Bắt đầu dịch** khi trạng thái đã sẵn sàng. Khung **Bản dịch Hiển thị** theo dõi cặp chữ gốc/bản dịch đã được đưa lên overlay. Bấm **Dừng dịch** để kết thúc quét; ứng dụng không tự bắt đầu chụp khi vừa mở.
+1. Trên trang **Tổng quan**, chọn cặp ngôn ngữ ở hàng **Ngôn ngữ**. English/Japanese đã có model trong bản portable; Chinese/Korean cần cài thêm gói OCR tại **Dịch thuật & OCR**.
+2. Trong **Nguồn chụp**, chọn **Màn hình** hoặc **Cửa sổ**, chọn nguồn rồi bấm **Xác nhận**. Nút biểu tượng làm mới cập nhật danh sách nếu vừa mở game; bấm **Đổi nguồn** khi cần chọn lại.
+3. Bấm **Khoanh vùng**, chọn vùng chứa chữ. Nút biểu tượng thanh trượt ở góc thẻ **Vùng đọc chữ** mở **Quản lý vùng nâng cao** nếu cần nhiều vùng OCR. **Làm mới ảnh** cập nhật ảnh xem trước theo yêu cầu, không phải video liên tục.
+4. Giữ **Google Translate** trong danh sách **Công cụ dịch** để bắt đầu không cần key. Muốn dùng AI, mở **Thiết lập** hoặc trang **Công cụ dịch** từ sidebar, chọn nhà cung cấp, model và áp dụng API key; Custom API cần thêm base URL tương thích OpenAI. Bấm **Tùy chỉnh** hoặc mở **Giao diện Phụ đề** để chọn cách hiển thị và chỉnh kiểu phụ đề.
+5. Bấm **Bắt đầu dịch** khi trạng thái đã sẵn sàng. Khung **Bản dịch mới nhất** theo dõi cặp chữ gốc/bản dịch đã được đưa lên overlay; bên dưới có **Xem trước phụ đề**. Mở **Chi tiết phiên dịch** để xem nhật ký. Bấm **Dừng dịch** để kết thúc quét; ứng dụng không tự bắt đầu chụp khi vừa mở.
+
+Trở về màn hình dịch bằng **Tổng quan** trên sidebar. Thay đổi thiết lập được đồng bộ giữa các trang. Khi thu nhỏ cửa sổ, nội dung có thể cuộn dọc; thanh bắt đầu/dừng vẫn nằm phía dưới.
 
 Nếu cửa sổ nguồn đóng hoặc không còn chụp được, ứng dụng chờ nguồn; bạn vẫn có thể dừng dịch hoặc chọn lại nguồn. Với game exclusive fullscreen, thử cửa sổ hoặc borderless.
 
