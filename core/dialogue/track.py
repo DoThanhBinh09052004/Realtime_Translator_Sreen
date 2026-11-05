@@ -13,6 +13,7 @@ class DialogueTrack:
         self.source_text = ''
         self.closed = True
         self.missing_count = 0
+        self._missing_since = None
         self.last_seen_s = float('-inf')
         self.presentation = None
         self._shown_at = float('-inf')
@@ -44,6 +45,7 @@ class DialogueTrack:
             self.miss(now_s=now_s)
             return
         self.last_seen_s, self.missing_count = now_s, 0
+        self._missing_since = None
         if self.closed:
             self._begin(text, now_s, evidence=evidence, captured_at_s=captured_at_s)
             return
@@ -82,11 +84,15 @@ class DialogueTrack:
             else:
                 self._begin(text, now_s, observations=challenger[2], evidence=evidence, captured_at_s=captured_at_s)
 
-    def miss(self, *, now_s: float) -> bool:
+    def miss(self, *, now_s: float, minimum_scans=None, minimum_absence_s=0.) -> bool:
         if self.closed: return False
         self._challenger = None
         self.missing_count += 1
-        if self.missing_count < self.policy.absent_scans: return False
+        if self._missing_since is None:
+            self._missing_since = now_s
+        required = self.policy.absent_scans if minimum_scans is None else minimum_scans
+        if (self.missing_count < required
+                or now_s-self._missing_since < minimum_absence_s): return False
         self.closed = True
         self._issued = self._pending = self._deferred = self._challenger = None
         return True
@@ -125,7 +131,7 @@ class DialogueTrack:
             self._last_dispatch = now_s
             self._dispatched_version = max(self._dispatched_version, job.text_version)
 
-    def apply_result(self, result, *, now_s):
+    def apply_result(self, result, *, now_s, defer_when_missing=False):
         job = self._issued
         if (self.closed or job is None or result.request_key != job.request_key
                 or result.source_text != job.source_text): return False
@@ -134,7 +140,7 @@ class DialogueTrack:
         if not result.result.text or result.text_version <= self._applied_version: return False
         receipt=PresentationReceipt(result.request_key,result.source_text,result.result.text,result.result.context)
         value = TrackPresentation(result.turn_id,result.text_version,result.source_text,result.result.text,receipt)
-        if self._challenger:
+        if self._challenger or (defer_when_missing and self.missing_count):
             self._deferred = value
         else:
             self._offer(value, now_s)

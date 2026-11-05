@@ -94,7 +94,10 @@ class BlockSession:
                     matches[i]=key;used.add(key)
         retained={}
         for key,t in self._tracks.items():
-            if key not in used and not t.state.miss(now_s=now_s): retained[key]=t
+            if key not in used and not t.state.miss(
+                    now_s=now_s, minimum_scans=self.policy.block_absent_scans,
+                    minimum_absence_s=self.policy.block_absent_s):
+                retained[key]=t
         remaining=self.max_tracks-len(retained)-len(used)
         for i,b in enumerate(blocks):
             key=matches.get(i)
@@ -129,7 +132,8 @@ class BlockSession:
     def apply_result(self, result, *, now_s=None):
         self._now=self._now if now_s is None else now_s
         t=self._tracks.get(result.block_id)
-        return bool(t and result.revision==self._revision and t.state.apply_result(result,now_s=self._now))
+        return bool(t and result.revision==self._revision and t.state.apply_result(
+            result,now_s=self._now,defer_when_missing=True))
 
     def tick(self, *, now_s):
         self._now=now_s
@@ -141,7 +145,9 @@ class BlockSession:
         return OverlayFrame(f.revision,f.frame_id,f.geometry,tuple(
             OverlayBlock(k,t.state.presentation.source_text,t.state.presentation.text,t.rect)
             for k,t in sorted(self._tracks.items(),key=lambda kv:(kv[1].rect.y,kv[1].rect.x,kv[0]))
-            if t.state.presentation and self._now-t.state.last_seen_s < self.policy.block_fresh_s))
+            # Visibility follows confirmed OCR identity/absence, not a timer.
+            if (t.state.presentation and not t.state.closed
+                and t.state.presentation.turn_id == t.state.turn_id)))
 
     def drain_errors(self):
         errors,self._errors=tuple(self._errors),[]

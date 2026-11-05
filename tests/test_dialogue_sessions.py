@@ -68,10 +68,12 @@ def test_missing_one_block_keeps_other_and_resets_counter(runtime_settings,captu
     obs((b,),1);obs((a,b),1.2);obs((b,),1.4)
     assert len(s.current_frame().blocks)==2
     obs((b,),1.6)
+    assert len(s.current_frame().blocks)==2
+    obs((b,),2.)
     assert [v.source_text for v in s.current_frame().blocks]==['B']
 
 
-def test_block_freshness_and_geometry_during_read_hold(runtime_settings,capture_geometry,dialogue_result):
+def test_block_persists_and_tracks_geometry_during_read_hold(runtime_settings,capture_geometry,dialogue_result):
     from core.blocks.session import BlockSession
     s=BlockSession()
     def obs(text,x,t):
@@ -81,7 +83,7 @@ def test_block_freshness_and_geometry_during_read_hold(runtime_settings,capture_
     j,=s.translation_jobs(now_s=.5);s.mark_dispatched(j,now_s=.5);s.apply_result(dialogue_result(j),now_s=.6)
     obs('Hello world',40,.7)
     assert s.current_frame().blocks[0].source_rect.x==40
-    s.tick(now_s=3.7);assert not s.current_frame().blocks
+    s.tick(now_s=3.7);assert s.current_frame().blocks
     obs('Hello world',40,4);assert s.current_frame().blocks
 
 

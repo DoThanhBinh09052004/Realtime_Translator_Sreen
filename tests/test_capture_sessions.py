@@ -150,8 +150,9 @@ def test_block_retirement_local_ids_are_monotonic(runtime_settings, capture_geom
     old = s.translation_jobs(now_s=.5)[0]; s.mark_dispatched(old, now_s=.5)
     s.observe(observation(p, ctx, settings, {0: ''}, .7, 2))
     s.observe(observation(p, ctx, settings, {0: ''}, .9, 3))
-    settle(s, observation(p, ctx, settings, {0: 'B'}, 1., 4, spans=(span_factory('B'),)))
-    new = s.translation_jobs(now_s=1.5)[0]
+    s.observe(observation(p, ctx, settings, {0: ''}, 1.3, 4))
+    settle(s, observation(p, ctx, settings, {0: 'B'}, 1.4, 5, spans=(span_factory('B'),)))
+    new = s.translation_jobs(now_s=1.9)[0]
     assert new.block_id > old.block_id
     assert not s.apply_result(dialogue_result(old), now_s=1.6)
 
@@ -197,11 +198,12 @@ def test_retired_local_ids_above_32_never_collide_with_another_roi(runtime_setti
     ids = {j.block_id for j in first}
     permanent = first[1].block_id
     for index in range(35):
-        scan = 2+index*4; now = 1.+index
-        for step in (0, 1): s.observe(observation(p, ctx, settings, {0: ''}, now, scan+step))
-        settle(s, observation(p, ctx, settings, {0: 'A', 1: 'A'}, now+.1, scan+2,
+        scan = 2+index*5; now = 1.+2*index
+        for step, delay in enumerate((0., .2, .6)):
+            s.observe(observation(p, ctx, settings, {0: ''}, now+delay, scan+step))
+        settle(s, observation(p, ctx, settings, {0: 'A', 1: 'A'}, now+.7, scan+3,
                               spans=(span_factory('A'),)))
-        jobs = s.translation_jobs(now_s=now+.6)
+        jobs = s.translation_jobs(now_s=now+1.3)
         assert len(jobs) == 2 and jobs[1].block_id == permanent
         assert jobs[0].block_id not in ids
         ids.add(jobs[0].block_id)

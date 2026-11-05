@@ -76,7 +76,11 @@ def run_replay(transcript_path: Path, *, latency_ms: int, mode: str, out_dir: Pa
                             summary['shown_closed_turn_results']+=1
             if prior[0] and not entries:
                 counts['clears']+=1
-                if oracle and expected[0] is not None:summary['clears_within_active_turn']+=1
+                # Removing the previous turn while waiting for the next
+                # translation is intentional. Count only loss of this turn.
+                if (oracle and expected[0] is not None
+                        and any(source_tags.get(source)==expected[0] for source,_ in prior[0])):
+                    summary['clears_within_active_turn']+=1
             prior[0]=entries
         c.jobs_changed.connect(pending_changed)
         c.subtitle_updated.connect(show);c.blocks_updated.connect(show)

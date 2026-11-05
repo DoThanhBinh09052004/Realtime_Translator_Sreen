@@ -15,6 +15,8 @@ class DialoguePolicy:
     absent_scans: int = 2
     subtitle_fresh_s: float = 6.
     block_fresh_s: float = 3.
+    block_absent_scans: int = 3
+    block_absent_s: float = .5
     tick_ms: int = 25
 
 
